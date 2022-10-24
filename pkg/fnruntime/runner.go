@@ -11,7 +11,6 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
-	"k8s.io/cli-runtime/pkg/printers"
 )
 
 type Run func(reader io.Reader, writer io.Writer) error
@@ -171,22 +170,17 @@ func (fr *FunctionRunner) Run(rctx *rctxv1.ResourceContext) (*rctxv1.ResourceCon
 	in := &bytes.Buffer{}
 	out := &bytes.Buffer{}
 
-	p := printers.JSONPrinter{}
-	if err := p.PrintObj(rctx, in); err != nil {
-		return nil, err
-	}
-
-	/*
 	b, err := json.Marshal(rctx)
 	if err != nil {
 		return nil, err
 	}
+
 	_, err = in.Write(b)
 	if err != nil {
 		return nil, err
 	}
-	*/
-	fmt.Printf("run rctx after printer: %v", in.String())
+
+	fmt.Printf("run rctx after printer: %v\n", in.String())
 
 	// here we call the run
 	ex := fr.run(in, out)
@@ -198,5 +192,6 @@ func (fr *FunctionRunner) Run(rctx *rctxv1.ResourceContext) (*rctxv1.ResourceCon
 	if err := json.Unmarshal(out.Bytes(), newRctx); err != nil {
 		return nil, err
 	}
+	//fmt.Printf("!!! rcctx: %+v\n", newRctx)
 	return newRctx, nil
 }
