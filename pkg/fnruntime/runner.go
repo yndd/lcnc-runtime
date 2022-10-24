@@ -10,7 +10,8 @@ import (
 	"github.com/google/shlex"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
+	"k8s.io/cli-runtime/pkg/printers"
 )
 
 type Run func(reader io.Reader, writer io.Writer) error
@@ -166,20 +167,36 @@ type FunctionRunner struct {
 	opts RunnerOptions
 }
 
-func (fr *FunctionRunner) Run(input *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (fr *FunctionRunner) Run(rctx *rctxv1.ResourceContext) (*rctxv1.ResourceContext, error) {
 	in := &bytes.Buffer{}
 	out := &bytes.Buffer{}
-	json.NewEncoder(in).Encode(input)
 
+	p := printers.JSONPrinter{}
+	if err := p.PrintObj(rctx, in); err != nil {
+		return nil, err
+	}
+
+	/*
+	b, err := json.Marshal(rctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = in.Write(b)
+	if err != nil {
+		return nil, err
+	}
+	*/
+	fmt.Printf("run rctx after printer: %v", in.String())
+
+	// here we call the run
 	ex := fr.run(in, out)
 	if ex != nil {
 		return nil, fmt.Errorf("fn run failed: %s", ex.Error())
 	}
 
-	output := &unstructured.Unstructured{}
-	if err := json.Unmarshal(out.Bytes(), output); err != nil {
+	newRctx := &rctxv1.ResourceContext{}
+	if err := json.Unmarshal(out.Bytes(), newRctx); err != nil {
 		return nil, err
 	}
-
-	return output, nil
+	return newRctx, nil
 }
