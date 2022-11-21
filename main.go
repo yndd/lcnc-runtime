@@ -67,8 +67,10 @@ func main() {
 				Version:  "v1alpha1",
 				Resource: "tenants",
 			},
-			Fn: &ctrlcfgv1.Function{
-				Image: "docker.io/henderiw/fn-test-image",
+			Fn: []*ctrlcfgv1.Function{
+				{
+					Image: "docker.io/henderiw/fn-test-image",
+				},
 			},
 		},
 	}
@@ -92,7 +94,7 @@ func main() {
 		Client:       mgr.GetClient(),
 		PollInterval: 1 * time.Minute,
 		Gvk:          gvk,
-		Fn:           ctrlcfg.For.Fn,
+		Fn:           ctrlcfg.For.Fn[0],
 		Log:          logger,
 	}))
 	if err != nil {

@@ -45,11 +45,14 @@ type ResourceContextSpec struct {
 // ResourceContextSpec defines the context of the resource of the controller
 type ResourceContextProperties struct {
 	// holds the input of the CR
-	Input map[string]KRMResource `json:"input,omitempty"`
+	Origin map[string]KRMResource `json:"origin,omitempty"`
+	// holds the input of the CR
+	Input map[string][]KRMResource `json:"input,omitempty"`
 	// holds the allocation of the CR with the key being GVK in string format
 	Allocations map[string][]KRMResource `json:"allocations,omitempty"`
 	// holds the extra input of the CR with the key being GVK in string format
-	ExtraInput map[string][]KRMResource `json:"extraInput,omitempty"`
+	Output map[string][]KRMResource `json:"extraInput,omitempty"`
+	//Result[]
 }
 
 // string is a string representation of the KRM resource

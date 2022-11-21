@@ -15,7 +15,7 @@ type ControllerConfig struct {
 
 type ControllerPipeline struct {
 	Gvr *ControllerGroupVersionResource `yaml:"gvr" json:"gvr"`
-	Fn  *Function                       `yaml:"function" json:"function"`
+	Fn  []*Function                       `yaml:"function" json:"function"`
 	//Predicates   []predicate.Predicate
 	Eventhandler handler.EventHandler
 }

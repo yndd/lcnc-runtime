@@ -2,6 +2,8 @@ package reconciler
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -87,14 +89,20 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		rctx, err := buildResourceContext(cr)
 		if err != nil {
 			log.Debug("Cannot build resource context", "error", err)
-			return reconcile.Result{RequeueAfter: 5 *time.Second}, errors.Wrap(err, "cannot build resource context")
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "cannot build resource context")
 		}
 		newRctx, err := runner.Run(rctx)
 		if err != nil {
 			log.Debug("run failed", "error", err)
-			return reconcile.Result{RequeueAfter: 5 *time.Second}, errors.Wrap(err, "run failed")
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "run failed")
 		}
-		log.Debug("cr after run", "cr", newRctx)
+		//log.Debug("cr after run", "cr", newRctx.Spec.Properties)
+		b, err := json.MarshalIndent(newRctx, "", "  ")
+		if err != nil {
+			log.Debug("run failed", "error", err)
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "run failed")
+		}
+		fmt.Printf("new cr content:\n%s\n", string(b))
 	}
 
 	return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
@@ -114,7 +122,7 @@ func buildResourceContext(cr *unstructured.Unstructured) (*rctxv1.ResourceContex
 		return nil, err
 	}
 
-	rctx :=  &rctxv1.ResourceContext{
+	rctx := &rctxv1.ResourceContext{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ResourceContext",
 			APIVersion: "lcnc.yndd.io/v1",
@@ -125,17 +133,17 @@ func buildResourceContext(cr *unstructured.Unstructured) (*rctxv1.ResourceContex
 		},
 		Spec: rctxv1.ResourceContextSpec{
 			Properties: &rctxv1.ResourceContextProperties{
-				Input: map[string]rctxv1.KRMResource{
-					cr.GroupVersionKind().String(): rctxv1.KRMResource(inputCr),
+				Input: map[string][]rctxv1.KRMResource{
+					cr.GroupVersionKind().String(): {rctxv1.KRMResource(inputCr)},
 				},
 			},
 		},
 	}
 
 	gvk := schema.GroupVersionKind{
-		Group : "lcnc.yndd.io",
+		Group:   "lcnc.yndd.io",
 		Version: "v1",
-		Kind: "ResourceContext",
+		Kind:    "ResourceContext",
 	}
 
 	rctx.SetGroupVersionKind(gvk)
