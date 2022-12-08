@@ -62,7 +62,7 @@ type KRMResource string
 type ResourceContextStatus struct {
 }
 
-// PackageRevisionResourcesList
+// ResourceContextList
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 type ResourceContextList struct {

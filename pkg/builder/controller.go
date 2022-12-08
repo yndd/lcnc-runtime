@@ -55,13 +55,15 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	if blder.mgr == nil {
 		return nil, fmt.Errorf("must provide a non-nil Manager")
 	}
-	if blder.cfg.For == nil {
-		return nil, fmt.Errorf("must provide a non-nil For")
-	}
-	// Checking the reconcile gvr exist or not
-	if blder.cfg.For.Gvr == nil {
-		return nil, fmt.Errorf("must provide a gvr for reconciliation")
-	}
+	/*
+		if blder.cfg.Spec.Properties.For == nil {
+			return nil, fmt.Errorf("must provide a non-nil For")
+		}
+		// Checking the reconcile gvr exist or not
+		if blder.cfg.For.Gvr == nil {
+			return nil, fmt.Errorf("must provide a gvr for reconciliation")
+		}
+	*/
 	//if blder.c.For.Fn == "" {
 	//	return nil, fmt.Errorf("must provide a function for reconciliation")
 	//}
@@ -81,11 +83,12 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 
 func (blder *builder) doWatch() error {
 	// Reconcile type
-	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-		Group:    blder.cfg.For.Gvr.Group,
-		Version:  blder.cfg.For.Gvr.Version,
-		Resource: blder.cfg.For.Gvr.Resource,
-	})
+	forGvrs, err := blder.cfg.GetForGvr()
+	if err != nil {
+		return nil
+	}
+
+	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), forGvrs[0])
 	if err != nil {
 		return err
 	}
@@ -99,12 +102,12 @@ func (blder *builder) doWatch() error {
 	}
 
 	// Watches the managed types
-	for _, own := range blder.cfg.Owns {
-		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-			Group:    own.Gvr.Group,
-			Version:  own.Gvr.Version,
-			Resource: own.Gvr.Resource,
-		})
+	ownGvrs, err := blder.cfg.GetOwnGvrs()
+	if err != nil {
+		return nil
+	}
+	for _, own := range ownGvrs {
+		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), own)
 		if err != nil {
 			return err
 		}
@@ -123,12 +126,12 @@ func (blder *builder) doWatch() error {
 	}
 
 	// Do the watch requests
-	for _, w := range blder.cfg.Watch {
-		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-			Group:    w.Gvr.Group,
-			Version:  w.Gvr.Version,
-			Resource: w.Gvr.Resource,
-		})
+	watchGvrs, err := blder.cfg.GetWatchGvrs()
+	if err != nil {
+		return nil
+	}
+	for _, w := range watchGvrs {
+		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), w)
 		if err != nil {
 			return err
 		}
@@ -141,9 +144,15 @@ func (blder *builder) doWatch() error {
 		// If the source of this watch is of type *source.Kind, project it.
 		src := &source.Kind{Type: obj}
 
+		// TODO replace nil with a real EventHandler where a fn is inserted
+		if err := blder.ctrl.Watch(src, nil, allPredicates...); err != nil {
+			return err
+		}
+		/*
 		if err := blder.ctrl.Watch(src, w.Eventhandler, allPredicates...); err != nil {
 			return err
 		}
+		*/
 	}
 	return nil
 }
@@ -163,11 +172,13 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 		ctrlOptions.Reconciler = r
 	}
 
-	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-		Group:    blder.cfg.For.Gvr.Group,
-		Version:  blder.cfg.For.Gvr.Version,
-		Resource: blder.cfg.For.Gvr.Resource,
-	})
+	forGvrs, err := blder.cfg.GetForGvr()
+	if err != nil {
+		return nil
+	}
+	
+
+	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), forGvrs[0])
 	if err != nil {
 		return err
 	}

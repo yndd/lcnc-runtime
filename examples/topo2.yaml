@@ -1,0 +1,93 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: topoController
+  namespace: default
+spec:
+  properties:
+    for: 
+      topo: {gvr: topo.yndd.io/v1alpha1/definitions}
+    getTargets:
+      type: query
+      input:
+        gvr: target.yndd.io/v1/targets 
+        selector:
+      output:
+        targets: .
+    getAllTemplates:
+      type: query
+      input: 
+        gvr: topo.yndd.io/v1alpha1/templates
+      output:
+        alltemplates: .
+    getAllParentTemplates:
+      range:
+        value: $topo.spec.properties.templates
+        # condition:
+        #   expression: xxx
+      parentTemplateNames:
+        type: slice # output is name of the function
+        input: 
+          value: $VALUE.name
+    getParentTemplateNames:
+      range:
+        value: $parentTemplateNames
+        functions:
+          parentTemplates:
+            type: map # output is name of the function
+            input: 
+              key: $VALUE
+              value: $allTemplates.name == $VALUE
+    getParentTemplates:
+      range: 
+        value: $parentTemplates
+        functions:
+          childTemplates:
+            type: map
+            input:
+              key: $VALUE.metadata.name
+              value: $allTemplates == "$VALUE.spec.properties.fabric.pod[*].definitionRef
+    getDiscoveryRuleNames:
+      range:
+        value: $topo.spec.properties.discoveryRules
+        functions:
+          getDiscoveryRuleNames:
+            type: slice
+            input:
+              string: $VALUE.metatdata.name
+    createTopology:
+      image: topology
+      input:
+        topology: $topo # can be implicit
+      output: 
+        Topologies: topo.yndd.io/v1alpha1/topologies
+    createFabric:
+      range:
+        value: $parentTemplates
+        functions:
+          createFabric:
+            image: topologyBuilderFromTemplate
+            vars: 
+              localChildTemplates: 
+                slice: 
+                  value: {query: $childTemplates, selector: { name: $KEY}}
+            input:
+              parentTemplate: $VALUE
+              localChildTemplates: $localChildTemplates
+            output: 
+              TemplateNodes: topo.yndd.io/v1alpha1/nodes  
+              Templatelinks: topo.yndd.io/v1alpha1/links
+    createNode:
+      range: 
+        value: $discoveryRuleNames
+        functions:
+          createNode:
+            image: nodeBuilderFromDiscoveryRule
+            vars: 
+              targets:
+                slice:
+                  value: {query: $targets, selector: { name: $KEY}}
+            input:
+              targets: $targets
+            output: 
+              DiscoveryNodes: topo.yndd.io/v1alpha1/nodes 

@@ -1,0 +1,89 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: infraController
+  namespace: default
+spec:
+  properties:
+    for: 
+      infra: {gvr: infra.yndd.io/v1alpha1/infrastructures}
+    #own:
+    #  infra: {gvr: infra.yndd.io/v1alpha1/infrastructures}
+    #watch: 
+    #  infra: {gvr: infra.yndd.io/v1alpha1/infrastructures, image: watchImage}
+    vars:
+      - nodes:
+          slice:
+            value:
+              query: topo.yndd.io/v1alpha1/nodes
+              selector: {matchLabels: {yndd.io/topology: $infra.spec.topology}}
+      - links:
+          slice:
+            value:
+              query: topo.yndd.io/v1alpha1/Link
+              selector: 
+                matchLabels: 
+                  yndd.io/topology: $infra.spec.topology
+                  yndd.io/linktype: not infra
+    functions:
+      - for:
+          range: $links
+        networkInfraAllocator:
+          image: networkInfraAllocator
+          vars:
+            linkEpA:
+              slice: 
+                value: {query: $nodes, selector: {matchLabels: { yndd.io/nodeName: $VALUE.spec.endpointA}}} 
+            linkEpB:
+              slice:
+                value: {query: $nodes, selector: {matchLabels: { yndd.io/nodeName: $VALUE.spec.endpointB}}}
+          input: 
+            link: $VALUE
+            linkEpA: $linkEpA
+            linkEpB: $linkEpB
+          output: 
+            nodeInfo: nodeInfo
+            asAllocations: asAllocations 
+            niAllocations: niAllocations 
+            ipAllocations: ipAllocations 
+      - for:
+          range: $nodeInfo
+        infraConfig:
+          image: infraConfig
+          vars:
+            asAllicationPerNode:
+              slice:
+                value: {query: $asAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}} 
+            ipAllicationPerNode:
+              slice:
+                value: {query: $ipAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}}
+            niAllicationPerNode:
+              slice:
+                value: {query: $niAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}}
+          input:
+            nodeInfo: $VALUE
+            asAllicationPerNode: $asAllicationPerNode
+            ipAllicationPerNode: $ipAllicationPerNode
+            niAllicationPerNode: $niAllicationPerNode  
+          output: 
+            config: yndd.io/v1alpha1/networkConfigs
+        infraState:
+          image: infraState
+          config: stateInfo
+          input:
+            nodeInfo: $VALUE
+          output: 
+            state: yndd.io/v1alpha1/networkStates
+    services:
+      - asInjection: { image: asInjection }
+        ipInjection: { image: ipInjection }
+        niInjection: { image: niInjection }
+
+# function -> name: infraConfig implements libraries
+      #createInterface: physical (lag, member), loopback/system, irb
+      #createTunnelInterface: vxlan or mple
+      #create SubInterface: loopback/system
+      #create route policy
+      #create network instance
+      #create bgp, group, evpn
+      #create system evpn constructs

@@ -2,8 +2,6 @@ package reconciler
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,9 +11,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/pkg/errors"
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
-	"github.com/yndd/lcnc-runtime/pkg/fnruntime"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/ndd-runtime/pkg/logging"
 	"github.com/yndd/ndd-runtime/pkg/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +30,9 @@ type ReconcileInfo struct {
 	Client       client.Client
 	PollInterval time.Duration
 	Gvk          schema.GroupVersionKind
-	Fn           *ctrlcfgv1.Function
+	Root         string
+	Dag          dag.DAG
+	//Fn           *ctrlcfgv1.ControllerConfigFunction
 
 	Log logging.Logger
 }
@@ -43,8 +42,8 @@ func New(ri *ReconcileInfo) reconcile.Reconciler {
 		client:       ri.Client,
 		pollInterval: ri.PollInterval,
 		gvk:          ri.Gvk,
-		fn:           ri.Fn,
-		log:          ri.Log,
+		//fn:           ri.Fn,
+		log: ri.Log,
 	}
 }
 
@@ -52,7 +51,9 @@ type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
 	gvk          schema.GroupVersionKind
-	fn           *ctrlcfgv1.Function
+	root         string
+	d            dag.DAG
+	//fn           *ctrlcfgv1.ControllerConfigFunction
 
 	log logging.Logger
 	//record event.Recorder
@@ -69,43 +70,58 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		log.Debug("Cannot get resource", "error", err)
 		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
 	}
+
+	if err := r.client.List(ctx, getUnstructuredList(r.gvk)); err != nil {
+		log.Debug("Cannot get resource", "error", err)
+		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
+	}
 	//log.Debug("get resource", "cr", cr.UnstructuredContent())
 
 	// INJECT RUNNER
-	log.Debug("function", "fn name", r.fn)
-	if r.fn != nil {
-		runner, err := fnruntime.NewRunner(
-			ctx,
-			r.fn,
-			fnruntime.RunnerOptions{
-				ResolveToImage: fnruntime.ResolveToImageForCLI,
-			},
-		)
-		if err != nil {
-			log.Debug("cannot get runner", "error", err)
-			return reconcile.Result{}, errors.Wrap(err, "cannot get runner")
-		}
+	/*
+		log.Debug("function", "fn name", r.fn)
+		if r.fn != nil {
+			runner, err := fnruntime.NewRunner(
+				ctx,
+				r.fn,
+				fnruntime.RunnerOptions{
+					ResolveToImage: fnruntime.ResolveToImageForCLI,
+				},
+			)
+			if err != nil {
+				log.Debug("cannot get runner", "error", err)
+				return reconcile.Result{}, errors.Wrap(err, "cannot get runner")
+			}
 
-		rctx, err := buildResourceContext(cr)
-		if err != nil {
-			log.Debug("Cannot build resource context", "error", err)
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "cannot build resource context")
+			rctx, err := buildResourceContext(cr)
+			if err != nil {
+				log.Debug("Cannot build resource context", "error", err)
+				return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "cannot build resource context")
+			}
+			newRctx, err := runner.Run(rctx)
+			if err != nil {
+				log.Debug("run failed", "error", err)
+				return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "run failed")
+			}
+			//log.Debug("cr after run", "cr", newRctx.Spec.Properties)
+			b, err := json.MarshalIndent(newRctx, "", "  ")
+			if err != nil {
+				log.Debug("run failed", "error", err)
+				return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "run failed")
+			}
+			fmt.Printf("new cr content:\n%s\n", string(b))
 		}
-		newRctx, err := runner.Run(rctx)
-		if err != nil {
-			log.Debug("run failed", "error", err)
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "run failed")
-		}
-		//log.Debug("cr after run", "cr", newRctx.Spec.Properties)
-		b, err := json.MarshalIndent(newRctx, "", "  ")
-		if err != nil {
-			log.Debug("run failed", "error", err)
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(err, "run failed")
-		}
-		fmt.Printf("new cr content:\n%s\n", string(b))
-	}
+	*/
 
 	return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+}
+
+func getUnstructuredList(gvk schema.GroupVersionKind) *unstructured.UnstructuredList {
+	var u unstructured.UnstructuredList
+	u.SetAPIVersion(gvk.GroupVersion().String())
+	u.SetKind(gvk.Kind)
+	uCopy := u.DeepCopy()
+	return uCopy
 }
 
 func getUnstructuredObj(gvk schema.GroupVersionKind) *unstructured.Unstructured {
