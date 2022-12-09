@@ -70,56 +70,27 @@ func (r *ControllerConfig) getGvrList(gvrObjs map[string]ControllerConfigGvrObje
 	return gvrs, nil
 }
 
-// CopyVariables copies the variable block and splits multiple entries
-// in a slice to a single entry. This allows to build a generic
-// resolution processor
-func CopyVariables(vars []ControllerConfigVarBlock) map[string]ControllerConfigVarBlock {
-	newvars := map[string]ControllerConfigVarBlock{}
-	for idx, varBlock := range vars {
-		for k, v := range varBlock.ControllerConfigVariables {
-			newvars[strings.Join([]string{k, strconv.Itoa(idx)}, "/")] = ControllerConfigVarBlock{
-				ControllerConfigBlock: varBlock.ControllerConfigBlock,
-				ControllerConfigVariables: map[string]ControllerConfigVar{
-					k: v,
-				},
-			}
-		}
-	}
-	return newvars
-}
-
-// CopyFunctions copies the variable block and splits multiple entries
-// in a slice to a single entry. This allows to build a generic
-// resolution processor
-func CopyFunctions(fns []ControllerConfigFunctionsBlock) map[string]ControllerConfigFunctionsBlock {
-	newfns := map[string]ControllerConfigFunctionsBlock{}
-	for idx, fnBlock := range fns {
-		for k, v := range fnBlock.ControllerConfigFunctions {
-			newfns[strings.Join([]string{k, strconv.Itoa(idx)}, "/")] = ControllerConfigFunctionsBlock{
-				ControllerConfigBlock: fnBlock.ControllerConfigBlock,
-				ControllerConfigFunctions: map[string]ControllerConfigFunction{
-					k: v,
-				},
-			}
-		}
-	}
-	return newfns
-}
-
 func GetIdxName(idxName string) (string, int) {
 	split := strings.Split(idxName, "/")
 	idx, _ := strconv.Atoi(split[1])
 	return split[0], idx
 }
 
-func GetGVR(s string) (*schema.GroupVersionResource, error) {
-	split := strings.Split(s, "/")
-	if len(split) != 3 {
-		return nil, fmt.Errorf("expecting a GVR in format <group>/<version>/<resource>, got: %s", s)
+func GetGVR(gvr *ControllerConfigGvr) (*schema.GroupVersionResource, error) {
+	split := strings.Split(gvr.ApiVersion, "/")
+	if len(split) != 2 {
+		return nil, fmt.Errorf("expecting a GVR apiVersion in format <group>/<version> got: %s", gvr.ApiVersion)
 	}
 	return &schema.GroupVersionResource{
 		Group:    split[0],
 		Version:  split[1],
-		Resource: split[2],
+		Resource: gvr.Resource,
 	}, nil
+}
+
+func (v ControllerConfigPipelineBlock) IsBlock() bool {
+	if v.Range == nil && v.Condition == nil {
+		return false
+	}
+	return true
 }

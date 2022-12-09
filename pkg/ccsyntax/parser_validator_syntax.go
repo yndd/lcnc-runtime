@@ -12,13 +12,12 @@ func (r *lcncparser) ValidateSyntax() []Result {
 		result: []Result{},
 	}
 
-	fnc := WalkConfig{
-		lcncCfgPreHookFn: vs.validateLcncCfgPreHookFn,
-		lcncGvrObjectFn:  vs.validateLcncGvrObjectFn,
-		lcncBlockFn:      vs.validateBlockFn,
-		lcncVarFn:        vs.validateVarFn,
-		lcncFunctionFn:   vs.validateFunctionFn,
-		lcncServiceFn:    vs.validateServiceFn,
+	fnc := &WalkConfig{
+		cfgPreHookFn:    vs.validateLcncCfgPreHookFn,
+		gvrObjectFn:     vs.validateLcncGvrObjectFn,
+		pipelineBlockFn: vs.validateBlockFn,
+		functionFn: vs.validateFunctionFn,
+		//lcncServiceFn:    vs.validateServiceFn,
 	}
 
 	// walk the config to validate the syntax
@@ -49,30 +48,47 @@ func (r *vs) validateLcncCfgPreHookFn(lcncCfg *ctrlcfgv1.ControllerConfig) {
 }
 
 func (r *vs) validateLcncGvrObjectFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigGvrObject) {
-	r.validateContext(&OriginContext{Origin: o, Index: idx, VertexName: vertexName}, v.Gvr)
-}
-
-// TODO add if statement ??
-func (r *vs) validateBlockFn(o Origin, idx int, v ctrlcfgv1.ControllerConfigBlock) {
-	if v.For == nil {
+	if v.Gvr == nil {
 		r.recordResult(Result{
 			Origin: o,
 			Index:  idx,
-			Error:  fmt.Errorf("for must be present in block").Error(),
+			Name:   vertexName,
+			Error:  fmt.Errorf("a gvr must be present, got: %v", v).Error(),
 		})
-		return
 	}
-	if v.For.Range == nil {
+}
+
+func (r *vs) validateBlockFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock) {
+	if v.Range != nil && v.Condition != nil {
 		r.recordResult(Result{
 			Origin: o,
 			Index:  idx,
-			Error:  fmt.Errorf("range must be present in for block").Error(),
+			Name:   vertexName,
+			Error:  fmt.Errorf("cannot have both range and condition in the same block, got: %v", v).Error(),
 		})
-		return
 	}
-	r.validateContext(&OriginContext{Origin: o, Index: 0, VertexName: ""}, *v.For.Range)
+	if v.Range != nil {
+		r.validateContext(&OriginContext{Origin: o, Index: 0, VertexName: vertexName}, *v.Range.Value)
+		r.validateBlockFn(o, idx, vertexName, v.Range.ControllerConfigBlock)
+
+	}
+	if v.Condition != nil {
+		r.validateContext(&OriginContext{Origin: o, Index: 0, VertexName: vertexName}, *v.Condition.Expression)
+		r.validateBlockFn(o, idx, vertexName, v.Condition.ControllerConfigBlock)
+	}
 }
 
+func (r *vs) validateFunctionFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
+	// if type == query -> check gvr and selector
+	// if type == map or slice -> check key, value
+	// if type == empty -> image or exec need to be present
+
+	// check input
+	// check output
+
+}
+
+/*
 func (r *vs) validateVarFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar) {
 	if v.Slice == nil && v.Map == nil {
 		r.recordResult(Result{
@@ -113,7 +129,8 @@ func (r *vs) validateVarFn(o Origin, block bool, idx int, vertexName string, v c
 		}
 	}
 }
-
+*/
+/*
 func (r *vs) validateValue(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigValue) {
 	if v.String == nil && v.ControllerConfigQuery.Query == nil {
 		r.recordResult(Result{
@@ -147,7 +164,9 @@ func (r *vs) validateValue(o Origin, block bool, idx int, vertexName string, v c
 			Output:     true}, *v.ControllerConfigQuery.Query)
 	}
 }
+*/
 
+/*
 func (r *vs) validateFunctionFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
 	//v.ImageName -> must be present
 	if v.ControllerConfigExecutor.Image == nil {
@@ -198,80 +217,34 @@ func (r *vs) validateFunctionFn(o Origin, block bool, idx int, vertexName string
 			Output:     true}, v)
 	}
 }
+*/
 
 func (r *vs) validateServiceFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
 }
 
 func (r *vs) validateContext(o *OriginContext, s string) {
-	value, err := GetValue(s)
-	if err != nil {
-		r.recordResult(Result{
-			Origin: o.Origin,
-			Index:  o.Index,
-			Name:   o.VertexName,
-			Error:  err.Error(),
-		})
-		return
-	}
+	refs := GetReferences(s)
 	//fmt.Printf("validate ctxName: %s, value: %s, kind: %s, variable: %v\n", o.VertexName, s, value.Kind, value.Variable)
-	switch value.Kind {
-	case GVRKind:
-		// only allowed for variables and output
-		if o.Origin == OriginFunction && !o.Output {
+	for _, ref := range refs {
+		switch ref.Kind {
+		case RangeKReferenceKind:
+			if !o.ForBlock {
+				r.recordResult(Result{
+					Origin: o.Origin,
+					Index:  o.Index,
+					Name:   o.VertexName,
+					Error:  fmt.Errorf("cannot use Key variabales without a range statement").Error(),
+				})
+				return
+			}
+		default:
 			r.recordResult(Result{
 				Origin: o.Origin,
 				Index:  o.Index,
 				Name:   o.VertexName,
-				Error:  fmt.Errorf("cannot use gvr encoding syntax in function statements, use variables instead").Error(),
+				Error:  fmt.Errorf("unknown reference kind, got: %s", s).Error(),
 			})
 			return
 		}
-	case ChildVariableReferenceKind, RootVariableReferenceKind:
-		if o.Origin == OriginFor {
-			r.recordResult(Result{
-				Origin: o.Origin,
-				Index:  o.Index,
-				Name:   o.VertexName,
-				Error:  fmt.Errorf("can only use GVR resources in for statements").Error(),
-			})
-			return
-		}
-	case KeyVariableReferenceKind:
-		if o.Origin == OriginFor {
-			r.recordResult(Result{
-				Origin: o.Origin,
-				Index:  o.Index,
-				Name:   o.VertexName,
-				Error:  fmt.Errorf("can only use GVR resources in for statements").Error(),
-			})
-			return
-		}
-		if !o.ForBlock {
-			r.recordResult(Result{
-				Origin: o.Origin,
-				Index:  o.Index,
-				Name:   o.VertexName,
-				Error:  fmt.Errorf("cannot use Key variabales without a for statement").Error(),
-			})
-			return
-		}
-	case VariableKind:
-		if o.Origin == OriginFor {
-			r.recordResult(Result{
-				Origin: o.Origin,
-				Index:  o.Index,
-				Name:   o.VertexName,
-				Error:  fmt.Errorf("can only use GVR resources in for statements").Error(),
-			})
-			return
-		}
-	default:
-		r.recordResult(Result{
-			Origin: o.Origin,
-			Index:  o.Index,
-			Name:   o.VertexName,
-			Error:  fmt.Errorf("unknown variable, got: %s", s).Error(),
-		})
-		return
 	}
 }

@@ -17,12 +17,11 @@ func (r *lcncparser) Resolve(d dag.DAG) []Result {
 		rootVertexName: r.rootVertexName,
 	}
 
-	fnc := WalkConfig{
-		lcncGvrObjectFn:         rs.resolveLcncGvrObjectFn,
-		lcncVarFn:               rs.resolveLcncVarFn,
-		lcncVarsPostHookFn:      rs.resolveLcncVarsPostHookFn,
-		lcncFunctionFn:          rs.resolveLcncFunctionFn,
-		lcncFunctionsPostHookFn: rs.resolveLcncFunctionsPostHookFn,
+	fnc := &WalkConfig{
+		gvrObjectFn:        rs.addGvr,
+		pipelineBlockFn:    rs.addBlock,
+		functionFn:         rs.addFunction,
+		pipelinePostHookFn: rs.resolvePipelinePostHookFn,
 	}
 
 	// walk the config to resolve the vars/functions/etc
@@ -36,9 +35,8 @@ func (r *lcncparser) Resolve(d dag.DAG) []Result {
 	}
 
 	// the 2nd walk adds the dependencies and edges in the graph
-	fnc = WalkConfig{
-		lcncVarsPostHookFn:      rs.addDependenciesLcncVarsPostHookFn,
-		lcncFunctionsPostHookFn: rs.addDependenciesLcncFunctionsPostHookFn,
+	fnc = &WalkConfig{
+		pipelinePostHookFn: rs.addDependenciesLcncFunctionsPostHookFn,
 	}
 	r.walkLcncConfig(fnc)
 
@@ -64,9 +62,30 @@ func (r *rs) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *rs) resolveLcncGvrObjectFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigGvrObject) {
-	if o == OriginFor {
-		if err := r.d.AddVertex(vertexName, v); err != nil {
+func (r *rs) resolveGvrObjectFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigGvrObject) {
+	if err := r.d.AddVertex(vertexName, v); err != nil {
+		r.recordResult(Result{
+			Origin: o,
+			Index:  idx,
+			Name:   vertexName,
+			Error:  err.Error(),
+		})
+	}
+}
+
+func (r *rs) resolveFunctionFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
+	if err := r.d.AddVertex(vertexName, v); err != nil {
+		r.recordResult(Result{
+			Origin: o,
+			Index:  idx,
+			Name:   vertexName,
+			Error:  err.Error(),
+		})
+	}
+
+	// if no output is defined the output key is the name of the function
+	if v.Output == nil {
+		if err := r.AddOutputMapping(vertexName, vertexName); err != nil {
 			r.recordResult(Result{
 				Origin: o,
 				Index:  idx,
@@ -75,31 +94,7 @@ func (r *rs) resolveLcncGvrObjectFn(o Origin, idx int, vertexName string, v ctrl
 			})
 		}
 	}
-}
-
-func (r *rs) resolveLcncVarFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar) {
-	if err := r.d.AddVertex(vertexName, v); err != nil {
-		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  err.Error(),
-		})
-	}
-}
-
-func (r *rs) resolveLcncFunctionFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
-	if err := r.d.AddVertex(vertexName, v); err != nil {
-		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  err.Error(),
-		})
-	}
-
 	for k := range v.Output {
-		// for output we generate a new output mapping
 		if err := r.AddOutputMapping(k, vertexName); err != nil {
 			r.recordResult(Result{
 				Origin: o,
@@ -111,27 +106,10 @@ func (r *rs) resolveLcncFunctionFn(o Origin, block bool, idx int, vertexName str
 	}
 }
 
-func (r *rs) resolveLcncVarsPostHookFn(v []ctrlcfgv1.ControllerConfigVarBlock) {
-	newvars := ctrlcfgv1.CopyVariables(v)
-	unresolved := r.resolveUnresolvedVars(newvars)
-	if len(unresolved) != 0 {
-		for idxName := range unresolved {
-			vertexName, idx := ctrlcfgv1.GetIdxName(idxName)
-			r.recordResult(Result{
-				Origin: OriginVariable,
-				Index:  idx,
-				Name:   vertexName,
-				Error:  fmt.Errorf("unresolved variable").Error(),
-			})
-		}
-	}
-}
-
-func (r *rs) resolveLcncFunctionsPostHookFn(v []ctrlcfgv1.ControllerConfigFunctionsBlock) {
-	newfns := ctrlcfgv1.CopyFunctions(v)
-	unresolved := r.resolveUnresolvedFunctions(newfns)
-	if len(unresolved) != 0 {
-		for idxName := range unresolved {
+func (r *rs) resolvePipelinePostHookFn(v ctrlcfgv1.ControllerConfigPipeline) {
+	unresolvedFns := r.resolveUnresolved(v.DeepCopy().Functions)
+	if len(unresolvedFns) != 0 {
+		for idxName := range unresolvedFns {
 			vertexName, idx := ctrlcfgv1.GetIdxName(idxName)
 			r.recordResult(Result{
 				Origin: OriginFunction,
@@ -143,6 +121,7 @@ func (r *rs) resolveLcncFunctionsPostHookFn(v []ctrlcfgv1.ControllerConfigFuncti
 	}
 }
 
+/*
 func (r *rs) resolveUnresolvedVars(unresolved map[string]ctrlcfgv1.ControllerConfigVarBlock) map[string]ctrlcfgv1.ControllerConfigVarBlock {
 	totalUnresolved := len(unresolved)
 	for idxName, v := range unresolved {
@@ -184,26 +163,29 @@ func (r *rs) resolveVariable(v ctrlcfgv1.ControllerConfigVarBlock) bool {
 	}
 	return true
 }
+*/
 
-func (r *rs) resolveUnresolvedFunctions(unresolved map[string]ctrlcfgv1.ControllerConfigFunctionsBlock) map[string]ctrlcfgv1.ControllerConfigFunctionsBlock {
-	totalUnresolved := len(unresolved)
-	for idxName, v := range unresolved {
+func (r *rs) resolveUnresolved(unresolvedFns map[string]ctrlcfgv1.ControllerConfigPipelineBlock) map[string]ctrlcfgv1.ControllerConfigPipelineBlock {
+	totalUnresolvedFns := len(unresolvedFns)
+	for idxName, v := range unresolvedFns {
 		if r.resolveFunction(v) {
-			delete(unresolved, idxName)
+			delete(unresolvedFns, idxName)
 		}
 	}
 	// when the new unresolved is 0 we are done and all variabled are resolved
-	newUnresolved := len(unresolved)
-	if newUnresolved == 0 {
-		return unresolved
+	if len(unresolvedFns) == 0 {
+		return unresolvedFns
 	}
-	if newUnresolved < totalUnresolved {
-		r.resolveUnresolvedFunctions(unresolved)
+	if len(unresolvedFns) < totalUnresolvedFns {
+		r.resolveUnresolved(unresolvedFns)
 	}
-	return unresolved
+	return unresolvedFns
 }
 
-func (r *rs) resolveFunction(v ctrlcfgv1.ControllerConfigFunctionsBlock) bool {
+func (r *rs) resolvePipeLineBlock(v ctrlcfgv1.ControllerConfigPipelineBlock) bool {
+	if v.IsBlock() {
+
+	}
 	for vertexName, vv := range v.ControllerConfigFunctions {
 		// initialize the local variables for local resolution
 		r.initLocalVariables()

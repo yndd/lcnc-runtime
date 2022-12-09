@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
 type DAG interface {
-	AddVertex(s string, v interface{}) error
+	AddVertex(s string, v *vertexContext) error
 	Connect(from, to string)
 	AddDownEdge(from, to string)
 	AddUpEdge(from, to string)
-	GetVertex(s string) bool
-	GetVertices() map[string]interface{}
+	VertexExists(s string) bool
+	GetVertex(s string) *vertexContext
+	GetVertices() map[string]*vertexContext
 	GetDownVertexes(from string) []string
 	GetUpVertexes(from string) []string
 
@@ -20,6 +23,10 @@ type DAG interface {
 	// Walk(ctx context.Context, from string)
 	// GetWalkResult()
 	TransitiveReduction()
+	// used for the resolution
+	LookupVertex(lookup bool, s []string) bool
+	// used for the edge connectivity
+	//GetDependencies() []string
 }
 
 // used for returning
@@ -29,9 +36,10 @@ type Edge struct {
 }
 
 type dag struct {
+	dagCtx *DagContext
 	// vertices first key is the vertexName
 	mv       sync.RWMutex
-	vertices map[string]interface{}
+	vertices map[string]*vertexContext
 	// downEdges/upEdges
 	// 1st key is from, 2nd key is to
 	mde       sync.RWMutex
@@ -43,15 +51,29 @@ type dag struct {
 	vertexDepth map[string]int
 }
 
-func NewDAG() DAG {
+type vertexContext struct {
+	// plBlock can be a block or a function
+	// if it is a fn we execute the function with the functionconfig
+	// if it is a block we execute the block and call the dag
+	root     bool
+	plBlock  ctrlcfgv1.ControllerConfigPipelineBlock
+	unaryDag DAG
+}
+
+type DagContext struct {
+	parentDag DAG
+}
+
+func NewDAG(dagCtx *DagContext) DAG {
 	return &dag{
-		vertices:  make(map[string]interface{}),
+		dagCtx:    dagCtx,
+		vertices:  make(map[string]*vertexContext),
 		downEdges: make(map[string]map[string]struct{}),
 		upEdges:   make(map[string]map[string]struct{}),
 	}
 }
 
-func (r *dag) AddVertex(s string, v interface{}) error {
+func (r *dag) AddVertex(s string, v *vertexContext) error {
 	r.mv.Lock()
 	defer r.mv.Unlock()
 
@@ -59,21 +81,34 @@ func (r *dag) AddVertex(s string, v interface{}) error {
 	if _, ok := r.vertices[s]; ok {
 		return fmt.Errorf("duplicate vertex entry: %s", s)
 	}
+	if r.dagCtx.parentDag == nil {
+		if len(r.GetVertices()) > 0 {
+			return fmt.Errorf("we can only have 1 root dag")
+		}
+		v.root = true
+	}
 	r.vertices[s] = v
+
 	return nil
 }
 
-func (r *dag) GetVertices() map[string]interface{} {
+func (r *dag) GetVertices() map[string]*vertexContext {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	return r.vertices
 }
 
-func (r *dag) GetVertex(s string) bool {
+func (r *dag) VertexExists(s string) bool {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	_, ok := r.vertices[s]
 	return ok
+}
+
+func (r *dag) GetVertex(s string) *vertexContext {
+	r.mv.RLock()
+	defer r.mv.RUnlock()
+	return r.vertices[s]
 }
 
 func (r *dag) Connect(from, to string) {
@@ -226,3 +261,33 @@ func (r *dag) checkVertex(s string) bool {
 	}
 	return found
 }
+
+func (r *dag) LookupVertex(lookup bool, s []string) bool {
+	if lookup && r.dagCtx.parentDag != nil {
+		return r.dagCtx.parentDag.LookupVertex(lookup, s)
+	}
+	// we hit the root of the tree
+	lookup = false
+	if len(s) == 0 {
+		// should never happen with our logic sicen there is a check for len
+		return false
+	}
+	v := r.GetVertex(s[0])
+	if v == nil {
+		return false
+	}
+	if v.unaryDag != nil {
+		return v.unaryDag.LookupVertex(lookup, s[1:])
+	}
+	if len(s) == 1 {
+		return true
+	}
+	return false
+}
+
+/*
+func (r *dag) GetDependencies() []string {
+
+	return nil
+}
+*/

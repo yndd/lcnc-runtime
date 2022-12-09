@@ -1,142 +1,101 @@
 package ccsyntax
 
 import (
+	"fmt"
+
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
-// lcncCfgPreHookFn processes the for, own, watch generically
-type lcncCfgPreHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
-type lcncCfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
+// cfgPreHookFn processes the for, own, watch generically
+type cfgPreHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
+type cfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 
-// lcncGvrObjectFn processes the for, own, watch per item
-type lcncGvrObjectFn func(o Origin, idx int, n string, v ctrlcfgv1.ControllerConfigGvrObject)
+// gvrObjectFn processes the for, own, watch per item
+type gvrObjectFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigGvrObject)
 
 // lcncBlockFn processes the block part of the Variables and functions
-type lcncBlockFn func(o Origin, idx int, v ctrlcfgv1.ControllerConfigBlock)
+type pipelineBlockFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock)
 
-type lcncVarsPreHookFn func(v []ctrlcfgv1.ControllerConfigVarBlock)
-type lcncVarsPostHookFn func(v []ctrlcfgv1.ControllerConfigVarBlock)
+//type lcncVarsPreHookFn func(v []ctrlcfgv1.ControllerConfigVarBlock)
+//type lcncVarsPostHookFn func(v []ctrlcfgv1.ControllerConfigVarBlock)
 
 // lcncVarFn processes the variable in the variables section
-type lcncVarFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar)
+//type lcncVarFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar)
 
-type lcncFunctionsPreHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
-type lcncFunctionsPostHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
+type pipelinePreHookFn func(v ctrlcfgv1.ControllerConfigPipeline)
+type pipelinePostHookFn func(v ctrlcfgv1.ControllerConfigPipeline)
 
-// lcncFunctionFn processes the function in the functions section
-type lcncFunctionFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction)
+// functionFn processes the function in the functions section
+type functionFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction)
 
-type lcncServicesPreHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
+//type lcncServicesPreHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
 
 //type lcncServicesPostHookFn func(v []LcncFunctionsBlock)
 
 // lcncServiceFn processes the service in the services section
-type lcncServiceFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction)
+//type lcncServiceFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction)
 
 type WalkConfig struct {
-	lcncCfgPreHookFn        lcncCfgPreHookFn
-	lcncCfgPostHookFn       lcncCfgPostHookFn
-	lcncGvrObjectFn         lcncGvrObjectFn
-	lcncBlockFn             lcncBlockFn
-	lcncVarsPreHookFn       lcncVarsPreHookFn
-	lcncVarFn               lcncVarFn
-	lcncVarsPostHookFn      lcncVarsPostHookFn
-	lcncFunctionsPreHookFn  lcncFunctionsPreHookFn
-	lcncFunctionFn          lcncFunctionFn
-	lcncFunctionsPostHookFn lcncFunctionsPostHookFn
-	lcncServicesPreHookFn   lcncServicesPreHookFn
-	lcncServiceFn           lcncServiceFn
-	lcncServicesPostHookFn  lcncServicesPreHookFn
+	cfgPreHookFn  cfgPreHookFn
+	cfgPostHookFn cfgPostHookFn
+	gvrObjectFn   gvrObjectFn
+
+	pipelinePreHookFn  pipelinePreHookFn
+	pipelineBlockFn    pipelineBlockFn
+	functionFn         functionFn
+	pipelinePostHookFn pipelinePostHookFn
+	//lcncServicesPreHookFn   lcncServicesPreHookFn
+	//lcncServiceFn           lcncServiceFn
+	//lcncServicesPostHookFn  lcncServicesPreHookFn
 }
 
-func (r *lcncparser) walkLcncConfig(fnc WalkConfig) {
+func (r *lcncparser) walkLcncConfig(fnc *WalkConfig) {
 	// process config entry
-	if fnc.lcncCfgPreHookFn != nil {
-		fnc.lcncCfgPreHookFn(r.lcncCfg)
+	if fnc.cfgPreHookFn != nil {
+		fnc.cfgPreHookFn(r.lcncCfg)
 	}
 
 	// process for, own, watch
-	if fnc.lcncGvrObjectFn != nil {
+	if fnc.gvrObjectFn != nil {
 		idx := 0
 		for vertexName, v := range r.lcncCfg.Spec.Properties.For {
-			fnc.lcncGvrObjectFn(OriginFor, idx, vertexName, v)
+			fnc.gvrObjectFn(OriginFor, idx, vertexName, v)
+			fnc.walkPipeline(OriginFor, idx, vertexName, v.ControllerConfigPipeline)
 			idx++
+
 		}
 		idx = 0
 		for vertexName, v := range r.lcncCfg.Spec.Properties.Own {
-			fnc.lcncGvrObjectFn(OriginOwn, idx, vertexName, v)
+			fnc.gvrObjectFn(OriginOwn, idx, vertexName, v)
+			fnc.walkPipeline(OriginOwn, idx, vertexName, v.ControllerConfigPipeline)
 			idx++
 		}
 		idx = 0
 		for vertexName, v := range r.lcncCfg.Spec.Properties.Watch {
-			fnc.lcncGvrObjectFn(OriginWatch, idx, vertexName, v)
+			fnc.gvrObjectFn(OriginWatch, idx, vertexName, v)
+			fnc.walkPipeline(OriginWatch, idx, vertexName, v.ControllerConfigPipeline)
 		}
+	}
+}
+
+func (fnc *WalkConfig) walkPipeline(o Origin, idx int, parentVertexName string, v ctrlcfgv1.ControllerConfigPipeline) {
+	if fnc.pipelinePreHookFn != nil {
+		fnc.pipelinePreHookFn(v)
 	}
 
-	// process variables
-	if fnc.lcncVarsPreHookFn != nil {
-		fnc.lcncVarsPreHookFn(r.lcncCfg.Spec.Properties.Vars)
-	}
-	for idx, vars := range r.lcncCfg.Spec.Properties.Vars {
-		// check if there is a block
-		block := false
-		if vars.ControllerConfigBlock.For != nil {
-			block = true
-			if fnc.lcncBlockFn != nil {
-				fnc.lcncBlockFn(OriginVariable, idx, vars.ControllerConfigBlock)
-			}
+	for vertexName, v := range v.Functions {
+		if v.IsBlock() {
+			fnc.pipelineBlockFn(o, idx, vertexName, v.ControllerConfigBlock)
+			// execute the remaining part as a block
+			fnc.walkPipeline(o, idx, vertexName, v.ControllerConfigPipeline)
+			continue
 		}
-		for vertexName, v := range vars.ControllerConfigVariables {
-			if fnc.lcncVarFn != nil {
-				fnc.lcncVarFn(OriginVariable, block, idx, vertexName, v)
-			}
+		// excute the function
+		if fnc.functionFn != nil {
+			fnc.functionFn(o, idx, vertexName, v.ControllerConfigFunction)
 		}
 	}
-	if fnc.lcncVarsPostHookFn != nil {
-		fnc.lcncVarsPostHookFn(r.lcncCfg.Spec.Properties.Vars)
-	}
-
-	// process functions
-	if fnc.lcncFunctionsPreHookFn != nil {
-		fnc.lcncFunctionsPreHookFn(r.lcncCfg.Spec.Properties.Functions)
-	}
-	for idx, functions := range r.lcncCfg.Spec.Properties.Functions {
-		// check if there is a block
-		block := false
-		if functions.ControllerConfigBlock.For != nil {
-			block = true
-			if fnc.lcncBlockFn != nil {
-				fnc.lcncBlockFn(OriginFunction, idx, functions.ControllerConfigBlock)
-			}
-		}
-		for vertexName, v := range functions.ControllerConfigFunctions {
-			if fnc.lcncFunctionFn != nil {
-				fnc.lcncFunctionFn(OriginFunction, block, idx, vertexName, v)
-			}
-
-		}
-	}
-	if fnc.lcncFunctionsPostHookFn != nil {
-		fnc.lcncFunctionsPostHookFn(r.lcncCfg.Spec.Properties.Functions)
-	}
-
-	// process services
-	if fnc.lcncServicesPreHookFn != nil {
-		fnc.lcncServicesPreHookFn(r.lcncCfg.Spec.Properties.Services)
-	}
-	for idx, services := range r.lcncCfg.Spec.Properties.Services {
-		for vertexName, v := range services.ControllerConfigFunctions {
-			if fnc.lcncServiceFn != nil {
-				fnc.lcncServiceFn(OriginService, false, idx, vertexName, v)
-			}
-		}
-	}
-	if fnc.lcncServicesPostHookFn != nil {
-		fnc.lcncServicesPostHookFn(r.lcncCfg.Spec.Properties.Services)
-	}
-
-	// process config end
-	if fnc.lcncCfgPostHookFn != nil {
-		fnc.lcncCfgPostHookFn(r.lcncCfg)
+	if fnc.pipelinePostHookFn != nil {
+		fnc.pipelinePostHookFn(v)
 	}
 }
