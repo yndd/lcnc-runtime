@@ -6,74 +6,69 @@ metadata:
 spec:
   properties:
     for: 
-      infra: {gvr: infra.yndd.io/v1alpha1/infrastructures}
-    #own:
-    #  infra: {gvr: infra.yndd.io/v1alpha1/infrastructures}
-    #watch: 
-    #  infra: {gvr: infra.yndd.io/v1alpha1/infrastructures, image: watchImage}
-    vars:
-      - nodes:
-          slice:
-            value:
-              query: topo.yndd.io/v1alpha1/nodes
-              selector: {matchLabels: {yndd.io/topology: $infra.spec.topology}}
-      - links:
-          slice:
-            value:
-              query: topo.yndd.io/v1alpha1/Link
-              selector: 
-                matchLabels: 
-                  yndd.io/topology: $infra.spec.topology
-                  yndd.io/linktype: not infra
-    functions:
-      - for:
-          range: $links
-        networkInfraAllocator:
-          image: networkInfraAllocator
-          vars:
-            linkEpA:
-              slice: 
-                value: {query: $nodes, selector: {matchLabels: { yndd.io/nodeName: $VALUE.spec.endpointA}}} 
-            linkEpB:
-              slice:
-                value: {query: $nodes, selector: {matchLabels: { yndd.io/nodeName: $VALUE.spec.endpointB}}}
-          input: 
-            link: $VALUE
-            linkEpA: $linkEpA
-            linkEpB: $linkEpB
-          output: 
-            nodeInfo: nodeInfo
-            asAllocations: asAllocations 
-            niAllocations: niAllocations 
-            ipAllocations: ipAllocations 
-      - for:
-          range: $nodeInfo
-        infraConfig:
-          image: infraConfig
-          vars:
-            asAllicationPerNode:
-              slice:
-                value: {query: $asAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}} 
-            ipAllicationPerNode:
-              slice:
-                value: {query: $ipAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}}
-            niAllicationPerNode:
-              slice:
-                value: {query: $niAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}}
+      infra: 
+        gvr: 
+          apiVersion: infra.yndd.io/v1alpha1
+          resource: infrastructures
+      pipeline:
+        nodes:
+          type: query
           input:
-            nodeInfo: $VALUE
-            asAllicationPerNode: $asAllicationPerNode
-            ipAllicationPerNode: $ipAllicationPerNode
-            niAllicationPerNode: $niAllicationPerNode  
-          output: 
-            config: yndd.io/v1alpha1/networkConfigs
-        infraState:
-          image: infraState
-          config: stateInfo
+            gvr:
+              apiVersion: topo.yndd.io/v1alpha1
+              resources: nodes
+            selector: 
+              matchLabels: 
+                yndd.io/topology: $infra.spec.topology
+        links:
+          type: query
           input:
-            nodeInfo: $VALUE
-          output: 
-            state: yndd.io/v1alpha1/networkStates
+            gvr: 
+              apiVersion: topo.yndd.io/v1alpha1
+              resources: Links
+            selector: 
+              matchLabels: 
+                yndd.io/topology: $infra.spec.topology
+                yndd.io/linktype: not infra
+        getNetworkAllocations:
+          range: 
+            value: $links
+          networkInfraAllocator:
+            image: networkInfraAllocator
+            input: 
+              link: $VALUE
+              nodeEpA: .select($nodes.metadata.labels[yndd.io/nodeName] == $VALUE.spec.endpointA)
+              nodeEpB: .select($nodes.metadata.labels[yndd.io/nodeName] == $VALUE.spec.endpointB)
+            output: 
+              nodeInfo: nodeInfo
+              asAllocations: asAllocations 
+              niAllocations: niAllocations 
+              ipAllocations: ipAllocations 
+        createNodeConfigAndState:
+          range:
+            value: ${networkInfraAllocator.nodeInfo}
+          infraConfig:
+            image: infraConfig
+            input:
+              nodeInfo: $VALUE
+              nodeAsAllications: .select(${infra.getNetworkAllocations.networkInfraAllocator.asAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)
+              nodeIpAllications: .select(${infra.getNetworkAllocations.networkInfraAllocator.ipAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)
+              nodeNiAllocations: .select(${infra.getNetworkAllocations.networkInfraAllocator.ipAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)  
+            output: 
+              config: 
+                gvr: 
+                  apiVersion: yndd.io/v1alpha1
+                  resource: networkConfigs
+          infraState:
+            image: infraState
+            config: stateInfo
+            input:
+              nodeInfo: $VALUE
+            output: 
+              state: 
+                gvr:
+                  apiVersion: yndd.io/v1alpha1
+                  resource: networkStates
     services:
       - asInjection: { image: asInjection }
         ipInjection: { image: ipInjection }

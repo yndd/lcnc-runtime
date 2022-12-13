@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/yndd/lcnc-runtime/pkg/dag"
 )
 
 type vertexContext struct {
@@ -30,12 +32,7 @@ type vertexContext struct {
 	// identifies the time the vertex fn finished
 	finished time.Time
 
-	input map[string]*gojq.Code
-	fn    string
-
-	output map[string]interface{}
-	status string
-	reason string
+	vertexContext *dag.VertexContext
 
 	// callback
 	recordResult ResultFunc
@@ -71,9 +68,11 @@ func (r *vertexContext) isVisted() bool {
 	return !r.visited.IsZero()
 }
 
+/*
 func (r *vertexContext) getDuration() time.Duration {
 	return r.finished.Sub(r.start)
 }
+*/
 
 func (r *vertexContext) run(ctx context.Context) {
 
@@ -87,7 +86,7 @@ func (r *vertexContext) run(ctx context.Context) {
 	r.m.Unlock()
 
 	// callback function to capture the result
-	r.recordResult(&ResultEntry{vertexName: r.vertexName, duration: r.getDuration()})
+	r.recordResult(&execResult{vertexName: r.vertexName, startTime: r.start})
 
 	// signal to the dependent function the result of the vertex fn execution
 	for vertexName, doneCh := range r.doneChs {

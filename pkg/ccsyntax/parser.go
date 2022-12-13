@@ -12,8 +12,8 @@ type Parser interface {
 }
 
 func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
-	p := &lcncparser{
-		lcncCfg: cfg,
+	p := &parser{
+		cCfg: cfg,
 		//d:       dag.NewDAG(),
 		//output: map[string]string{},
 	}
@@ -24,19 +24,27 @@ func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
 	return p, result
 }
 
-type lcncparser struct {
-	lcncCfg *ctrlcfgv1.ControllerConfig
+type parser struct {
+	cCfg *ctrlcfgv1.ControllerConfig
 	//d              dag.DAG
 	rootVertexName string
 }
 
-func (r *lcncparser) Parse() (dag.DAG, string, []Result) {
+func (r *parser) Parse() (dag.DAG, string, []Result) {
 	// validate the config when creating the dag
-	d := dag.NewDAG()
+	d := dag.New()
 	// resolves the dependencies in the dag
 	// step1. check if all dependencies resolve
 	// step2. add the dependencies in the dag
-	result := r.Resolve(d)
+	result := r.populate(d)
+	if len(result) != 0 {
+		return nil, "", result
+	}
+	result = r.resolve(d)
+	if len(result) != 0 {
+		return nil, "", result
+	}
+	result = r.connect(d)
 	if len(result) != 0 {
 		return nil, "", result
 	}

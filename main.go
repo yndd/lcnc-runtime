@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-const yamlFile = "./examples/topo.yaml"
+const yamlFile = "./examples/topo2.yaml"
 
 func main() {
 	var metricsAddr string
@@ -69,23 +69,28 @@ func main() {
 		logger.Debug("cannot read file", "error", err)
 		os.Exit(1)
 	}
+	logger.Debug("read file")
 
 	ctrlcfg := &ctrlcfgv1.ControllerConfig{}
 	if err := yaml.Unmarshal(fb, ctrlcfg); err != nil {
 		logger.Debug("cannot unmarshal", "error", err)
 		os.Exit(1)
 	}
+	logger.Debug("unmarshal succeeded")
 
 	p, result := ccsyntax.NewParser(ctrlcfg)
 	if len(result) > 0 {
 		logger.Debug("config syntax validation failed", "result", result)
 		os.Exit(1)
 	}
+	logger.Debug("new parser succecreateeded")
+
 	_, _, result = p.Parse()
 	if len(result) != 0 {
 		logger.Debug("cannot parse resources", "result", result)
 		os.Exit(1)
 	}
+	logger.Debug("new parser succecreateeded")
 
 	gvrs, result := p.GetExternalResources()
 	if len(result) > 0 {

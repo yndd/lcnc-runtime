@@ -58,7 +58,7 @@ func (r *ControllerConfig) GetWatchGvrs() ([]schema.GroupVersionResource, error)
 	return gvrs, nil
 }
 
-func (r *ControllerConfig) getGvrList(gvrObjs map[string]ControllerConfigGvrObject) ([]schema.GroupVersionResource, error) {
+func (r *ControllerConfig) getGvrList(gvrObjs map[string]*ControllerConfigGvrObject) ([]schema.GroupVersionResource, error) {
 	gvrs := make([]schema.GroupVersionResource, 0, len(gvrObjs))
 	for _, gvrObj := range gvrObjs {
 		gvr, err := GetGVR(gvrObj.Gvr)
@@ -88,9 +88,22 @@ func GetGVR(gvr *ControllerConfigGvr) (*schema.GroupVersionResource, error) {
 	}, nil
 }
 
-func (v ControllerConfigPipelineBlock) IsBlock() bool {
-	if v.Range == nil && v.Condition == nil {
-		return false
+func (v *ControllerConfigFunction) HasBlock() bool {
+	return v.Block != nil
+}
+
+func (v *ControllerConfigBlock) HasRange() bool {
+	return v.Range.Value != nil
+
+	//return v.Condition.Block.HasRange()
+}
+
+func (r *ControllerConfig) GetPipeline(s string) *ControllerConfigPipeline {
+	for _, pipeline := range r.Spec.Properties.ControllerConfigPipelines {
+		fmt.Printf("searching %s, matching: %s\n", s, pipeline.Name)
+		if pipeline.Name == s {
+			return pipeline
+		}
 	}
-	return true
+	return nil
 }

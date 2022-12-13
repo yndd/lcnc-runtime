@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *lcncparser) GetExternalResources() ([]schema.GroupVersionResource, []Result) {
+func (r *parser) GetExternalResources() ([]schema.GroupVersionResource, []Result) {
 	er := &er{
 		result:    []Result{},
 		resources: []schema.GroupVersionResource{},
@@ -15,13 +15,9 @@ func (r *lcncparser) GetExternalResources() ([]schema.GroupVersionResource, []Re
 	er.resultFn = er.recordResult
 	er.addResourceFn = er.addResource
 
-	fnc := WalkConfig{
-		lcncCfgPreHookFn: nil,
-		lcncGvrObjectFn:  er.validateLcncGvrObjectFn,
-		lcncBlockFn:      er.validateBlockFn,
-		lcncVarFn:        er.validateVarFn,
-		lcncFunctionFn:   er.validateFunctionFn,
-		lcncServiceFn:    nil,
+	fnc := &WalkConfig{
+		gvrObjectFn: er.getGvr,
+		functionFn:  er.getFunctionGvr,
 	}
 
 	// validate the external resources
@@ -62,80 +58,28 @@ func (r *er) addResource(er schema.GroupVersionResource) {
 	}
 }
 
-//func (r *er) validateLcncHookNopFn(o Origin, v map[string]LcncGvrObject) {}
-
-func (r *er) validateLcncGvrObjectFn(o Origin, idx int, n string, v ctrlcfgv1.ControllerConfigGvrObject) {
-	gvr, err := ctrlcfgv1.GetGVR(v.Gvr)
+func (r *er) addGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvr) {
+	gvr, err := ctrlcfgv1.GetGVR(v)
 	if err != nil {
 		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   n,
-			Error:  err.Error(),
+			OriginContext: oc,
+			Error:         err.Error(),
 		})
 	}
 	r.addResource(*gvr)
 }
 
-func (r *er) validateBlockFn(o Origin, idx int, v ctrlcfgv1.ControllerConfigBlock) {
-	value, err := GetValue(*v.For.Range)
-	if err != nil {
-		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   "",
-			Error:  err.Error(),
-		})
-	}
-	if value.Kind == GVRKind {
-		r.addResource(*value.Gvr)
-	}
+func (r *er) getGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
+	r.addGvr(oc, v.Gvr)
 }
 
-func (r *er) validateVarFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar) {
-	if v.Slice != nil {
-		r.validateValue(o, block, idx, vertexName, v.Slice.ControllerConfigValue)
+func (r *er) getFunctionGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+	if v.Input.Gvr != nil {
+		r.addGvr(oc, v.Input.Gvr)
 	}
-	if v.Map != nil {
-		r.validateValue(o, block, idx, vertexName, v.Map.ControllerConfigValue)
-	}
-}
-
-func (r *er) validateValue(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigValue) {
-	dv := ""
-	if v.String != nil {
-		dv = *v.String
-	}
-	if v.Query != nil {
-		dv = *v.Query
-	}
-	value, err := GetValue(dv)
-	if err != nil {
-		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   "",
-			Error:  err.Error(),
-		})
-	}
-	if value.Kind == GVRKind {
-		r.addResource(*value.Gvr)
-	}
-}
-
-func (r *er) validateFunctionFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
 	for _, v := range v.Output {
-		value, err := GetValue(v)
-		if err != nil {
-			r.recordResult(Result{
-				Origin: o,
-				Index:  idx,
-				Name:   vertexName,
-				Error:  err.Error(),
-			})
-		}
-		if value.Kind == GVRKind {
-			r.addResource(*value.Gvr)
+		if v.Gvr != nil {
+			r.addGvr(oc, v.Gvr)
 		}
 	}
 }

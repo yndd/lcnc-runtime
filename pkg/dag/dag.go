@@ -9,13 +9,15 @@ import (
 )
 
 type DAG interface {
-	AddVertex(s string, v *vertexContext) error
+	//GetParentDag() DAG
+	AddVertex(s string, v *VertexContext) error
 	Connect(from, to string)
 	AddDownEdge(from, to string)
 	AddUpEdge(from, to string)
 	VertexExists(s string) bool
-	GetVertex(s string) *vertexContext
-	GetVertices() map[string]*vertexContext
+	GetRootVertex() string
+	GetVertex(s string) *VertexContext
+	GetVertices() map[string]*VertexContext
 	GetDownVertexes(from string) []string
 	GetUpVertexes(from string) []string
 
@@ -24,9 +26,11 @@ type DAG interface {
 	// GetWalkResult()
 	TransitiveReduction()
 	// used for the resolution
-	LookupVertex(lookup bool, s []string) bool
+	//Lookup(s []string) bool
+	Lookup(s []string) bool
 	// used for the edge connectivity
-	//GetDependencies() []string
+	LookupRootVertex(s []string) (string, error)
+	lookupRootVertex(idx int, s []string) (int, string, error)
 }
 
 // used for returning
@@ -36,10 +40,10 @@ type Edge struct {
 }
 
 type dag struct {
-	dagCtx *DagContext
+	//dagCtx *DagContext
 	// vertices first key is the vertexName
 	mv       sync.RWMutex
-	vertices map[string]*vertexContext
+	vertices map[string]*VertexContext
 	// downEdges/upEdges
 	// 1st key is from, 2nd key is to
 	mde       sync.RWMutex
@@ -51,29 +55,50 @@ type dag struct {
 	vertexDepth map[string]int
 }
 
-type vertexContext struct {
-	// plBlock can be a block or a function
-	// if it is a fn we execute the function with the functionconfig
+type VertexKind string
+
+const (
+	RootVertexKind VertexKind = "root"
+	//BlockVertexKind    VertexKind = "block"
+	FunctionVertexKind VertexKind = "function"
+	OutputVertexKind   VertexKind = "output"
+	LocalVarVertexKind VertexKind = "localvar"
+)
+
+type VertexContext struct {
+	// block indicates we have to execute the pipeline or not
+	Name        string
+	Kind        VertexKind
+	OutputDAG   DAG
+	LocalVarDag DAG
 	// if it is a block we execute the block and call the dag
-	root     bool
-	plBlock  ctrlcfgv1.ControllerConfigPipelineBlock
-	unaryDag DAG
+	//ControllerConfigBlock ctrlcfgv1.ControllerConfigBlock
+	//ChildDAG              DAG
+	// if is not a block we execute the function with the functionconfig
+	// root is modelled as a function
+	Function *ctrlcfgv1.ControllerConfigFunction
 }
 
-type DagContext struct {
-	parentDag DAG
-}
+//type DagContext struct {
+//	ParentDag DAG
+//}
 
-func NewDAG(dagCtx *DagContext) DAG {
+func New() DAG {
 	return &dag{
-		dagCtx:    dagCtx,
-		vertices:  make(map[string]*vertexContext),
+		//dagCtx:    dagCtx,
+		vertices:  make(map[string]*VertexContext),
 		downEdges: make(map[string]map[string]struct{}),
 		upEdges:   make(map[string]map[string]struct{}),
 	}
 }
 
-func (r *dag) AddVertex(s string, v *vertexContext) error {
+/*
+func (r *dag) GetParentDag() DAG {
+	return r.dagCtx.ParentDag
+}
+*/
+
+func (r *dag) AddVertex(s string, v *VertexContext) error {
 	r.mv.Lock()
 	defer r.mv.Unlock()
 
@@ -81,18 +106,19 @@ func (r *dag) AddVertex(s string, v *vertexContext) error {
 	if _, ok := r.vertices[s]; ok {
 		return fmt.Errorf("duplicate vertex entry: %s", s)
 	}
-	if r.dagCtx.parentDag == nil {
-		if len(r.GetVertices()) > 0 {
-			return fmt.Errorf("we can only have 1 root dag")
+	/*
+		if r.dagCtx.ParentDag == nil {
+			if len(r.GetVertices()) > 0 {
+				return fmt.Errorf("we can only have 1 root dag")
+			}
 		}
-		v.root = true
-	}
+	*/
 	r.vertices[s] = v
 
 	return nil
 }
 
-func (r *dag) GetVertices() map[string]*vertexContext {
+func (r *dag) GetVertices() map[string]*VertexContext {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	return r.vertices
@@ -105,10 +131,19 @@ func (r *dag) VertexExists(s string) bool {
 	return ok
 }
 
-func (r *dag) GetVertex(s string) *vertexContext {
+func (r *dag) GetVertex(s string) *VertexContext {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	return r.vertices[s]
+}
+
+func (r *dag) GetRootVertex() string {
+	for vertexName, v := range r.GetVertices() {
+		if v.Kind == RootVertexKind {
+			return vertexName
+		}
+	}
+	return ""
 }
 
 func (r *dag) Connect(from, to string) {
@@ -253,41 +288,64 @@ func (r *dag) getDependencyMap(from string, indent int) {
 }
 
 func (r *dag) checkVertex(s string) bool {
-	found := false
 	for vertexName := range r.GetVertices() {
 		if vertexName == s {
 			return true
 		}
 	}
-	return found
+	return false
 }
 
-func (r *dag) LookupVertex(lookup bool, s []string) bool {
-	if lookup && r.dagCtx.parentDag != nil {
-		return r.dagCtx.parentDag.LookupVertex(lookup, s)
-	}
+func (r *dag) Lookup(s []string) bool {
 	// we hit the root of the tree
-	lookup = false
 	if len(s) == 0 {
-		// should never happen with our logic sicen there is a check for len
+		// should never happen with our logic since there is a check for len
 		return false
 	}
 	v := r.GetVertex(s[0])
 	if v == nil {
 		return false
 	}
-	if v.unaryDag != nil {
-		return v.unaryDag.LookupVertex(lookup, s[1:])
-	}
 	if len(s) == 1 {
 		return true
+	}
+	if v.OutputDAG != nil {
+		return v.OutputDAG.Lookup(s[1:])
 	}
 	return false
 }
 
-/*
-func (r *dag) GetDependencies() []string {
+func (r *dag) LookupRootVertex(s []string) (string, error) {
+	// we hit the root of the tree
+	if len(s) == 0 {
+		// should never happen with our logic since there is a check for len
+		return "", fmt.Errorf("lookup root vertex should always have some input: %v", s)
+	}
+	_, vertexName, err := r.lookupRootVertex(1, s)
+	if err != nil {
+		return "", err
+	}
+	return vertexName, nil
 
-	return nil
 }
-*/
+
+func (r *dag) lookupRootVertex(idx int, s []string) (int, string, error) {
+	v := r.GetVertex(s[0])
+	if v == nil {
+		return idx, "", fmt.Errorf("lookup root vertex not found: %v", s)
+	}
+	if len(s) == idx {
+		if idx == 1 {
+			return idx, s[idx-1], nil
+		}
+		if idx == 2 {
+			return idx, s[idx-2], nil
+		}
+		
+	}
+	if v.OutputDAG != nil {
+		idx++
+		return v.OutputDAG.lookupRootVertex(idx, s)
+	}
+	return idx, "", fmt.Errorf("lookup root vertex not found: %v", s)
+}

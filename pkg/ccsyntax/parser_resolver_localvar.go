@@ -1,5 +1,7 @@
 package ccsyntax
 
+/*
+
 import "errors"
 
 func (r *rs) initLocalVariables() {
@@ -28,3 +30,4 @@ func (r *rs) GetLocalVariable(s string) bool {
 	_, ok := r.localVariable[s]
 	return ok
 }
+*/

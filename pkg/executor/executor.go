@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/henderiw-k8s-lcnc/lcnc-runtime2/pkg/dag"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
+	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type exectutor struct {
@@ -18,29 +18,18 @@ type exectutor struct {
 	walkMap   map[string]*vertexContext
 	fnDoneMap map[string]chan bool
 
-	mr     sync.RWMutex
-	execResult []*execResult
-	finaloutput map[string][]unstructured.Unstructured
-
-}
-
-type execResult struct {
-	vertexName string
-	startTime  string
-	endTime    string
-	input      map[string]interface{}
-	output     map[string]interface{}
-	status     string
-	reason     string
+	mr          sync.RWMutex
+	execResult  []*execResult
+	//finaloutput map[string][]unstructured.Unstructured
 }
 
 func New() *exectutor {
 	return &exectutor{
-		mw:        sync.RWMutex{},
-		walkMap:   map[string]*vertexContext{},
-		fnDoneMap: map[string]chan bool{},
-		mr:        sync.RWMutex{},
-		result:    []*ResultEntry{},
+		mw:         sync.RWMutex{},
+		walkMap:    map[string]*vertexContext{},
+		fnDoneMap:  map[string]chan bool{},
+		mr:         sync.RWMutex{},
+		execResult: []*execResult{},
 	}
 }
 
@@ -53,20 +42,22 @@ func (r *exectutor) Walk(ctx context.Context, d dag.DAG, from string) {
 	r.cancelFn = cancelFn
 	r.walk(ctx, d, from, true, 1)
 	// add total as a last entry in the result
-	r.recordResult(&ResultEntry{
+	r.recordResult(&execResult{
 		vertexName: "total",
-		duration:   time.Since(start),
+		startTime:  start,
+		endTime:    time.Now(),
 	})
 }
 
 func (r *exectutor) initWalk(d dag.DAG) {
 	//d.wg = new(sync.WaitGroup)
-	r.result = []*ResultEntry{}
+	r.execResult = []*execResult{}
 	r.walkMap = map[string]*vertexContext{}
-	for vertexName := range d.GetVertices() {
+	for vertexName, dvc := range d.GetVertices() {
 		//fmt.Printf("init vertexName: %s\n", vertexName)
 		r.walkMap[vertexName] = &vertexContext{
-			vertexName: vertexName,
+			vertexName:    vertexName,
+			vertexContext: dvc,
 			//cancelFn:   cancelFn,
 			doneChs: make(map[string]chan bool), //snd
 			depChs:  make(map[string]chan bool), //rcv

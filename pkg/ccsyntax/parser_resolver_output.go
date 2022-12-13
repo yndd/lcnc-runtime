@@ -1,5 +1,6 @@
 package ccsyntax
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -38,3 +39,4 @@ func (r *rs) PrintOutputMappings() {
 		fmt.Printf("output: key: %s, fnName: %s\n", k, v)
 	}
 }
+*/

@@ -7,16 +7,16 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
-func (r *lcncparser) ValidateSyntax() []Result {
+func (r *parser) ValidateSyntax() []Result {
 	vs := &vs{
 		result: []Result{},
 	}
 
 	fnc := &WalkConfig{
-		cfgPreHookFn:    vs.validateLcncCfgPreHookFn,
-		gvrObjectFn:     vs.validateLcncGvrObjectFn,
-		pipelineBlockFn: vs.validateBlockFn,
-		functionFn: vs.validateFunctionFn,
+		cfgPreHookFn:    vs.validatePreHook,
+		gvrObjectFn:     vs.validateGvr,
+		emptyPipelineFn: vs.validateEmptyPipeline,
+		functionFn:      vs.validateFunction,
 		//lcncServiceFn:    vs.validateServiceFn,
 	}
 
@@ -37,212 +37,149 @@ func (r *vs) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *vs) validateLcncCfgPreHookFn(lcncCfg *ctrlcfgv1.ControllerConfig) {
+func (r *vs) validatePreHook(lcncCfg *ctrlcfgv1.ControllerConfig) {
 	if len(lcncCfg.Spec.Properties.For) != 1 {
 		r.recordResult(Result{
-			Origin: OriginFor,
-			Index:  0,
-			Error:  fmt.Errorf("lcnc config must have just 1 for statement, got: %v", lcncCfg.Spec.Properties.For).Error(),
+			OriginContext: &OriginContext{FOW: FOWFor},
+			Error:         fmt.Errorf("lcnc config must have just 1 for statement, got: %v", lcncCfg.Spec.Properties.For).Error(),
 		})
 	}
 }
 
-func (r *vs) validateLcncGvrObjectFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigGvrObject) {
+func (r *vs) validateGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
 	if v.Gvr == nil {
 		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("a gvr must be present, got: %v", v).Error(),
+			OriginContext: oc,
+			Error:         fmt.Errorf("a gvr must be present, got: %v", v).Error(),
 		})
 	}
 }
 
-func (r *vs) validateBlockFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock) {
-	if v.Range != nil && v.Condition != nil {
+func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
+	if oc.FOW != FOWOwn {
 		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("cannot have both range and condition in the same block, got: %v", v).Error(),
+			OriginContext: oc,
+			Error:         fmt.Errorf("a pipeline must be present for %v", *oc).Error(),
 		})
-	}
-	if v.Range != nil {
-		r.validateContext(&OriginContext{Origin: o, Index: 0, VertexName: vertexName}, *v.Range.Value)
-		r.validateBlockFn(o, idx, vertexName, v.Range.ControllerConfigBlock)
-
-	}
-	if v.Condition != nil {
-		r.validateContext(&OriginContext{Origin: o, Index: 0, VertexName: vertexName}, *v.Condition.Expression)
-		r.validateBlockFn(o, idx, vertexName, v.Condition.ControllerConfigBlock)
 	}
 }
 
-func (r *vs) validateFunctionFn(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
-	// if type == query -> check gvr and selector
-	// if type == map or slice -> check key, value
-	// if type == empty -> image or exec need to be present
-
-	// check input
-	// check output
-
-}
-
-/*
-func (r *vs) validateVarFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar) {
-	if v.Slice == nil && v.Map == nil {
-		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("slice or map must be present in a variable").Error(),
-		})
-		return
+func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+	// validate block
+	if v.HasBlock() {
+		r.validateBlock(oc, v.Block)
 	}
-	if v.Slice != nil {
-		r.validateValue(o, block, idx, vertexName, v.Slice.ControllerConfigValue)
-	}
-	if v.Map != nil {
-		r.validateValue(o, block, idx, vertexName, v.Map.ControllerConfigValue)
-		// validate key
-		input := false
-		if o == OriginVariable {
-			input = true
-		}
-		if v.Map.Key == nil {
+
+	// validate the function type
+	switch v.Type {
+	case ctrlcfgv1.MapType:
+		if v.Input.Key == "" {
 			r.recordResult(Result{
-				Origin: o,
-				Index:  idx,
-				Name:   vertexName,
-				Error:  fmt.Errorf("key must be present in a map variable").Error(),
+				OriginContext: oc,
+				Error:         fmt.Errorf("key needs to be present in %s", v.Type).Error(),
 			})
-			return
 		}
-		if v.Map.Key != nil {
-			r.validateContext(&OriginContext{
-				Origin:     o,
-				Index:      idx,
-				VertexName: vertexName,
-				ForBlock:   block,
-				Input:      input,
-				Output:     true}, *v.Map.Key)
+		if v.Input.Value == "" {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("value needs to be present in %s", v.Type).Error(),
+			})
+		}
+	case ctrlcfgv1.SliceType:
+		if v.Input.Value == "" {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("value needs to be present in %s", v.Type).Error(),
+			})
+		}
+	case ctrlcfgv1.QueryType:
+		if v.Input.Gvr == nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("gvr needs to be present in %s", v.Type).Error(),
+			})
+		}
+	default:
+	}
+
+	// validate input references
+	// e.g. check if a VALUE, KEY, INDEX is not used when no block is present
+	if v.Input == nil {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("input is needed in a function %s", v.Type).Error(),
+		})
+	} else {
+		if v.Input.Key != "" {
+			r.validateContext(oc, v, v.Input.Key)
+		}
+		if v.Input.Value != "" {
+			r.validateContext(oc, v, v.Input.Value)
+		}
+		for _, val := range v.Input.GenericInput {
+			r.validateContext(oc, v, val)
+		}
+	}
+	
+
+	// validate output -> TBD
+
+	// validate local vars -> TBD
+
+}
+
+func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.ControllerConfigBlock) {
+	// process and validate block
+	if v.Range.Value != nil && v.Condition.Expression != nil {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("cannot have both range and condition in the same block, got: %v", v).Error(),
+		})
+	}
+	if v.Range.Value != nil {
+		if v.Range.Value.Value != nil {
+			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, *v.Range.Value.Value)
+			//r.validateBlock(oc, v.Range.Block)
+		} else {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("range value cannot be empty: %v", v).Error(),
+			})
+		}
+	}
+	if v.Condition.Expression != nil {
+		if v.Condition.Expression.Expression != nil {
+			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, *v.Condition.Expression.Expression)
+			//r.validateBlock(oc, v.Condition.Block)
+		} else {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("condition expression cannot be empty: %v", v).Error(),
+			})
 		}
 	}
 }
-*/
-/*
-func (r *vs) validateValue(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigValue) {
-	if v.String == nil && v.ControllerConfigQuery.Query == nil {
-		r.recordResult(Result{
-			Origin: o,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("query or string must be present in a slice variable").Error(),
-		})
-	}
-	input := false
-	if o == OriginVariable {
-		input = true
-	}
-	if v.String != nil {
-		r.validateContext(&OriginContext{
-			Origin:     o,
-			Index:      idx,
-			VertexName: vertexName,
-			ForBlock:   block,
-			Input:      input,
-			Output:     true}, *v.String)
-	}
-	if v.ControllerConfigQuery.Query != nil {
-		r.validateContext(&OriginContext{
-			Origin:     o,
-			Index:      idx,
-			VertexName: vertexName,
-			ForBlock:   block,
-			Input:      input,
-			Query:      true,
-			Output:     true}, *v.ControllerConfigQuery.Query)
-	}
-}
-*/
 
-/*
-func (r *vs) validateFunctionFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
-	//v.ImageName -> must be present
-	if v.ControllerConfigExecutor.Image == nil {
-		r.recordResult(Result{
-			Origin: OriginFunction,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("imageName must be present in a function").Error(),
-		})
-	}
-	// input must be present
-	if len(v.Input) == 0 {
-		r.recordResult(Result{
-			Origin: OriginFunction,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("input must be present in a function").Error(),
-		})
-	}
-	// output must be present
-	if len(v.Output) == 0 {
-		r.recordResult(Result{
-			Origin: OriginFunction,
-			Index:  idx,
-			Name:   vertexName,
-			Error:  fmt.Errorf("output must be present in a function").Error(),
-		})
-	}
-	// uniqueness of local variables are checked by the way we defined the api
-	// map[string]LcncVar
-	for _, v := range v.Vars {
-		r.validateVarFn(OriginFunction, block, idx, vertexName, v)
-	}
-	for _, v := range v.Input {
-		r.validateContext(&OriginContext{
-			Origin:     OriginFunction,
-			Index:      idx,
-			VertexName: vertexName,
-			ForBlock:   block,
-			Input:      true}, v)
-	}
-	for _, v := range v.Output {
-		r.validateContext(&OriginContext{
-			Origin:     OriginFunction,
-			Index:      idx,
-			VertexName: vertexName,
-			ForBlock:   block,
-			Output:     true}, v)
-	}
-}
-*/
+//func (r *vs) validateService(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+//}
 
-func (r *vs) validateServiceFn(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction) {
-}
-
-func (r *vs) validateContext(o *OriginContext, s string) {
+func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction, s string) {
 	refs := GetReferences(s)
 	//fmt.Printf("validate ctxName: %s, value: %s, kind: %s, variable: %v\n", o.VertexName, s, value.Kind, value.Variable)
 	for _, ref := range refs {
 		switch ref.Kind {
-		case RangeKReferenceKind:
-			if !o.ForBlock {
+		case RangeReferenceKind:
+			if !v.HasBlock() || !v.Block.HasRange() {
 				r.recordResult(Result{
-					Origin: o.Origin,
-					Index:  o.Index,
-					Name:   o.VertexName,
-					Error:  fmt.Errorf("cannot use Key variabales without a range statement").Error(),
+					OriginContext: oc,
+					Error:         fmt.Errorf("cannot use Key variables without a range statement").Error(),
 				})
 				return
 			}
 		default:
 			r.recordResult(Result{
-				Origin: o.Origin,
-				Index:  o.Index,
-				Name:   o.VertexName,
-				Error:  fmt.Errorf("unknown reference kind, got: %s", s).Error(),
+				OriginContext: oc,
+				Error:         fmt.Errorf("unknown reference kind, got: %s", s).Error(),
 			})
 			return
 		}

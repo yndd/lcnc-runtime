@@ -5,7 +5,6 @@ go 1.19
 require (
 	github.com/go-logr/logr v1.2.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/henderiw-k8s-lcnc/lcnc-runtime2 v0.0.0-20221202045023-8748f683f2bd
 	github.com/onsi/ginkgo/v2 v2.1.6
 	github.com/onsi/gomega v1.20.1
 	github.com/pkg/errors v0.9.1

@@ -3,7 +3,7 @@ package ccsyntax
 type ReferenceKind string
 
 const (
-	RangeKReferenceKind  ReferenceKind = "range" // used for $KEY, $VALUE, $INDEX
+	RangeReferenceKind   ReferenceKind = "range" // used for $KEY, $VALUE, $INDEX
 	RegularReferenceKind ReferenceKind = "regular"
 )
 

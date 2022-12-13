@@ -7,87 +7,95 @@ spec:
   properties:
     for: 
       topo: 
-        gvr: topo.yndd.io/v1alpha1/definitions
-        pipeline:
+        gvr: 
+          apiVersion: topo.yndd.io/v1alpha1
+          resource: definitions
+        pipelineRef: forPipeline
+    pipelines:
+      - name: forPipeline
+        vars:
           targets:
             type: query
             input:
-              gvr: target.yndd.io/v1/targets 
-              selector:
+              gvr: 
+                apiVersion: target.yndd.io/v1
+                resources: targets 
           alltemplates:
             type: query
             input: 
-              gvr: topo.yndd.io/v1alpha1/templates
-          getParentTemplateNames:
+              gvr: 
+                apiVersion: topo.yndd.io/v1alpha1
+                resource: templates
+          parentTemplateNames:
             range:
               value: $topo.spec.properties.templates
-              # condition:
-              #   expression: xxx
-            parentTemplateNames:
-              type: slice # output is name of the function
-              input: 
-                value: $VALUE.name
-          getParentTemplates:
+            type: slice # output is name of the function
+            input: 
+              value: $VALUE.name
+          parentTemplates:
             range:
-              value: ${topo.getAllParentTemplates.parentTemplateNames}
-            parentTemplates:
-              type: map # output is name of the function
-              input: 
-                key: $VALUE
-                value: .select(${topo.allTemplates}.name == $VALUE)
-          getChildTemplates:
+              value: $parentTemplateNames
+            type: map # output is name of the function
+            input: 
+              key: $VALUE
+              value: .select($.allTemplates.name == $VALUE)
+          childTemplates:
             range: 
               value: $parentTemplates
-            childTemplates:
-              type: map
-              input:
-                key: $VALUE.metadata.name
-                value: $allTemplates == "$VALUE.spec.properties.fabric.pod[*].definitionRef
-          getDiscoveryRuleNames:
+            type: map
+            input:
+              key: $VALUE.metadata.name
+              value: $allTemplates == "$VALUE.spec.properties.fabric.pod[*].definitionRef
+          discoveryRuleNames:
             range:
               value: $topo.spec.properties.discoveryRules
-            discoveryRuleNames:
-              type: slice
-              input:
-                value: $VALUE.metatdata.name
+            type: slice
+            input:
+              value: $VALUE.metatdata.name
+        tasks:
           createTopology:
             image: topology
             input:
               topology: $topo # can be implicit
             output: 
-              Topologies: topo.yndd.io/v1alpha1/topologies
+              topologies: 
+                gvr: 
+                  apiVersion: topo.yndd.io/v1alpha1
+                  resource: topologies
+                resource: topologies
           createFabric:
             range:
-              value: $parentTemplates
-            createFabric:
-              image: topologyBuilderFromTemplate
-              getChildTemplates:
+              value: ${topo.getParentTemplates.parentTemplates}
+            image: topologyBuilderFromTemplate
+            vars:
+              localChildTemplates:
                 range:
                   value: $childTemplates
                   condition:
-                    expression: 
-                localChildTemplates:
-                  type: slice
-                  input: 
-                    value: $KEY 
-              input:
-                parentTemplate: $VALUE
-                localChildTemplates: $localChildTemplates
-              output: 
-                TemplateNodes: topo.yndd.io/v1alpha1/nodes  
-                Templatelinks: topo.yndd.io/v1alpha1/links
-          createNode:
-            range: 
-              value: $discoveryRuleNames
-            createNode:
-              image: nodeBuilderFromDiscoveryRule
-              getTargets:
+                    expression: xxx
                 type: slice
-              vars: 
-                targets:
-                  slice:
-                    value: {query: $targets, selector: { name: $KEY}}
-              input:
-                targets: $targets
-              output: 
-                DiscoveryNodes: topo.yndd.io/v1alpha1/nodes 
+                input: 
+                  value: $KEY 
+            input:
+              parentTemplate: $VALUE
+              localChildTemplates: $localChildTemplates
+            output: 
+              nodes: 
+                gvr:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  resource: nodes  
+              links: 
+                gvr:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  resource: links
+          createNodeFromDiscovery:
+            range: 
+              value: ${topo.getDiscoveryRuleNames.discoveryRuleNames)
+            image: nodeBuilderFromDiscoveryRule
+            input:
+              targets: .select(${topo.targets}.metadata.name == $VALUE)
+            output: 
+              nodes: 
+                apiVersion: topo.yndd.io/v1alpha1
+                resources: nodes 
+          

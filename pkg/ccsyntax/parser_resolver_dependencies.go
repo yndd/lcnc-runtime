@@ -1,5 +1,6 @@
 package ccsyntax
 
+/*
 import (
 	"fmt"
 
@@ -185,3 +186,4 @@ func (r *rs) connectEdges(o *OriginContext, vertexName, s string) error {
 	}
 	return nil
 }
+*/
