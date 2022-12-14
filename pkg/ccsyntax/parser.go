@@ -8,7 +8,7 @@ import (
 
 type Parser interface {
 	GetExternalResources() ([]schema.GroupVersionResource, []Result)
-	Parse() (dag.DAG, string, []Result)
+	Parse() (dag.DAG, []Result)
 }
 
 func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
@@ -30,7 +30,7 @@ type parser struct {
 	rootVertexName string
 }
 
-func (r *parser) Parse() (dag.DAG, string, []Result) {
+func (r *parser) Parse() (dag.DAG, []Result) {
 	// validate the config when creating the dag
 	d := dag.New()
 	// resolves the dependencies in the dag
@@ -38,20 +38,20 @@ func (r *parser) Parse() (dag.DAG, string, []Result) {
 	// step2. add the dependencies in the dag
 	result := r.populate(d)
 	if len(result) != 0 {
-		return nil, "", result
+		return nil, result
 	}
 	result = r.resolve(d)
 	if len(result) != 0 {
-		return nil, "", result
+		return nil, result
 	}
 	result = r.connect(d)
 	if len(result) != 0 {
-		return nil, "", result
+		return nil, result
 	}
 	//d.GetDependencyMap(r.rootVertexName)
 	// optimizes the dependncy graph based on transit reduction
 	// techniques
 	d.TransitiveReduction()
 	//d.GetDependencyMap(r.rootVertexName)
-	return d, r.rootVertexName, nil
+	return d, nil
 }

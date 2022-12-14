@@ -43,8 +43,23 @@ func (r *connector) connectGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigG
 }
 
 func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+	if v.HasVars() {
+		oc := oc.DeepCopy()
+		for localVarName, v := range v.Vars {
+			oc.LocalVarName = localVarName
+			r.connectFunction(oc, v)
+		}
+	}
+
 	if v.HasBlock() {
 		r.connectBlock(oc, v.Block)
+	}
+
+	if v.Input.Selector != nil {
+		for k, v := range v.Input.Selector.MatchLabels {
+			r.connectRefs(oc, k)
+			r.connectRefs(oc, v)
+		}
 	}
 
 	if v.Input != nil {
@@ -52,35 +67,38 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 			r.d.Connect(r.rootVertexName, oc.VertexName)
 		}
 		if v.Input.Key != "" {
-			r.connectRefs(oc, GetReferences(v.Input.Key))
+			r.connectRefs(oc, v.Input.Key)
 		}
 		if v.Input.Value != "" {
-			r.connectRefs(oc, GetReferences(v.Input.Value))
+			r.connectRefs(oc, v.Input.Value)
 		}
 		for _, v := range v.Input.GenericInput {
-			r.connectRefs(oc, GetReferences(v))
+			r.connectRefs(oc, v)
 		}
 	}
 }
 
-func (r *connector) connectBlock(oc *OriginContext, v *ctrlcfgv1.ControllerConfigBlock) {
-	if v.Condition.Expression != nil {
-		if v.Condition.Expression.Expression != nil {
-			r.connectRefs(oc, GetReferences(*v.Condition.Expression.Expression))
-			// continue to resolve if this is a nested block
-			//r.connectBlock(oc, v.Condition.Block)
+func (r *connector) connectBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
+	if v.Range != nil {
+		r.connectRefs(oc, v.Range.Value)
+		// continue to resolve if this is a nested block
+		if v.Range.Block != nil {
+			r.connectBlock(oc, v.Range.Block)
 		}
 	}
-	if v.Range.Value != nil {
-		if v.Range.Value != nil {
-			r.connectRefs(oc, GetReferences(*v.Range.Value.Value))
-			// continue to resolve if this is a nested block
-			//r.connectBlock(oc, v.Range.Block)
+	if v.Condition != nil {
+		r.connectRefs(oc, v.Condition.Expression)
+		// continue to resolve if this is a nested block
+		if v.Condition.Block != nil {
+			r.connectBlock(oc, v.Condition.Block)
 		}
 	}
 }
 
-func (r *connector) connectRefs(oc *OriginContext, refs []*Reference) {
+func (r *connector) connectRefs(oc *OriginContext, s string) {
+	rfs := NewReferences()
+	refs := rfs.GetReferences(s)
+
 	for _, ref := range refs {
 		// RangeRefKind do nothing
 		if ref.Kind == RegularReferenceKind {

@@ -74,27 +74,23 @@ type ControllerConfigPipeline struct {
 	Tasks map[string]*ControllerConfigFunction `json:"tasks,omitempty" yaml:"tasks,omitempty"`
 }
 
-type ControllerConfigBlock struct {
-	Range     ControllerConfigRange     `json:",inline" yaml:",inline"`
-	Condition ControllerConfigCondition `json:",inline" yaml:",inline"`
+type Block struct {
+	Range     *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
+	Condition *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
-type ControllerConfigRange struct {
-	Value *ControllerConfigRangeValue `json:"range,omitempty" yaml:"range,omitempty"`
-	//Block *ControllerConfigBlock      `json:",inline" yaml:",inline"`
+type RangeValue struct {
+	Value     string               `json:"value" yaml:"value"`
+	Block     *Block               `json:",inline" yaml:",inline"`
+	//Range     *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
+	//Condition *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
-type ControllerConfigRangeValue struct {
-	Value *string `json:"value,omitempty" yaml:"value,omitempty"`
-}
-
-type ControllerConfigCondition struct {
-	Expression *ControllerConfigConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
-	//Block      *ControllerConfigBlock               `json:",inline" yaml:",inline"`
-}
-
-type ControllerConfigConditionExpression struct {
-	Expression *string `json:"expression" yaml:"expression"`
+type ConditionExpression struct {
+	Expression string               `json:"expression" yaml:"expression"`
+	Block     *Block               `json:",inline" yaml:",inline"`
+	//Range      *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
+	//Condition  *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
 type Type string
@@ -107,7 +103,7 @@ const (
 )
 
 type ControllerConfigFunction struct {
-	Block    *ControllerConfigBlock    `json:",inline" yaml:",inline"`
+	Block    *Block                    `json:",inline" yaml:",inline"`
 	Executor *ControllerConfigExecutor `json:",inline" yaml:",inline"`
 	//ControllerConfigPipeline `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
 	Vars map[string]*ControllerConfigFunction `json:"vars,omitempty" yaml:"vars,omitempty"`

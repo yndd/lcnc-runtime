@@ -128,17 +128,17 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFu
 
 }
 
-func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.ControllerConfigBlock) {
+func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
 	// process and validate block
-	if v.Range.Value != nil && v.Condition.Expression != nil {
+	if v.Range != nil && v.Condition != nil {
 		r.recordResult(Result{
 			OriginContext: oc,
 			Error:         fmt.Errorf("cannot have both range and condition in the same block, got: %v", v).Error(),
 		})
 	}
-	if v.Range.Value != nil {
-		if v.Range.Value.Value != nil {
-			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, *v.Range.Value.Value)
+	if v.Range != nil {
+		if v.Range.Value != "" {
+			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, v.Range.Value)
 			//r.validateBlock(oc, v.Range.Block)
 		} else {
 			r.recordResult(Result{
@@ -146,16 +146,22 @@ func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.ControllerConfigBlock
 				Error:         fmt.Errorf("range value cannot be empty: %v", v).Error(),
 			})
 		}
+		if v.Range.Block != nil {
+			r.validateBlock(oc, v.Range.Block)
+		}
 	}
-	if v.Condition.Expression != nil {
-		if v.Condition.Expression.Expression != nil {
-			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, *v.Condition.Expression.Expression)
+	if v.Condition != nil {
+		if v.Condition.Expression != "" {
+			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, v.Condition.Expression)
 			//r.validateBlock(oc, v.Condition.Block)
 		} else {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         fmt.Errorf("condition expression cannot be empty: %v", v).Error(),
 			})
+		}
+		if v.Condition.Block != nil {
+			r.validateBlock(oc, v.Range.Block)
 		}
 	}
 }
@@ -164,7 +170,8 @@ func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.ControllerConfigBlock
 //}
 
 func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction, s string) {
-	refs := GetReferences(s)
+	rfs := NewReferences()
+	refs := rfs.GetReferences(s)
 	//fmt.Printf("validate ctxName: %s, value: %s, kind: %s, variable: %v\n", o.VertexName, s, value.Kind, value.Variable)
 	for _, ref := range refs {
 		switch ref.Kind {
@@ -174,14 +181,14 @@ func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFun
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot use Key variables without a range statement").Error(),
 				})
-				return
 			}
+		case RegularReferenceKind:
+			// this is ok
 		default:
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         fmt.Errorf("unknown reference kind, got: %s", s).Error(),
 			})
-			return
 		}
 	}
 }

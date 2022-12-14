@@ -43,41 +43,59 @@ func (r *resolver) resolveGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGv
 }
 
 func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
-	// LOCAL VARS TBD
-	// TBD selector
+	if v.HasVars() {
+		oc := oc.DeepCopy()
+		for localVarName, v := range v.Vars {
+			oc.LocalVarName = localVarName
+			r.resolveFunction(oc, v)
+		}
+	}
+
 	if v.HasBlock() {
 		r.resolveBlock(oc, v.Block)
 	}
-	
+
+	if v.Input.Selector != nil {
+		for k, v := range v.Input.Selector.MatchLabels {
+			r.resolveRefs(oc, k)
+			r.resolveRefs(oc, v)
+		}
+	}
+
 	if v.Input.Key != "" {
-		r.resolveRefs(oc, GetReferences(v.Input.Key))
+		r.resolveRefs(oc, v.Input.Key)
 	}
 	if v.Input.Value != "" {
-		r.resolveRefs(oc, GetReferences(v.Input.Value))
+		r.resolveRefs(oc, v.Input.Value)
 	}
 	for _, v := range v.Input.GenericInput {
-		r.resolveRefs(oc, GetReferences(v))
+		r.resolveRefs(oc, v)
 	}
 }
 
-func (r *resolver) resolveBlock(oc *OriginContext, v *ctrlcfgv1.ControllerConfigBlock) {
-	if v.Condition.Expression != nil {
-		if v.Condition.Expression.Expression != nil {
-			r.resolveRefs(oc, GetReferences(*v.Condition.Expression.Expression))
-			// continue to resolve if this is a nested block
-			//r.resolveBlock(oc, v.Condition.Block)
+func (r *resolver) resolveBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
+	if v.Range != nil {
+		r.resolveRefs(oc, v.Range.Value)
+		// continue to resolve if this is a nested block
+		if v.Range.Block != nil {
+			r.resolveBlock(oc, v.Range.Block)
+		}
+
+	}
+	if v.Condition != nil {
+		r.resolveRefs(oc, v.Condition.Expression)
+		// continue to resolve if this is a nested block
+		if v.Condition.Block != nil {
+			r.resolveBlock(oc, v.Condition.Block)
 		}
 	}
-	if v.Range.Value != nil {
-		if v.Range.Value != nil {
-			r.resolveRefs(oc, GetReferences(*v.Range.Value.Value))
-			// continue to resolve if this is a nested block
-			//r.resolveBlock(oc, v.Range.Block)
-		}
-	}
+
 }
 
-func (r *resolver) resolveRefs(oc *OriginContext, refs []*Reference) {
+func (r *resolver) resolveRefs(oc *OriginContext, s string) {
+	rfs := NewReferences()
+	refs := rfs.GetReferences(s)
+
 	for _, ref := range refs {
 		// for val
 		if ref.Kind == RegularReferenceKind {
@@ -90,7 +108,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, refs []*Reference) {
 					continue
 				}
 			}
-			// if the lookup in the root DAG does not succeed we record the result 
+			// if the lookup in the root DAG does not succeed we record the result
 			// and fail eventually
 			if !r.d.Lookup(strings.Split(ref.Value, ".")) {
 				r.recordResult(Result{

@@ -1,4 +1,4 @@
-package executor
+package scheduler
 
 import (
 	"context"
@@ -86,7 +86,7 @@ func (r *vertexContext) run(ctx context.Context) {
 	r.m.Unlock()
 
 	// callback function to capture the result
-	r.recordResult(&execResult{vertexName: r.vertexName, startTime: r.start})
+	r.recordResult(&result{vertexName: r.vertexName, startTime: r.start})
 
 	// signal to the dependent function the result of the vertex fn execution
 	for vertexName, doneCh := range r.doneChs {

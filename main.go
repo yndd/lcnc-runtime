@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/pkg/profile"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/scheduler"
 
 	//"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
@@ -83,14 +85,14 @@ func main() {
 		logger.Debug("config syntax validation failed", "result", result)
 		os.Exit(1)
 	}
-	logger.Debug("new parser succecreateeded")
+	logger.Debug("new parser succeeded")
 
-	_, _, result = p.Parse()
+	d, result := p.Parse()
 	if len(result) != 0 {
 		logger.Debug("cannot parse resources", "result", result)
 		os.Exit(1)
 	}
-	logger.Debug("new parser succecreateeded")
+	logger.Debug("parsing succeeded")
 
 	gvrs, result := p.GetExternalResources()
 	if len(result) > 0 {
@@ -98,14 +100,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// validate if we can resolve the gvr to gvk in the system
 	for _, gvr := range gvrs {
 		gvk, err := mgr.GetRESTMapper().KindFor(gvr)
 		if err != nil {
-			logger.Debug("Cannot get gvk", "error", err)
+			logger.Debug("Cannot get gvk in system", "error", err)
 			os.Exit(1)
 		}
 		logger.Debug("gvk", "value", gvk)
 	}
+
+	s := scheduler.New()
+	s.Walk(context.TODO(), d)
+	s.GetWalkResult()
 
 	/*
 		ctrlcfg := ctrlcfgv1.ControllerConfig{

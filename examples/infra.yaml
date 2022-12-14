@@ -51,7 +51,7 @@ spec:
             image: infraConfig
             input:
               nodeInfo: $VALUE
-              nodeAsAllications: .select(${infra.getNetworkAllocations.networkInfraAllocator.asAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)
+              nodeAsAllications: .select(${getNetworkAllocations.networkInfraAllocator.asAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)
               nodeIpAllications: .select(${infra.getNetworkAllocations.networkInfraAllocator.ipAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)
               nodeNiAllocations: .select(${infra.getNetworkAllocations.networkInfraAllocator.ipAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)  
             output: 

@@ -9,11 +9,24 @@ type recordResultFn func(Result)
 
 type OriginContext struct {
 	//Index      int
-	FOW        Fow    `json:"fow,omitempty" yaml:"fow,omitempty"`
-	Pipeline   string `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
-	Origin     Origin `json:"origin,omitempty" yaml:"origin,omitempty"`
-	VertexName string `json:"vertexname,omitempty" yaml:"vertexname,omitempty"`
-	LocalVars  string `json:"localvarName,omitempty" yaml:"localvarName,omitempty"`
+	FOW          Fow    `json:"fow,omitempty" yaml:"fow,omitempty"`
+	Pipeline     string `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
+	Origin       Origin `json:"origin,omitempty" yaml:"origin,omitempty"`
+	VertexName   string `json:"vertexname,omitempty" yaml:"vertexname,omitempty"`
+	LocalVarName string `json:"localvarName,omitempty" yaml:"localvarName,omitempty"`
+}
+
+func (in *OriginContext) DeepCopy() *OriginContext {
+	if in == nil {
+		return nil
+	}
+	out := new(OriginContext)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *OriginContext) DeepCopyInto(out *OriginContext) {
+	*out = *in
 }
 
 type Fow string

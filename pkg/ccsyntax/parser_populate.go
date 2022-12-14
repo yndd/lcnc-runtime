@@ -69,12 +69,12 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfig
 	}
 
 	// add localVars in a seperate DAG
-	// only used for resolution
-	// TODO extend local vars
+	// only used for resolution and dependencies
 	localVarsDAG := dag.New()
-	for localVarName := range v.Vars {
+	for localVarName, v := range v.Vars {
 		if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
 			Kind: dag.LocalVarVertexKind,
+			Function: v,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,

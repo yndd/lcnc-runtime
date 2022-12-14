@@ -1,4 +1,4 @@
-package executor
+package scheduler
 
 import (
 	"fmt"
@@ -9,9 +9,9 @@ import (
 
 // ResultFunc is the callback used for gathering the
 // result during graph execution.
-type ResultFunc func(*execResult)
+type ResultFunc func(*result)
 
-type execResult struct {
+type result struct {
 	vertexName    string
 	startTime     time.Time
 	endTime       time.Time
@@ -20,13 +20,13 @@ type execResult struct {
 	reason        string
 }
 
-func (r *exectutor) recordResult(re *execResult) {
+func (r *scheduler) recordResult(re *result) {
 	r.mr.Lock()
 	defer r.mr.Unlock()
 	r.execResult = append(r.execResult, re)
 }
 
-func (r *exectutor) GetWalkResult() {
+func (r *scheduler) GetWalkResult() {
 	r.mr.RLock()
 	defer r.mr.RUnlock()
 	for i, result := range r.execResult {

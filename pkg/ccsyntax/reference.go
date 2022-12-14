@@ -1,5 +1,7 @@
 package ccsyntax
 
+import "fmt"
+
 type ReferenceKind string
 
 const (
@@ -7,34 +9,70 @@ const (
 	RegularReferenceKind ReferenceKind = "regular"
 )
 
+const (
+	ValueKey = "VALUE"
+	IndexKey = "INDEX"
+	KeyKey   = "KEY"
+)
+
 type Reference struct {
 	Kind  ReferenceKind
 	Value string
 }
 
-func GetReferences(s string) []*Reference {
+type References interface {
+	GetReferences(s string) []*Reference
+	//addReference(s string)
+}
+
+type references struct {
+	refs []*Reference
+}
+
+func NewReferences() References {
+	return &references{
+		refs: make([]*Reference, 0),
+	}
+}
+
+func (r *references) GetReferences(s string) []*Reference {
 	var idx int
-	refs := make([]*Reference, 0)
+	var found bool
 	for k, v := range s {
-		if v == '$' && idx == 0 {
+		if v == '$' {
+			found = true
 			idx = k
 			continue
 		}
-		if v == '.' && idx > 0 {
-			refs = append(refs, &Reference{
-				Kind:  RegularReferenceKind,
-				Value: s[idx+1 : k]})
-			idx = 0
+		if (v == '.' || v == ' ' || v == ')') && found {
+			r.addReference(s[idx+1 : k])
+			found = false
 		}
 	}
 	// if no . was found we store the complete value as a refrence value
-	if idx > 0 {
-		refs = append(refs, &Reference{
-			Kind:  RegularReferenceKind,
-			Value: s[idx+1:]})
+	if found {
+		r.addReference(s[idx+1:])
 	}
 
-	// TODO handle VALUE, KEY, INDEX
+	return r.refs
+}
 
-	return refs
+func (r *references) addReference(val string) {
+	if val == ValueKey || val == KeyKey || val == IndexKey {
+		r.refs = append(r.refs, &Reference{
+			Kind:  RangeReferenceKind,
+			Value: val,
+		})
+	} else {
+		r.refs = append(r.refs, &Reference{
+			Kind:  RegularReferenceKind,
+			Value: val,
+		})
+	}
+}
+
+func (r *references) Print() {
+	for _, ref := range r.refs {
+		fmt.Printf("refs: %s kind: %s\n", ref.Value, string(ref.Kind))
+	}
 }

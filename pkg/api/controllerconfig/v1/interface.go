@@ -88,19 +88,25 @@ func GetGVR(gvr *ControllerConfigGvr) (*schema.GroupVersionResource, error) {
 	}, nil
 }
 
+func (v *ControllerConfigFunction) HasVars() bool {
+	return v.Vars != nil
+}
+
 func (v *ControllerConfigFunction) HasBlock() bool {
 	return v.Block != nil
 }
 
-func (v *ControllerConfigBlock) HasRange() bool {
-	return v.Range.Value != nil
+func (v *Block) HasRange() bool {
+	if v.Range != nil {
+		return true
+	}
+	return v.Range.Block.HasRange()
 
 	//return v.Condition.Block.HasRange()
 }
 
 func (r *ControllerConfig) GetPipeline(s string) *ControllerConfigPipeline {
 	for _, pipeline := range r.Spec.Properties.ControllerConfigPipelines {
-		fmt.Printf("searching %s, matching: %s\n", s, pipeline.Name)
 		if pipeline.Name == s {
 			return pipeline
 		}

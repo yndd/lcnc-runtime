@@ -19,8 +19,8 @@ spec:
             input:
               gvr: 
                 apiVersion: target.yndd.io/v1
-                resources: targets 
-          alltemplates:
+                resource: targets 
+          allTemplates:
             type: query
             input: 
               gvr: 
@@ -38,20 +38,22 @@ spec:
             type: map # output is name of the function
             input: 
               key: $VALUE
-              value: .select($.allTemplates.name == $VALUE)
+              value: $allTemplates | .select(.metadata.name == $VALUE)
           childTemplates:
             range: 
               value: $parentTemplates
+              range:
+                value: $VALUE.spec.properties.fabric.pod[*].definitionRef
             type: map
             input:
               key: $VALUE.metadata.name
-              value: $allTemplates == "$VALUE.spec.properties.fabric.pod[*].definitionRef
+              value: $allTemplates | .select(.metadata.name == $VALUE.metadata.name)
           discoveryRuleNames:
             range:
               value: $topo.spec.properties.discoveryRules
             type: slice
             input:
-              value: $VALUE.metatdata.name
+              value: $VALUE
         tasks:
           createTopology:
             image: topology
@@ -65,7 +67,7 @@ spec:
                 resource: topologies
           createFabric:
             range:
-              value: ${topo.getParentTemplates.parentTemplates}
+              value: $parentTemplates
             image: topologyBuilderFromTemplate
             vars:
               localChildTemplates:
@@ -90,10 +92,10 @@ spec:
                   resource: links
           createNodeFromDiscovery:
             range: 
-              value: ${topo.getDiscoveryRuleNames.discoveryRuleNames)
+              value: $discoveryRuleNames
             image: nodeBuilderFromDiscoveryRule
             input:
-              targets: .select(${topo.targets}.metadata.name == $VALUE)
+              targets: $targets | .select(.metadata.name == $VALUE)
             output: 
               nodes: 
                 apiVersion: topo.yndd.io/v1alpha1
