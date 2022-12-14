@@ -16,15 +16,15 @@ func RunFn(fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (
 			var isRange bool
 			var ok bool
 			var err error
-			if fnconfig.Block.Range.Value.Value != nil {
-				items, err = runRange(*fnconfig.Block.Range.Value.Value, input)
+			if fnconfig.Block.Range != nil {
+				items, err = runRange(fnconfig.Block.Range.Value, input)
 				if err != nil {
 					return nil, err
 				}
 				isRange = true
 			}
-			if exp := fnconfig.Block.Condition.Expression; exp != nil {
-				ok, err = runCondition(*exp.Expression, input)
+			if exp := fnconfig.Block.Condition.Expression; exp != "" {
+				ok, err = runCondition(exp, input)
 				if err != nil {
 					return nil, err
 				}
@@ -61,15 +61,15 @@ func RunFn(fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (
 		var isRange bool
 		var ok bool
 		var err error
-		if fnconfig.Block.Range.Value.Value != nil {
-			items, err = runRange(*fnconfig.Block.Range.Value.Value, input)
+		if fnconfig.Block.Range != nil {
+			items, err = runRange(fnconfig.Block.Range.Value, input)
 			if err != nil {
 				return nil, err
 			}
 			isRange = true
 		}
-		if exp := fnconfig.Block.Condition.Expression; exp != nil {
-			ok, err = runCondition(*exp.Expression, input)
+		if exp := fnconfig.Block.Condition.Expression; exp != "" {
+			ok, err = runCondition(exp, input)
 			if err != nil {
 				return nil, err
 			}
