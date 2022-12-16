@@ -98,6 +98,8 @@ func RunFn(fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (
 			}
 			return result, nil
 		}
+	case ctrlcfgv1.JQType:
+		return runJQ(fnconfig.Input.Expression, input)
 	case "": // image
 	}
 

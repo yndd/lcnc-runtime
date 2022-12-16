@@ -104,6 +104,7 @@ const (
 	QueryType    Type = "query"
 	SliceType    Type = "slice"
 	MapType      Type = "map"
+	JQType       Type = "jq"
 )
 
 type ControllerConfigFunction struct {
