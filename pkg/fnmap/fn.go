@@ -11,7 +11,7 @@ import (
 func RunFn(fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (any, error) {
 	switch fnconfig.Type {
 	case ctrlcfgv1.MapType:
-		if fnconfig.Block != nil {
+		if fnconfig.HasBlock() {
 			var items []*item
 			var isRange bool
 			var ok bool

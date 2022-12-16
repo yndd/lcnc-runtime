@@ -14,7 +14,7 @@ func (r *parser) populate(d dag.DAG) []Result {
 	}
 
 	fnc := &WalkConfig{
-		gvrObjectFn: p.addGvr,
+		gvkObjectFn: p.addGvr,
 		functionFn:  p.addFunction,
 	}
 
@@ -37,13 +37,13 @@ func (r *populator) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *populator) addGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
+func (r *populator) addGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
 	if err := r.d.AddVertex(oc.VertexName, &dag.VertexContext{
 		Kind: dag.RootVertexKind,
 		Function: &ctrlcfgv1.ControllerConfigFunction{
 			Type: ctrlcfgv1.ForQueryType,
 			Input: &ctrlcfgv1.ControllerConfigInput{
-				Gvr: v.Gvr,
+				Resource: v.Resource,
 			},
 		},
 	}); err != nil {
@@ -73,7 +73,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfig
 	localVarsDAG := dag.New()
 	for localVarName, v := range v.Vars {
 		if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
-			Kind: dag.LocalVarVertexKind,
+			Kind:     dag.LocalVarVertexKind,
 			Function: v,
 		}); err != nil {
 			r.recordResult(Result{

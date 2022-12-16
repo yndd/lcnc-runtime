@@ -15,7 +15,7 @@ func (r *parser) connect(d dag.DAG) []Result {
 	}
 
 	fnc := &WalkConfig{
-		gvrObjectFn: c.connectGvr,
+		gvkObjectFn: c.connectGvr,
 		functionFn:  c.connectFunction,
 	}
 
@@ -38,7 +38,7 @@ func (r *connector) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *connector) connectGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
+func (r *connector) connectGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
 	r.rootVertexName = r.d.GetRootVertex()
 }
 
@@ -63,7 +63,7 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 	}
 
 	if v.Input != nil {
-		if v.Input.Gvr != nil {
+		if len(v.Input.Resource.Raw) != 0 {
 			r.d.Connect(r.rootVertexName, oc.VertexName)
 		}
 		if v.Input.Key != "" {
@@ -78,18 +78,18 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 	}
 }
 
-func (r *connector) connectBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
+func (r *connector) connectBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	if v.Range != nil {
 		r.connectRefs(oc, v.Range.Value)
 		// continue to resolve if this is a nested block
-		if v.Range.Block != nil {
+		if v.Range.Range != nil || v.Range.Condition != nil {
 			r.connectBlock(oc, v.Range.Block)
 		}
 	}
 	if v.Condition != nil {
 		r.connectRefs(oc, v.Condition.Expression)
 		// continue to resolve if this is a nested block
-		if v.Condition.Block != nil {
+		if v.Condition.Range != nil || v.Condition.Condition != nil {
 			r.connectBlock(oc, v.Condition.Block)
 		}
 	}

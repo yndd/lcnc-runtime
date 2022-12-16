@@ -30,7 +30,6 @@ type ReconcileInfo struct {
 	Client       client.Client
 	PollInterval time.Duration
 	Gvk          schema.GroupVersionKind
-	Root         string
 	Dag          dag.DAG
 	//Fn           *ctrlcfgv1.ControllerConfigFunction
 
@@ -63,6 +62,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
 
+	
 	cr := getUnstructuredObj(r.gvk)
 	if err := r.client.Get(ctx, req.NamespacedName, cr); err != nil {
 		// There's no need to requeue if we no longer exist. Otherwise we'll be

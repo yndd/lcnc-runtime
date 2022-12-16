@@ -17,10 +17,13 @@ limitations under the License.
 package v1
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -33,41 +36,41 @@ func (r *ControllerConfig) GetRootVertexName() string {
 	return ""
 }
 
-func (r *ControllerConfig) GetForGvr() ([]schema.GroupVersionResource, error) {
-	gvrs, err := r.getGvrList(r.Spec.Properties.For)
+func (r *ControllerConfig) GetForGvk() ([]schema.GroupVersionKind, error) {
+	gvks, err := r.getGvkList(r.Spec.Properties.For)
 	if err != nil {
 		return nil, err
 	}
 	// there should only be 1 for gvr
-	return gvrs, nil
+	return gvks, nil
 }
 
-func (r *ControllerConfig) GetOwnGvrs() ([]schema.GroupVersionResource, error) {
-	gvrs, err := r.getGvrList(r.Spec.Properties.Own)
+func (r *ControllerConfig) GetOwnGvks() ([]schema.GroupVersionKind, error) {
+	gvks, err := r.getGvkList(r.Spec.Properties.Own)
+	if err != nil {
+		return nil, err
+	}
+	return gvks, nil
+}
+
+func (r *ControllerConfig) GetWatchGvks() ([]schema.GroupVersionKind, error) {
+	gvrs, err := r.getGvkList(r.Spec.Properties.Watch)
 	if err != nil {
 		return nil, err
 	}
 	return gvrs, nil
 }
 
-func (r *ControllerConfig) GetWatchGvrs() ([]schema.GroupVersionResource, error) {
-	gvrs, err := r.getGvrList(r.Spec.Properties.Watch)
-	if err != nil {
-		return nil, err
-	}
-	return gvrs, nil
-}
-
-func (r *ControllerConfig) getGvrList(gvrObjs map[string]*ControllerConfigGvrObject) ([]schema.GroupVersionResource, error) {
-	gvrs := make([]schema.GroupVersionResource, 0, len(gvrObjs))
+func (r *ControllerConfig) getGvkList(gvrObjs map[string]*ControllerConfigGvkObject) ([]schema.GroupVersionKind, error) {
+	gvks := make([]schema.GroupVersionKind, 0, len(gvrObjs))
 	for _, gvrObj := range gvrObjs {
-		gvr, err := GetGVR(gvrObj.Gvr)
+		gvk, err := GetGVK(gvrObj.Resource)
 		if err != nil {
 			return nil, err
 		}
-		gvrs = append(gvrs, *gvr)
+		gvks = append(gvks, gvk)
 	}
-	return gvrs, nil
+	return gvks, nil
 }
 
 func GetIdxName(idxName string) (string, int) {
@@ -76,15 +79,21 @@ func GetIdxName(idxName string) (string, int) {
 	return split[0], idx
 }
 
-func GetGVR(gvr *ControllerConfigGvr) (*schema.GroupVersionResource, error) {
-	split := strings.Split(gvr.ApiVersion, "/")
-	if len(split) != 2 {
-		return nil, fmt.Errorf("expecting a GVR apiVersion in format <group>/<version> got: %s", gvr.ApiVersion)
+func GetGVK(gvr runtime.RawExtension) (schema.GroupVersionKind, error) {
+	fmt.Println(string(gvr.Raw))
+	var u unstructured.Unstructured
+	if err := json.Unmarshal(gvr.Raw, &u); err != nil {
+		return schema.GroupVersionKind{}, err
 	}
-	return &schema.GroupVersionResource{
-		Group:    split[0],
-		Version:  split[1],
-		Resource: gvr.Resource,
+	gv, err := schema.ParseGroupVersion(u.GetAPIVersion())
+	if err != nil {
+		return schema.GroupVersionKind{}, err
+	}
+
+	return schema.GroupVersionKind{
+		Group:   gv.Group,
+		Version: gv.Version,
+		Kind:    u.GetKind(),
 	}, nil
 }
 
@@ -93,7 +102,7 @@ func (v *ControllerConfigFunction) HasVars() bool {
 }
 
 func (v *ControllerConfigFunction) HasBlock() bool {
-	return v.Block != nil
+	return v.Block.Range != nil || v.Block.Condition != nil
 }
 
 func (v *Block) HasRange() bool {

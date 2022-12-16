@@ -14,7 +14,7 @@ func (r *parser) ValidateSyntax() []Result {
 
 	fnc := &WalkConfig{
 		cfgPreHookFn:    vs.validatePreHook,
-		gvrObjectFn:     vs.validateGvr,
+		gvkObjectFn:     vs.validateGvk,
 		emptyPipelineFn: vs.validateEmptyPipeline,
 		functionFn:      vs.validateFunction,
 		//lcncServiceFn:    vs.validateServiceFn,
@@ -46,16 +46,16 @@ func (r *vs) validatePreHook(lcncCfg *ctrlcfgv1.ControllerConfig) {
 	}
 }
 
-func (r *vs) validateGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
-	if v.Gvr == nil {
+func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
+	if len(v.Resource.Raw) == 0 {
 		r.recordResult(Result{
 			OriginContext: oc,
-			Error:         fmt.Errorf("a gvr must be present, got: %v", v).Error(),
+			Error:         fmt.Errorf("a gvk must be present, got: %v", v).Error(),
 		})
 	}
 }
 
-func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
+func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
 	if oc.FOW != FOWOwn {
 		r.recordResult(Result{
 			OriginContext: oc,
@@ -93,10 +93,10 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFu
 			})
 		}
 	case ctrlcfgv1.QueryType:
-		if v.Input.Gvr == nil {
+		if len(v.Input.Resource.Raw) == 0 {
 			r.recordResult(Result{
 				OriginContext: oc,
-				Error:         fmt.Errorf("gvr needs to be present in %s", v.Type).Error(),
+				Error:         fmt.Errorf("gvk needs to be present in %s", v.Type).Error(),
 			})
 		}
 	default:
@@ -120,7 +120,6 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFu
 			r.validateContext(oc, v, val)
 		}
 	}
-	
 
 	// validate output -> TBD
 
@@ -128,7 +127,7 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFu
 
 }
 
-func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
+func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	// process and validate block
 	if v.Range != nil && v.Condition != nil {
 		r.recordResult(Result{
@@ -146,7 +145,7 @@ func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
 				Error:         fmt.Errorf("range value cannot be empty: %v", v).Error(),
 			})
 		}
-		if v.Range.Block != nil {
+		if v.Range.Range != nil || v.Range.Condition != nil {
 			r.validateBlock(oc, v.Range.Block)
 		}
 	}
@@ -160,7 +159,7 @@ func (r *vs) validateBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
 				Error:         fmt.Errorf("condition expression cannot be empty: %v", v).Error(),
 			})
 		}
-		if v.Condition.Block != nil {
+		if v.Condition.Range != nil || v.Condition.Condition != nil {
 			r.validateBlock(oc, v.Range.Block)
 		}
 	}
@@ -177,6 +176,7 @@ func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFun
 		switch ref.Kind {
 		case RangeReferenceKind:
 			if !v.HasBlock() || !v.Block.HasRange() {
+				fmt.Printf("validate ctx: vertex %s, ref: %s, string: %s, function value: %v\n", oc.VertexName, ref, s, v.Block)
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot use Key variables without a range statement").Error(),

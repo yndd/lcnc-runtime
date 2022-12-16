@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -44,11 +45,11 @@ type ControllerConfigSpec struct {
 
 type ControllerConfigProperties struct {
 	// key represents the variable
-	For map[string]*ControllerConfigGvrObject `json:"for" yaml:"for"`
+	For map[string]*ControllerConfigGvkObject `json:"for" yaml:"for"`
 	// key represents the variable
-	Own map[string]*ControllerConfigGvrObject `json:"own,omitempty" yaml:"own,omitempty"`
+	Own map[string]*ControllerConfigGvkObject `json:"own,omitempty" yaml:"own,omitempty"`
 	// key represents the variable
-	Watch map[string]*ControllerConfigGvrObject `json:"watch,omitempty" yaml:"watch,omitempty"`
+	Watch map[string]*ControllerConfigGvkObject `json:"watch,omitempty" yaml:"watch,omitempty"`
 	// key respresents the variable
 	//Functions map[string]ControllerConfigFunctionBlock `json:",inline" yaml:",inline"`
 	ControllerConfigPipelines []*ControllerConfigPipeline `json:"pipelines,omitempty" yaml:"pipelines,omitempty"`
@@ -59,15 +60,18 @@ type ControllerConfigProperties struct {
 	//Services map[string]ControllerConfigFunction `json:"services,omitempty" yaml:"services,omitempty"`
 }
 
-type ControllerConfigGvrObject struct {
-	Gvr         *ControllerConfigGvr `json:"gvr" yaml:"gvr"`
+type ControllerConfigGvkObject struct {
+	//Gvr         *ControllerConfigGvr `json:"gvr" yaml:"gvr"`
+	Resource    runtime.RawExtension `json:"resource,omitempty" yaml:"resource,omitempty"`
 	PipelineRef string               `json:"pipelineRef,omitempty" yaml:"pipelineRef,omitempty"`
 }
 
-type ControllerConfigGvr struct {
-	ApiVersion string `json:"apiVersion" yaml:"apiVersion"`
-	Resource   string `json:"resource" yaml:"resource"`
-}
+/*
+	type ControllerConfigGvr struct {
+		ApiVersion string `json:"apiVersion" yaml:"apiVersion"`
+		Resource   string `json:"resource" yaml:"resource"`
+	}
+*/
 type ControllerConfigPipeline struct {
 	Name  string                               `json:"name" yaml:"name"`
 	Vars  map[string]*ControllerConfigFunction `json:"vars,omitempty" yaml:"vars,omitempty"`
@@ -80,15 +84,15 @@ type Block struct {
 }
 
 type RangeValue struct {
-	Value     string               `json:"value" yaml:"value"`
-	Block     *Block               `json:",inline" yaml:",inline"`
+	Value string `json:"value" yaml:"value"`
+	Block `json:",inline" yaml:",inline"`
 	//Range     *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
 	//Condition *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
 type ConditionExpression struct {
-	Expression string               `json:"expression" yaml:"expression"`
-	Block     *Block               `json:",inline" yaml:",inline"`
+	Expression string `json:"expression" yaml:"expression"`
+	Block      `json:",inline" yaml:",inline"`
 	//Range      *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
 	//Condition  *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
@@ -103,12 +107,12 @@ const (
 )
 
 type ControllerConfigFunction struct {
-	Block    *Block                    `json:",inline" yaml:",inline"`
-	Executor *ControllerConfigExecutor `json:",inline" yaml:",inline"`
+	Block    `json:",inline" yaml:",inline"`
+	Executor `json:",inline" yaml:",inline"`
 	//ControllerConfigPipeline `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
-	Vars map[string]*ControllerConfigFunction `json:"vars,omitempty" yaml:"vars,omitempty"`
-	Type Type                                 `json:"type,omitempty" yaml:"type,omitempty"`
-	//Config                   string                                   `json:"config,omitempty" yaml:"config,omitempty"`
+	Vars   map[string]*ControllerConfigFunction `json:"vars,omitempty" yaml:"vars,omitempty"`
+	Type   Type                                 `json:"type,omitempty" yaml:"type,omitempty"`
+	Config string                               `json:"config,omitempty" yaml:"config,omitempty"`
 	// input is always a GVK of some sort
 	Input *ControllerConfigInput `json:"input,omitempty" yaml:"input,omitempty"`
 	// key = variableName, value is gvr format or not -> gvr format is needed for external resources
@@ -116,7 +120,8 @@ type ControllerConfigFunction struct {
 }
 
 type ControllerConfigOutput struct {
-	Gvr           *ControllerConfigGvr `json:"gvr,omitempty" yaml:"gvr,omitempty"`
+	//Gvr           *ControllerConfigGvr `json:"gvr,omitempty" yaml:"gvr,omitempty"`
+	Resource      runtime.RawExtension `json:"resource,omitempty" yaml:"resource,omitempty"`
 	GenericOutput map[string]string    `json:",inline" yaml:",inline"`
 }
 
@@ -127,11 +132,13 @@ type ControllerConfigGenericOutput struct {
 */
 
 type ControllerConfigInput struct {
-	Gvr          *ControllerConfigGvr  `json:"gvr,omitempty" yaml:"gvr,omitempty"`
+	//Gvr          *ControllerConfigGvr  `json:"gvr,omitempty" yaml:"gvr,omitempty"`
 	Selector     *metav1.LabelSelector `json:"selector,omitempty" yaml:"selector,omitempty"`
 	Key          string                `json:"key,omitempty" yaml:"key,omitempty"`
 	Value        string                `json:"value,omitempty" yaml:"value,omitempty"`
 	GenericInput map[string]string     `json:",inline" yaml:",inline"`
+	Expression   string                `json:"expression,omitempty" yaml:"expression,omitempty"`
+	Resource     runtime.RawExtension  `json:"resource,omitempty" yaml:"resource,omitempty"`
 }
 
 /*
@@ -140,7 +147,7 @@ type ControllerConfigGenericInput struct {
 }
 */
 
-type ControllerConfigExecutor struct {
+type Executor struct {
 	Image *string `json:"image,omitempty" yaml:"image,omitempty"`
 	Exec  *string `json:"exec,omitempty" yaml:"exec,omitempty"`
 }

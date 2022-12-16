@@ -1,23 +1,25 @@
 package ccsyntax
 
 import (
+	"fmt"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) GetExternalResources() ([]schema.GroupVersionResource, []Result) {
+func (r *parser) GetExternalResources() ([]schema.GroupVersionKind, []Result) {
 	er := &er{
 		result:    []Result{},
-		resources: []schema.GroupVersionResource{},
+		resources: []schema.GroupVersionKind{},
 	}
 	er.resultFn = er.recordResult
-	er.addResourceFn = er.addResource
+	er.addKindFn = er.addKind
 
 	fnc := &WalkConfig{
-		gvrObjectFn: er.getGvr,
-		functionFn:  er.getFunctionGvr,
+		gvkObjectFn: er.getGvk,
+		functionFn:  er.getFunctionGvk,
 	}
 
 	// validate the external resources
@@ -26,15 +28,15 @@ func (r *parser) GetExternalResources() ([]schema.GroupVersionResource, []Result
 }
 
 type er struct {
-	mr            sync.RWMutex
-	result        []Result
-	resultFn      recordResultFn
-	mrs           sync.RWMutex
-	resources     []schema.GroupVersionResource
-	addResourceFn erAddResourceFn
+	mr        sync.RWMutex
+	result    []Result
+	resultFn  recordResultFn
+	mrs       sync.RWMutex
+	resources []schema.GroupVersionKind
+	addKindFn erAddKindFn
 }
 
-type erAddResourceFn func(schema.GroupVersionResource)
+type erAddKindFn func(schema.GroupVersionKind)
 
 func (r *er) recordResult(result Result) {
 	r.mr.Lock()
@@ -42,14 +44,15 @@ func (r *er) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *er) addResource(er schema.GroupVersionResource) {
+func (r *er) addKind(er schema.GroupVersionKind) {
+	fmt.Printf("add kind: %v \n", er)
 	r.mrs.Lock()
 	defer r.mrs.Unlock()
 	found := false
 	for _, resource := range r.resources {
 		if resource.Group == er.Group &&
 			resource.Version == er.Version &&
-			resource.Resource == er.Resource {
+			resource.Kind == er.Kind {
 			return
 		}
 	}
@@ -58,28 +61,29 @@ func (r *er) addResource(er schema.GroupVersionResource) {
 	}
 }
 
-func (r *er) addGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvr) {
-	gvr, err := ctrlcfgv1.GetGVR(v)
+func (r *er) addGvk(oc *OriginContext, v runtime.RawExtension) {
+	gvk, err := ctrlcfgv1.GetGVK(v)
 	if err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,
 			Error:         err.Error(),
 		})
+		return
 	}
-	r.addResource(*gvr)
+	r.addKind(gvk)
 }
 
-func (r *er) getGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
-	r.addGvr(oc, v.Gvr)
+func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
+	r.addGvk(oc, v.Resource)
 }
 
-func (r *er) getFunctionGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
-	if v.Input.Gvr != nil {
-		r.addGvr(oc, v.Input.Gvr)
+func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+	if len(v.Input.Resource.Raw) != 0 {
+		r.addGvk(oc, v.Input.Resource)
 	}
 	for _, v := range v.Output {
-		if v.Gvr != nil {
-			r.addGvr(oc, v.Gvr)
+		if len(v.Resource.Raw) != 0 {
+			r.addGvk(oc, v.Resource)
 		}
 	}
 }

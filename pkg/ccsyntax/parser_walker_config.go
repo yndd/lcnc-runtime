@@ -8,9 +8,9 @@ import (
 type cfgPreHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 type cfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 
-// gvrObjectFn processes the for, own, watch per item
-type gvrObjectFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject)
-type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject)
+// gvkObjectFn processes the for, own, watch per item
+type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject)
+type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject)
 
 // lcncBlockFn processes the block part of the Variables and functions
 //type pipelineBlockFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock)
@@ -38,7 +38,7 @@ type functionFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction)
 type WalkConfig struct {
 	cfgPreHookFn    cfgPreHookFn
 	cfgPostHookFn   cfgPostHookFn
-	gvrObjectFn     gvrObjectFn
+	gvkObjectFn     gvkObjectFn
 	emptyPipelineFn emptyPipelineFn
 
 	pipelinePreHookFn  pipelinePreHookFn
@@ -61,20 +61,20 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	idx := 0
 	for vertexName, v := range r.cCfg.Spec.Properties.For {
 		oc := &OriginContext{FOW: FOWFor, Origin: OriginFow, VertexName: vertexName}
-		r.processGvrObject(fnc, oc, v)
+		r.processGvkObject(fnc, oc, v)
 		idx++
 
 	}
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Own {
 		oc := &OriginContext{FOW: FOWOwn, Origin: OriginFow, VertexName: vertexName}
-		r.processGvrObject(fnc, oc, v)
+		r.processGvkObject(fnc, oc, v)
 		idx++
 	}
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Watch {
 		oc := &OriginContext{FOW: FOWWatch, Origin: OriginFow, VertexName: vertexName}
-		r.processGvrObject(fnc, oc, v)
+		r.processGvkObject(fnc, oc, v)
 	}
 
 	if fnc.cfgPostHookFn != nil {
@@ -83,9 +83,9 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 
 }
 
-func (r *parser) processGvrObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
-	if fnc.gvrObjectFn != nil {
-		fnc.gvrObjectFn(oc, v)
+func (r *parser) processGvkObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
+	if fnc.gvkObjectFn != nil {
+		fnc.gvkObjectFn(oc, v)
 		pipeline := r.cCfg.GetPipeline(v.PipelineRef)
 		if pipeline == nil {
 			if fnc.emptyPipelineFn != nil {

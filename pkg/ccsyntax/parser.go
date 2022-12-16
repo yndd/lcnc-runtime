@@ -7,7 +7,7 @@ import (
 )
 
 type Parser interface {
-	GetExternalResources() ([]schema.GroupVersionResource, []Result)
+	GetExternalResources() ([]schema.GroupVersionKind, []Result)
 	Parse() (dag.DAG, []Result)
 }
 

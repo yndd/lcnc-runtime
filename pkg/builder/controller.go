@@ -9,9 +9,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -83,16 +81,12 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 
 func (blder *builder) doWatch() error {
 	// Reconcile type
-	forGvrs, err := blder.cfg.GetForGvr()
-	if err != nil {
-		return nil
-	}
 
-	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), forGvrs[0])
+	gvk, err := blder.cfg.GetForGvk()
 	if err != nil {
 		return err
 	}
-	typeForSrc := getUnstructuredObj(gvk)
+	typeForSrc := getUnstructuredObj(gvk[0])
 
 	src := &source.Kind{Type: typeForSrc}
 	hdler := &handler.EnqueueRequestForObject{}
@@ -102,15 +96,11 @@ func (blder *builder) doWatch() error {
 	}
 
 	// Watches the managed types
-	ownGvrs, err := blder.cfg.GetOwnGvrs()
+	ownGvks, err := blder.cfg.GetOwnGvks()
 	if err != nil {
 		return nil
 	}
-	for _, own := range ownGvrs {
-		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), own)
-		if err != nil {
-			return err
-		}
+	for _, gvk := range ownGvks {
 		obj := getUnstructuredObj(gvk)
 
 		src := &source.Kind{Type: obj}
@@ -126,15 +116,11 @@ func (blder *builder) doWatch() error {
 	}
 
 	// Do the watch requests
-	watchGvrs, err := blder.cfg.GetWatchGvrs()
+	watchGvks, err := blder.cfg.GetWatchGvks()
 	if err != nil {
 		return nil
 	}
-	for _, w := range watchGvrs {
-		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), w)
-		if err != nil {
-			return err
-		}
+	for _, gvk := range watchGvks {
 		//var obj client.Object
 		obj := getUnstructuredObj(gvk)
 
@@ -149,9 +135,9 @@ func (blder *builder) doWatch() error {
 			return err
 		}
 		/*
-		if err := blder.ctrl.Watch(src, w.Eventhandler, allPredicates...); err != nil {
-			return err
-		}
+			if err := blder.ctrl.Watch(src, w.Eventhandler, allPredicates...); err != nil {
+				return err
+			}
 		*/
 	}
 	return nil
@@ -172,20 +158,14 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 		ctrlOptions.Reconciler = r
 	}
 
-	forGvrs, err := blder.cfg.GetForGvr()
-	if err != nil {
-		return nil
-	}
-	
-
-	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), forGvrs[0])
+	gvk, err := blder.cfg.GetForGvk()
 	if err != nil {
 		return err
 	}
 
 	// Setup concurrency.
 	if ctrlOptions.MaxConcurrentReconciles == 0 {
-		groupKind := gvk.GroupKind().String()
+		groupKind := gvk[0].GroupKind().String()
 
 		if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
 			ctrlOptions.MaxConcurrentReconciles = concurrency
@@ -197,21 +177,21 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 		ctrlOptions.CacheSyncTimeout = *globalOpts.CacheSyncTimeout
 	}
 
-	controllerName := blder.getControllerName(gvk)
+	controllerName := blder.getControllerName(gvk[0])
 
 	// Setup the logger.
 	if ctrlOptions.LogConstructor == nil {
 		log := blder.mgr.GetLogger().WithValues(
 			"controller", controllerName,
-			"controllerGroup", gvk.Group,
-			"controllerKind", gvk.Kind,
+			"controllerGroup", gvk[0].Group,
+			"controllerKind", gvk[0].Kind,
 		)
 
 		ctrlOptions.LogConstructor = func(req *reconcile.Request) logr.Logger {
 			log := log
 			if req != nil {
 				log = log.WithValues(
-					gvk.Kind, klog.KRef(req.Namespace, req.Name),
+					gvk[0].Kind, klog.KRef(req.Namespace, req.Name),
 					"namespace", req.Namespace, "name", req.Name,
 				)
 			}
@@ -224,6 +204,7 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 	return err
 }
 
+/*
 func getGVKfromGVR(c *rest.Config, gvr schema.GroupVersionResource) (schema.GroupVersionKind, error) {
 	mapper, err := apiutil.NewDynamicRESTMapper(c)
 	if err != nil {
@@ -235,6 +216,7 @@ func getGVKfromGVR(c *rest.Config, gvr schema.GroupVersionResource) (schema.Grou
 	}
 	return gvk, nil
 }
+*/
 
 func getUnstructuredObj(gvk schema.GroupVersionKind) *unstructured.Unstructured {
 	var u unstructured.Unstructured

@@ -16,7 +16,7 @@ func (r *parser) resolve(d dag.DAG) []Result {
 	}
 
 	fnc := &WalkConfig{
-		gvrObjectFn: rs.resolveGvr,
+		//gvkObjectFn: rs.resolveGvk,
 		functionFn:  rs.resolveFunction,
 	}
 
@@ -38,9 +38,6 @@ func (r *resolver) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *resolver) resolveGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvrObject) {
-	// nothing todo
-}
 
 func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
 	if v.HasVars() {
@@ -73,11 +70,11 @@ func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.ControllerCon
 	}
 }
 
-func (r *resolver) resolveBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
+func (r *resolver) resolveBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	if v.Range != nil {
 		r.resolveRefs(oc, v.Range.Value)
 		// continue to resolve if this is a nested block
-		if v.Range.Block != nil {
+		if v.Range.Range != nil || v.Range.Condition != nil {
 			r.resolveBlock(oc, v.Range.Block)
 		}
 
@@ -85,7 +82,7 @@ func (r *resolver) resolveBlock(oc *OriginContext, v *ctrlcfgv1.Block) {
 	if v.Condition != nil {
 		r.resolveRefs(oc, v.Condition.Expression)
 		// continue to resolve if this is a nested block
-		if v.Condition.Block != nil {
+		if v.Condition.Range != nil || v.Condition.Condition != nil {
 			r.resolveBlock(oc, v.Condition.Block)
 		}
 	}

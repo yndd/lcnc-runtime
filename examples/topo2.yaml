@@ -6,10 +6,10 @@ metadata:
 spec:
   properties:
     for: 
-      topo: 
-        gvr: 
+      topoDef: 
+        resource: 
           apiVersion: topo.yndd.io/v1alpha1
-          resource: definitions
+          kind: Definition
         pipelineRef: forPipeline
     pipelines:
       - name: forPipeline
@@ -17,21 +17,32 @@ spec:
           targets:
             type: query
             input:
-              gvr: 
+              resource: 
                 apiVersion: target.yndd.io/v1
-                resource: targets 
+                kind: Target 
           allTemplates:
             type: query
             input: 
-              gvr: 
+              resource: 
                 apiVersion: topo.yndd.io/v1alpha1
-                resource: templates
+                kind: Template
+          #parentTemplateNames:
+          #  type: jq
+          #  input: 
+          #    expression: $topoDef | [.spec.properties.templates[].templateRef.name]
           parentTemplateNames:
             range:
-              value: $topo.spec.properties.templates
+              value: $topoDef | .spec.properties.templates[]
             type: slice # output is name of the function
             input: 
-              value: $VALUE.name
+              value: $VALUE.templateRef.name
+          discoveryRuleNames:
+            range:
+              value: $topoDef | .spec.properties.discoveryRules[]
+            type: slice
+            input:
+              value: $VALUE.discoveryRuleRef
+          #    expression: $allTemplates | .[] | select(.metadata.name as $a | $VALUE | index($a)) | {(.metadata.name): .}
           parentTemplates:
             range:
               value: $parentTemplateNames
@@ -39,32 +50,26 @@ spec:
             input: 
               key: $VALUE
               value: $allTemplates | .select(.metadata.name == $VALUE)
+          #    expression: $allTemplates | select(.metadata.name as $a | $VALUE | index($a)) | {(.metadata.name): .}
           childTemplates:
             range: 
               value: $parentTemplates
               range:
-                value: $VALUE.spec.properties.fabric.pod[*].definitionRef
+                value: $VALUE.spec.properties.fabric.pod[*].TemplateRef
             type: map
             input:
               key: $VALUE.metadata.name
               value: $allTemplates | .select(.metadata.name == $VALUE.metadata.name)
-          discoveryRuleNames:
-            range:
-              value: $topo.spec.properties.discoveryRules
-            type: slice
-            input:
-              value: $VALUE
         tasks:
           createTopology:
             image: topology
             input:
-              topology: $topo # can be implicit
+              topology: $topoDef # can be implicit
             output: 
               topologies: 
-                gvr: 
+                resource: 
                   apiVersion: topo.yndd.io/v1alpha1
-                  resource: topologies
-                resource: topologies
+                  kind: Topology
           createFabric:
             range:
               value: $parentTemplates
@@ -83,13 +88,13 @@ spec:
               localChildTemplates: $localChildTemplates
             output: 
               nodes: 
-                gvr:
+                resource:
                   apiVersion: topo.yndd.io/v1alpha1
-                  resource: nodes  
+                  kind: Node  
               links: 
-                gvr:
+                resource:
                   apiVersion: topo.yndd.io/v1alpha1
-                  resource: links
+                  kind: Link
           createNodeFromDiscovery:
             range: 
               value: $discoveryRuleNames
@@ -98,6 +103,7 @@ spec:
               targets: $targets | .select(.metadata.name == $VALUE)
             output: 
               nodes: 
-                apiVersion: topo.yndd.io/v1alpha1
-                resources: nodes 
+                resource:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  kind: Node 
           

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"net/http"
 	"os"
@@ -9,14 +8,17 @@ import (
 
 	"github.com/pkg/profile"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/scheduler"
+	"github.com/yndd/lcnc-runtime/pkg/builder"
+	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	//"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	//"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 	"github.com/yndd/ndd-runtime/pkg/logging"
-	"gopkg.in/yaml.v3"
+	//"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -78,7 +80,7 @@ func main() {
 		logger.Debug("cannot unmarshal", "error", err)
 		os.Exit(1)
 	}
-	logger.Debug("unmarshal succeeded")
+	logger.Debug("unmarshal succeeded", "cfg", ctrlcfg)
 
 	p, result := ccsyntax.NewParser(ctrlcfg)
 	if len(result) > 0 {
@@ -94,15 +96,15 @@ func main() {
 	}
 	logger.Debug("parsing succeeded")
 
-	gvrs, result := p.GetExternalResources()
+	gvks, result := p.GetExternalResources()
 	if len(result) > 0 {
 		logger.Debug("config get external resources failed", "result", result)
 		os.Exit(1)
 	}
 
 	// validate if we can resolve the gvr to gvk in the system
-	for _, gvr := range gvrs {
-		gvk, err := mgr.GetRESTMapper().KindFor(gvr)
+	for _, gvk := range gvks {
+		gvk, err := mgr.GetRESTMapper().RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
 		if err != nil {
 			logger.Debug("Cannot get gvk in system", "error", err)
 			os.Exit(1)
@@ -110,68 +112,41 @@ func main() {
 		logger.Debug("gvk", "value", gvk)
 	}
 
-	s := scheduler.New()
-	s.Walk(context.TODO(), d)
-	s.GetWalkResult()
+	//s := scheduler.New()
+	//s.Walk(context.TODO(), d)
+	//s.GetWalkResult()
 
-	/*
-		ctrlcfg := ctrlcfgv1.ControllerConfig{
-			For: &ctrlcfgv1.ControllerPipeline{
-				Gvr: &ctrlcfgv1.ControllerGroupVersionResource{
-					Group:    "admin.yndd.io",
-					Version:  "v1alpha1",
-					Resource: "tenants",
-				},
-				Fn: []*ctrlcfgv1.Function{
-					{
-						Image: "docker.io/henderiw/fn-test-image",
-					},
-				},
-			},
-		}
-	*/
-
-	gvr, err := ctrlcfg.GetForGvr()
+	gvk, err := ctrlcfg.GetForGvk()
 	if err != nil {
 		os.Exit(1)
 	}
 
-	/*
-		gvr := schema.GroupVersionResource{
-			Group:    ctrlcfg.For.Gvr.Group,
-			Version:  ctrlcfg.For.Gvr.Version,
-			Resource: ctrlcfg.For.Gvr.Resource,
-		}
-	*/
+	
+
+
 	//logger.Debug("gvr", "value", gvr)
-	gvk, err := mgr.GetRESTMapper().KindFor(gvr[0])
-	if err != nil {
-		logger.Debug("Cannot get gvk", "error", err)
-		os.Exit(1)
-	}
+	
 	logger.Debug("gvk", "value", gvk)
 
-	/*
-		b := builder.New(mgr, *ctrlcfg)
+	b := builder.New(mgr, *ctrlcfg)
 
-		_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
-			Client:       mgr.GetClient(),
-			PollInterval: 1 * time.Minute,
-			Gvk:          gvk,
-			Root:         root,
-			Dag:          d,
-			//Fn:           ctrlcfg.For.Fn[0],
-			Log: logger,
-		}))
-		if err != nil {
-			logger.Debug("Cannot build controller", "error", err)
-			os.Exit(1)
-		}
+	_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
+		Client:       mgr.GetClient(),
+		PollInterval: 1 * time.Minute,
+		//Gvk:          gvk,
+		Dag: d,
+		//Fn:           ctrlcfg.For.Fn[0],
+		Log: logger,
+	}))
+	if err != nil {
+		logger.Debug("Cannot build controller", "error", err)
+		os.Exit(1)
+	}
 
-		logger.Debug("starting controller manager")
-		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			logger.Debug("problem running manager", "error", err)
-			os.Exit(1)
-		}
-	*/
+	logger.Debug("starting controller manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		logger.Debug("problem running manager", "error", err)
+		os.Exit(1)
+	}
+
 }
