@@ -1,7 +1,6 @@
 package ccsyntax
 
 import (
-	"fmt"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
@@ -15,7 +14,7 @@ func (r *parser) GetExternalResources() ([]schema.GroupVersionKind, []Result) {
 		resources: []schema.GroupVersionKind{},
 	}
 	er.resultFn = er.recordResult
-	er.addKindFn = er.addKind
+	er.addKindFn = er.addGVK
 
 	fnc := &WalkConfig{
 		gvkObjectFn: er.getGvk,
@@ -44,46 +43,54 @@ func (r *er) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *er) addKind(er schema.GroupVersionKind) {
-	fmt.Printf("add kind: %v \n", er)
+func (r *er) addGVK(gvk schema.GroupVersionKind) {
+	//fmt.Printf("add gvk: %v \n", gvk)
 	r.mrs.Lock()
 	defer r.mrs.Unlock()
 	found := false
 	for _, resource := range r.resources {
-		if resource.Group == er.Group &&
-			resource.Version == er.Version &&
-			resource.Kind == er.Kind {
+		if resource.Group == gvk.Group &&
+			resource.Version == gvk.Version &&
+			resource.Kind == gvk.Kind {
 			return
 		}
 	}
 	if !found {
-		r.resources = append(r.resources, er)
+		r.resources = append(r.resources, gvk)
 	}
 }
 
-func (r *er) addGvk(oc *OriginContext, v runtime.RawExtension) {
+func (r *er) addGvk(gvk schema.GroupVersionKind) {
+	r.addGVK(gvk)
+}
+
+func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+	gvk := r.getgvk(oc, v.Resource)
+	r.addGvk(gvk)
+	return gvk
+}
+
+func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+	if len(v.Input.Resource.Raw) != 0 {
+		gvk := r.getgvk(oc, v.Input.Resource)
+		r.addGvk(gvk)
+	}
+	for _, v := range v.Output {
+		if len(v.Resource.Raw) != 0 {
+			gvk := r.getgvk(oc, v.Resource)
+			r.addGvk(gvk)
+		}
+	}
+}
+
+func (r *er) getgvk(oc *OriginContext, v runtime.RawExtension) schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v)
 	if err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,
 			Error:         err.Error(),
 		})
-		return
+		return gvk
 	}
-	r.addKind(gvk)
-}
-
-func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
-	r.addGvk(oc, v.Resource)
-}
-
-func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
-	if len(v.Input.Resource.Raw) != 0 {
-		r.addGvk(oc, v.Input.Resource)
-	}
-	for _, v := range v.Output {
-		if len(v.Resource.Raw) != 0 {
-			r.addGvk(oc, v.Resource)
-		}
-	}
+	return gvk
 }

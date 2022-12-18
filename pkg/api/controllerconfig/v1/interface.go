@@ -18,7 +18,6 @@ package v1
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -80,7 +79,7 @@ func GetIdxName(idxName string) (string, int) {
 }
 
 func GetGVK(gvr runtime.RawExtension) (schema.GroupVersionKind, error) {
-	fmt.Println(string(gvr.Raw))
+	//fmt.Println(string(gvr.Raw))
 	var u unstructured.Unstructured
 	if err := json.Unmarshal(gvr.Raw, &u); err != nil {
 		return schema.GroupVersionKind{}, err

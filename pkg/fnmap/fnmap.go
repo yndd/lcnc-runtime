@@ -1,56 +1,30 @@
 package fnmap
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"context"
+
+	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type FnMap interface {
+	RunFn(ctx context.Context, fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (any, error)
 }
 
-func New(c client.Client) FnMap {
-	f := &fnMap{
+func New(c client.Client, gvk schema.GroupVersionKind) FnMap {
+	f := &fnmap{
 		client: c,
-		fns:    map[string]interface{}{},
+		gvk:    gvk,
+		//fns:    map[string]interface{}{},
 	}
 	//f.fns["queryClient"] = f.queryGvk
 
 	return f
 }
 
-type fnMap struct {
+type fnmap struct {
 	client client.Client
-	fns    map[string]interface{}
-}
-
-/*
-func (r *fnMap) queryGvk(ctx context.Context, namespace string, fn ctrlcfgv1.ControllerConfigFunction) ([]unstructured.Unstructured, error) {
-	opts := []client.ListOption{
-		client.InNamespace(namespace),
-		client.MatchingLabels(fn.Input.Selector.MatchLabels),
-	}
-
-
-	crl := getUnstructuredList(fn.Input.Gvr)
-	if err := r.client.List(ctx, crl, opts...); err != nil {
-		return nil, err
-	}
-	return crl.Items, nil
-
-}
-*/
-
-/*
-func forSlice() {
-	s := make([]interface)
-}
-*/
-
-func getUnstructuredList(gvk schema.GroupVersionKind) *unstructured.UnstructuredList {
-	var u unstructured.UnstructuredList
-	u.SetAPIVersion(gvk.GroupVersion().String())
-	u.SetKind(gvk.Kind)
-	uCopy := u.DeepCopy()
-	return uCopy
+	gvk    schema.GroupVersionKind
+	//fns    map[string]interface{}
 }

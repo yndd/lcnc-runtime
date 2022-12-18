@@ -1,5 +1,7 @@
 package ccsyntax
 
+import "k8s.io/apimachinery/pkg/runtime/schema"
+
 type Result struct {
 	OriginContext *OriginContext `json:"inline" yaml:"inline"`
 	Error         string         `json:"error,omitempty" yaml:"error,omitempty"`
@@ -9,11 +11,12 @@ type recordResultFn func(Result)
 
 type OriginContext struct {
 	//Index      int
-	FOW          Fow    `json:"fow,omitempty" yaml:"fow,omitempty"`
-	Pipeline     string `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
-	Origin       Origin `json:"origin,omitempty" yaml:"origin,omitempty"`
-	VertexName   string `json:"vertexname,omitempty" yaml:"vertexname,omitempty"`
-	LocalVarName string `json:"localvarName,omitempty" yaml:"localvarName,omitempty"`
+	FOW          FOW                     `json:"fow,omitempty" yaml:"fow,omitempty"`
+	GVK          schema.GroupVersionKind `json:"gvk,omitempty" yaml:"gvk,omitempty"`
+	Pipeline     string                  `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
+	Origin       Origin                  `json:"origin,omitempty" yaml:"origin,omitempty"`
+	VertexName   string                  `json:"vertexname,omitempty" yaml:"vertexname,omitempty"`
+	LocalVarName string                  `json:"localvarName,omitempty" yaml:"localvarName,omitempty"`
 }
 
 func (in *OriginContext) DeepCopy() *OriginContext {
@@ -29,12 +32,12 @@ func (in *OriginContext) DeepCopyInto(out *OriginContext) {
 	*out = *in
 }
 
-type Fow string
+type FOW string
 
 const (
-	FOWFor   Fow = "for"
-	FOWOwn   Fow = "own"
-	FOWWatch Fow = "watch"
+	FOWFor   FOW = "for"
+	FOWOwn   FOW = "own"
+	FOWWatch FOW = "watch"
 )
 
 type Origin string

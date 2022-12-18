@@ -2,13 +2,12 @@ package ccsyntax
 
 import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type Parser interface {
 	GetExternalResources() ([]schema.GroupVersionKind, []Result)
-	Parse() (dag.DAG, []Result)
+	Parse() (ConfigExecutionContext, []Result)
 }
 
 func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
@@ -30,28 +29,47 @@ type parser struct {
 	rootVertexName string
 }
 
-func (r *parser) Parse() (dag.DAG, []Result) {
-	// validate the config when creating the dag
-	d := dag.New()
+func (r *parser) Parse() (ConfigExecutionContext, []Result) {
+	// initialize the config execution context
+	// for each for and watch a new dag is created
+	ceCtx, result := r.init()
+	if len(result) != 0 {
+		return nil, result
+	}
 	// resolves the dependencies in the dag
 	// step1. check if all dependencies resolve
 	// step2. add the dependencies in the dag
-	result := r.populate(d)
+	result = r.populate(ceCtx)
 	if len(result) != 0 {
 		return nil, result
 	}
-	result = r.resolve(d)
+	//fmt.Println("propulate succeded")
+	result = r.resolve(ceCtx)
 	if len(result) != 0 {
 		return nil, result
 	}
-	result = r.connect(d)
+	//fmt.Println("resolve succeded")
+	result = r.connect(ceCtx)
 	if len(result) != 0 {
 		return nil, result
 	}
+	//fmt.Println("connect succeded")
 	//d.GetDependencyMap(r.rootVertexName)
 	// optimizes the dependncy graph based on transit reduction
 	// techniques
-	d.TransitiveReduction()
+	r.transitivereduction(ceCtx)
+
 	//d.GetDependencyMap(r.rootVertexName)
-	return d, nil
+	return ceCtx, nil
+}
+
+func (r *parser) transitivereduction(ceCtx ConfigExecutionContext) {
+	// transitive reduction for For dag
+	for _, d := range ceCtx.GetFOW(FOWFor) {
+		d.TransitiveReduction()
+	}
+	// transitive reduction for Watch dags
+	for _, d := range ceCtx.GetFOW(FOWWatch) {
+		d.TransitiveReduction()
+	}
 }

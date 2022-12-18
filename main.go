@@ -17,10 +17,11 @@ import (
 	//"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 	"github.com/yndd/ndd-runtime/pkg/logging"
+
 	//"gopkg.in/yaml.v3"
-	"sigs.k8s.io/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/yaml"
 )
 
 const yamlFile = "./examples/topo2.yaml"
@@ -89,12 +90,13 @@ func main() {
 	}
 	logger.Debug("new parser succeeded")
 
-	d, result := p.Parse()
+	ceCtx, result := p.Parse()
 	if len(result) != 0 {
 		logger.Debug("cannot parse resources", "result", result)
 		os.Exit(1)
 	}
 	logger.Debug("parsing succeeded")
+
 
 	gvks, result := p.GetExternalResources()
 	if len(result) > 0 {
@@ -116,27 +118,12 @@ func main() {
 	//s.Walk(context.TODO(), d)
 	//s.GetWalkResult()
 
-	gvk, err := ctrlcfg.GetForGvk()
-	if err != nil {
-		os.Exit(1)
-	}
-
-	
-
-
-	//logger.Debug("gvr", "value", gvr)
-	
-	logger.Debug("gvk", "value", gvk)
-
-	b := builder.New(mgr, *ctrlcfg)
-
+	b := builder.New(mgr, ceCtx)
 	_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
 		Client:       mgr.GetClient(),
 		PollInterval: 1 * time.Minute,
-		//Gvk:          gvk,
-		Dag: d,
-		//Fn:           ctrlcfg.For.Fn[0],
-		Log: logger,
+		CeCtx:        ceCtx,
+		Log:          logger,
 	}))
 	if err != nil {
 		logger.Debug("Cannot build controller", "error", err)
@@ -148,5 +135,4 @@ func main() {
 		logger.Debug("problem running manager", "error", err)
 		os.Exit(1)
 	}
-
 }

@@ -5,16 +5,17 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) populate(d dag.DAG) []Result {
+func (r *parser) populate(cec ConfigExecutionContext) []Result {
 	p := &populator{
-		d:      d,
+		cec:    cec,
 		result: []Result{},
 	}
 
 	fnc := &WalkConfig{
-		gvkObjectFn: p.addGvr,
+		gvkObjectFn: p.addGvk,
 		functionFn:  p.addFunction,
 	}
 
@@ -26,7 +27,7 @@ func (r *parser) populate(d dag.DAG) []Result {
 }
 
 type populator struct {
-	d      dag.DAG
+	cec    ConfigExecutionContext
 	mr     sync.RWMutex
 	result []Result
 }
@@ -37,21 +38,32 @@ func (r *populator) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *populator) addGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
-	if err := r.d.AddVertex(oc.VertexName, &dag.VertexContext{
-		Kind: dag.RootVertexKind,
-		Function: &ctrlcfgv1.ControllerConfigFunction{
-			Type: ctrlcfgv1.ForQueryType,
-			Input: &ctrlcfgv1.ControllerConfigInput{
-				Resource: v.Resource,
-			},
-		},
-	}); err != nil {
+func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
+	if err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,
 			Error:         err.Error(),
 		})
 	}
+	// Own does not have a pipeline so there is no point in populating the DAG
+	if oc.FOW != FOWOwn && err == nil {
+		if err := r.cec.GetDAG(oc.FOW, gvk).AddVertex(oc.VertexName, &dag.VertexContext{
+			Kind: dag.RootVertexKind,
+			Function: &ctrlcfgv1.ControllerConfigFunction{
+				Type: ctrlcfgv1.ForQueryType,
+				Input: &ctrlcfgv1.ControllerConfigInput{
+					Resource: v.Resource,
+				},
+			},
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+	}
+	return gvk
 }
 
 func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
@@ -84,7 +96,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfig
 	}
 
 	// add the function vertex to the dag
-	if err := r.d.AddVertex(oc.VertexName, &dag.VertexContext{
+	if err := r.cec.GetDAG(oc.FOW, oc.GVK).AddVertex(oc.VertexName, &dag.VertexContext{
 		Kind:        dag.FunctionVertexKind,
 		OutputDAG:   outputDAG,
 		LocalVarDag: localVarsDAG,

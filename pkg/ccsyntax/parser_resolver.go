@@ -6,18 +6,17 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 )
 
-func (r *parser) resolve(d dag.DAG) []Result {
+func (r *parser) resolve(ceCtx ConfigExecutionContext) []Result {
 	rs := &resolver{
-		d:      d,
+		ceCtx:  ceCtx,
 		result: []Result{},
 	}
 
 	fnc := &WalkConfig{
 		//gvkObjectFn: rs.resolveGvk,
-		functionFn:  rs.resolveFunction,
+		functionFn: rs.resolveFunction,
 	}
 
 	// walk the config resolve the verteces and create the outputmapping
@@ -27,7 +26,7 @@ func (r *parser) resolve(d dag.DAG) []Result {
 }
 
 type resolver struct {
-	d      dag.DAG
+	ceCtx  ConfigExecutionContext
 	mr     sync.RWMutex
 	result []Result
 }
@@ -37,7 +36,6 @@ func (r *resolver) recordResult(result Result) {
 	defer r.mr.Unlock()
 	r.result = append(r.result, result)
 }
-
 
 func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
 	if v.HasVars() {
@@ -97,7 +95,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 		// for val
 		if ref.Kind == RegularReferenceKind {
 			// get the vertexContext from the function
-			vc := r.d.GetVertex(oc.VertexName)
+			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
 				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
@@ -107,7 +105,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 			}
 			// if the lookup in the root DAG does not succeed we record the result
 			// and fail eventually
-			if !r.d.Lookup(strings.Split(ref.Value, ".")) {
+			if !r.ceCtx.GetDAG(oc.FOW, oc.GVK).Lookup(strings.Split(ref.Value, ".")) {
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot resolve %s", ref.Value).Error(),

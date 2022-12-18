@@ -2,6 +2,7 @@ package ccsyntax
 
 import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // cfgPreHookFn processes the for, own, watch generically
@@ -9,7 +10,7 @@ type cfgPreHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 type cfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 
 // gvkObjectFn processes the for, own, watch per item
-type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject)
+type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind
 type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject)
 
 // lcncBlockFn processes the block part of the Variables and functions
@@ -85,7 +86,8 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 
 func (r *parser) processGvkObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
 	if fnc.gvkObjectFn != nil {
-		fnc.gvkObjectFn(oc, v)
+		gvk := fnc.gvkObjectFn(oc, v)
+		oc.GVK = gvk
 		pipeline := r.cCfg.GetPipeline(v.PipelineRef)
 		if pipeline == nil {
 			if fnc.emptyPipelineFn != nil {
@@ -102,6 +104,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 	if fnc.pipelinePreHookFn != nil {
 		oc := &OriginContext{
 			FOW:        oc.FOW,
+			GVK:        oc.GVK,
 			Pipeline:   pipelineName,
 			Origin:     oc.Origin,
 			VertexName: oc.VertexName,
@@ -113,6 +116,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 		if fnc.functionFn != nil {
 			oc := &OriginContext{
 				FOW:        oc.FOW,
+				GVK:        oc.GVK,
 				Pipeline:   pipelineName,
 				Origin:     OriginVariable,
 				VertexName: vertexName,
@@ -125,6 +129,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 		if fnc.functionFn != nil {
 			oc := &OriginContext{
 				FOW:        oc.FOW,
+				GVK:        oc.GVK,
 				Pipeline:   pipelineName,
 				Origin:     OriginFunction,
 				VertexName: vertexName,
@@ -136,6 +141,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 	if fnc.pipelinePostHookFn != nil {
 		oc := &OriginContext{
 			FOW:        oc.FOW,
+			GVK:        oc.GVK,
 			Pipeline:   pipelineName,
 			Origin:     oc.Origin,
 			VertexName: oc.VertexName,

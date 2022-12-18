@@ -102,6 +102,8 @@ func (r *dag) AddVertex(s string, v *VertexContext) error {
 	r.mv.Lock()
 	defer r.mv.Unlock()
 
+	//fmt.Printf("add vertex: %s\n", s)
+
 	// validate duplicate entry
 	if _, ok := r.vertices[s]; ok {
 		return fmt.Errorf("duplicate vertex entry: %s", s)

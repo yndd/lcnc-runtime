@@ -12,7 +12,8 @@ import (
 
 	"github.com/pkg/errors"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"github.com/yndd/ndd-runtime/pkg/logging"
 	"github.com/yndd/ndd-runtime/pkg/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,9 +30,7 @@ const (
 type ReconcileInfo struct {
 	Client       client.Client
 	PollInterval time.Duration
-	Gvk          schema.GroupVersionKind
-	Dag          dag.DAG
-	//Fn           *ctrlcfgv1.ControllerConfigFunction
+	CeCtx        ccsyntax.ConfigExecutionContext
 
 	Log logging.Logger
 }
@@ -40,19 +39,15 @@ func New(ri *ReconcileInfo) reconcile.Reconciler {
 	return &reconciler{
 		client:       ri.Client,
 		pollInterval: ri.PollInterval,
-		gvk:          ri.Gvk,
-		//fn:           ri.Fn,
-		log: ri.Log,
+		ceCtx:        ri.CeCtx,
+		log:          ri.Log,
 	}
 }
 
 type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
-	gvk          schema.GroupVersionKind
-	root         string
-	d            dag.DAG
-	//fn           *ctrlcfgv1.ControllerConfigFunction
+	ceCtx        ccsyntax.ConfigExecutionContext
 
 	log logging.Logger
 	//record event.Recorder
@@ -62,8 +57,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
 
-	
-	cr := getUnstructuredObj(r.gvk)
+	cr := meta.GetUnstructuredFromGVK(r.ceCtx.GetForGVK())
 	if err := r.client.Get(ctx, req.NamespacedName, cr); err != nil {
 		// There's no need to requeue if we no longer exist. Otherwise we'll be
 		// requeued implicitly because we return an error.
@@ -71,7 +65,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
 	}
 
-	if err := r.client.List(ctx, getUnstructuredList(r.gvk)); err != nil {
+	if err := r.client.List(ctx, meta.GetUnstructuredListFromGVK(r.ceCtx.GetForGVK())); err != nil {
 		log.Debug("Cannot get resource", "error", err)
 		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
 	}
@@ -114,22 +108,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	*/
 
 	return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
-}
-
-func getUnstructuredList(gvk schema.GroupVersionKind) *unstructured.UnstructuredList {
-	var u unstructured.UnstructuredList
-	u.SetAPIVersion(gvk.GroupVersion().String())
-	u.SetKind(gvk.Kind)
-	uCopy := u.DeepCopy()
-	return uCopy
-}
-
-func getUnstructuredObj(gvk schema.GroupVersionKind) *unstructured.Unstructured {
-	var u unstructured.Unstructured
-	u.SetAPIVersion(gvk.GroupVersion().String())
-	u.SetKind(gvk.Kind)
-	uCopy := u.DeepCopy()
-	return uCopy
 }
 
 func buildResourceContext(cr *unstructured.Unstructured) (*rctxv1.ResourceContext, error) {

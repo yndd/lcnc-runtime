@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func (r *parser) ValidateSyntax() []Result {
@@ -46,13 +47,21 @@ func (r *vs) validatePreHook(lcncCfg *ctrlcfgv1.ControllerConfig) {
 	}
 }
 
-func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
+func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
 	if len(v.Resource.Raw) == 0 {
 		r.recordResult(Result{
 			OriginContext: oc,
 			Error:         fmt.Errorf("a gvk must be present, got: %v", v).Error(),
 		})
 	}
+	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
+	if err != nil {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         err.Error(),
+		})
+	}
+	return gvk
 }
 
 func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {

@@ -5,17 +5,17 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) connect(d dag.DAG) []Result {
+func (r *parser) connect(ceCtx ConfigExecutionContext) []Result {
 	c := &connector{
-		d:      d,
+		ceCtx:  ceCtx,
 		result: []Result{},
 	}
 
 	fnc := &WalkConfig{
-		gvkObjectFn: c.connectGvr,
+		gvkObjectFn: c.connectGvk,
 		functionFn:  c.connectFunction,
 	}
 
@@ -26,7 +26,7 @@ func (r *parser) connect(d dag.DAG) []Result {
 }
 
 type connector struct {
-	d              dag.DAG
+	ceCtx          ConfigExecutionContext
 	rootVertexName string
 	mr             sync.RWMutex
 	result         []Result
@@ -38,8 +38,16 @@ func (r *connector) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *connector) connectGvr(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
-	r.rootVertexName = r.d.GetRootVertex()
+func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
+	if err != nil {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         err.Error(),
+		})
+	}
+	r.rootVertexName = r.ceCtx.GetDAG(oc.FOW, gvk).GetRootVertex()
+	return gvk
 }
 
 func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
@@ -64,7 +72,7 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerCo
 
 	if v.Input != nil {
 		if len(v.Input.Resource.Raw) != 0 {
-			r.d.Connect(r.rootVertexName, oc.VertexName)
+			r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(r.rootVertexName, oc.VertexName)
 		}
 		if v.Input.Key != "" {
 			r.connectRefs(oc, v.Input.Key)
@@ -103,7 +111,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 		// RangeRefKind do nothing
 		if ref.Kind == RegularReferenceKind {
 			// get the vertexContext from the function
-			vc := r.d.GetVertex(oc.VertexName)
+			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
 				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
@@ -111,7 +119,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 					continue
 				}
 			}
-			vertexName, err := r.d.LookupRootVertex(strings.Split(ref.Value, "."))
+			vertexName, err := r.ceCtx.GetDAG(oc.FOW, oc.GVK).LookupRootVertex(strings.Split(ref.Value, "."))
 			if err != nil {
 				r.recordResult(Result{
 					OriginContext: oc,
@@ -119,7 +127,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 				})
 				continue
 			}
-			r.d.Connect(vertexName, oc.VertexName)
+			r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(vertexName, oc.VertexName)
 		}
 	}
 }
