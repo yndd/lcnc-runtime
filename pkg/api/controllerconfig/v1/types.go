@@ -105,6 +105,8 @@ const (
 	SliceType    Type = "slice"
 	MapType      Type = "map"
 	JQType       Type = "jq"
+	Container    Type = "container"
+	Wasm         Type = "wasm"
 )
 
 type ControllerConfigFunction struct {

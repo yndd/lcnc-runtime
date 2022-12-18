@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	//"github.com/yndd/lcnc-runtime/pkg/dag"
 )
 
 // ResultFunc is the callback used for gathering the
@@ -15,8 +15,8 @@ type result struct {
 	vertexName    string
 	startTime     time.Time
 	endTime       time.Time
-	vertexContext *dag.VertexContext
-	status        string
+	//vertexContext *dag.VertexContext
+	success        bool
 	reason        string
 }
 
@@ -26,7 +26,7 @@ func (r *scheduler) recordResult(re *result) {
 	r.execResult = append(r.execResult, re)
 }
 
-func (r *scheduler) GetWalkResult() {
+func (r *scheduler) GetExecResult() {
 	r.mr.RLock()
 	defer r.mr.RUnlock()
 	for i, result := range r.execResult {

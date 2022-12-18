@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	forkey = "for"
+	ForKey = "for"
 )
 
 func (r *fnmap) forQuery(ctx context.Context, input map[string]any) (any, error) {
 	// key is namespaced name
-	key, ok := input[forkey].(types.NamespacedName)
+	key, ok := input[ForKey].(types.NamespacedName)
 	if !ok {
-		return nil, fmt.Errorf("unexpected type, expected namespacedName, got: %v", input[forkey])
+		return nil, fmt.Errorf("unexpected type, expected namespacedName, got: %v", input[ForKey])
 	}
 	o := getUnstructured(r.gvk)
 	if err := r.client.Get(ctx, key, o); err != nil {

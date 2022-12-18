@@ -10,12 +10,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/pkg/errors"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
-	"github.com/yndd/lcnc-runtime/pkg/meta"
+	"github.com/yndd/lcnc-runtime/pkg/scheduler"
 	"github.com/yndd/ndd-runtime/pkg/logging"
-	"github.com/yndd/ndd-runtime/pkg/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -41,6 +39,11 @@ func New(ri *ReconcileInfo) reconcile.Reconciler {
 		pollInterval: ri.PollInterval,
 		ceCtx:        ri.CeCtx,
 		log:          ri.Log,
+		sched: scheduler.New(&scheduler.SchedulerConfig{
+			Client: ri.Client,
+			GVK:    ri.CeCtx.GetForGVK(),
+			DAG:    ri.CeCtx.GetDAG(ccsyntax.FOWFor, ri.CeCtx.GetForGVK()),
+		}),
 	}
 }
 
@@ -48,6 +51,7 @@ type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
+	sched        scheduler.Scheduler
 
 	log logging.Logger
 	//record event.Recorder
@@ -57,18 +61,22 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
 
-	cr := meta.GetUnstructuredFromGVK(r.ceCtx.GetForGVK())
-	if err := r.client.Get(ctx, req.NamespacedName, cr); err != nil {
-		// There's no need to requeue if we no longer exist. Otherwise we'll be
-		// requeued implicitly because we return an error.
-		log.Debug("Cannot get resource", "error", err)
-		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
-	}
+	r.sched.Execute(ctx, req)
 
-	if err := r.client.List(ctx, meta.GetUnstructuredListFromGVK(r.ceCtx.GetForGVK())); err != nil {
-		log.Debug("Cannot get resource", "error", err)
-		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
-	}
+	/*
+		cr := meta.GetUnstructuredFromGVK(r.ceCtx.GetForGVK())
+		if err := r.client.Get(ctx, req.NamespacedName, cr); err != nil {
+			// There's no need to requeue if we no longer exist. Otherwise we'll be
+			// requeued implicitly because we return an error.
+			log.Debug("Cannot get resource", "error", err)
+			return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
+		}
+
+		if err := r.client.List(ctx, meta.GetUnstructuredListFromGVK(r.ceCtx.GetForGVK())); err != nil {
+			log.Debug("Cannot get resource", "error", err)
+			return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
+		}
+	*/
 	//log.Debug("get resource", "cr", cr.UnstructuredContent())
 
 	// INJECT RUNNER
@@ -107,7 +115,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	*/
 
-	return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+	r.sched = scheduler.New(&scheduler.SchedulerConfig{
+		Client: r.client,
+		GVK:    r.ceCtx.GetForGVK(),
+		DAG:    r.ceCtx.GetDAG(ccsyntax.FOWFor, r.ceCtx.GetForGVK()),
+	})
+
+	return reconcile.Result{RequeueAfter: r.pollInterval}, nil
+	//return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 }
 
 func buildResourceContext(cr *unstructured.Unstructured) (*rctxv1.ResourceContext, error) {

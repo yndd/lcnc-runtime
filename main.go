@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const yamlFile = "./examples/topo2.yaml"
+const yamlFile = "./examples/topo3.yaml"
 
 func main() {
 	var metricsAddr string
@@ -58,8 +58,6 @@ func main() {
 			http.ListenAndServe(":8000", nil)
 		}()
 	}
-
-	// Parse config map
 
 	mgr, err := manager.New(ctrl.GetConfigOrDie(), manager.Options{
 		Namespace: os.Getenv("POD_NAMESPACE"),

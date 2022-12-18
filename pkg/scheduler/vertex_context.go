@@ -6,11 +6,15 @@ import (
 	"sync"
 	"time"
 
+	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/fnmap"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-type vertexContext struct {
+type execContext struct {
 	vertexName string
+	fnMap      fnmap.FnMap
 
 	// used to handle the dependencies between the functions
 	m sync.RWMutex
@@ -38,19 +42,19 @@ type vertexContext struct {
 	recordResult ResultFunc
 }
 
-func (r *vertexContext) AddDoneCh(n string, c chan bool) {
+func (r *execContext) AddDoneCh(n string, c chan bool) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.doneChs[n] = c
 }
 
-func (r *vertexContext) AddDepCh(n string, c chan bool) {
+func (r *execContext) AddDepCh(n string, c chan bool) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.depChs[n] = c
 }
 
-func (r *vertexContext) isFinished() bool {
+func (r *execContext) isFinished() bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	return !r.finished.IsZero()
@@ -62,7 +66,7 @@ func (r *vertexcontext) hasStarted() bool {
 }
 */
 
-func (r *vertexContext) isVisted() bool {
+func (r *execContext) isVisted() bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	return !r.visited.IsZero()
@@ -74,33 +78,68 @@ func (r *vertexContext) getDuration() time.Duration {
 }
 */
 
-func (r *vertexContext) run(ctx context.Context) {
-
+func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 	r.m.Lock()
 	r.start = time.Now()
 	r.m.Unlock()
+
+	var success bool
+	var reason string
 	// todo execute the function
+	switch r.vertexContext.Function.Type {
+	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
+	case ctrlcfgv1.ForQueryType:
+		// we use a dedicated key for the for
+		x, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, map[string]any{fnmap.ForKey: req.NamespacedName})
+		if err != nil {
+			success = false
+			reason = err.Error()
+			fmt.Printf("vertex: %s, output: %v, err: %s\n", r.vertexName, x, err.Error())
+		} else {
+			success = true
+			fmt.Printf("vertex: %s, output: %v\n", r.vertexName, x)
+		}
+
+	case ctrlcfgv1.QueryType:
+		x, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, nil)
+		if err != nil {
+			success = false
+			reason = err.Error()
+			fmt.Printf("vertex: %s, output: %v, err: %s\n", r.vertexName, x, err.Error())
+		} else {
+			success = true
+			fmt.Printf("vertex: %s, output: %v\n", r.vertexName, x)
+		}
+	case ctrlcfgv1.MapType, ctrlcfgv1.SliceType, ctrlcfgv1.JQType:
+	}
+
 	fmt.Printf("%s fn executed, doneChs: %v\n", r.vertexName, r.doneChs)
 	r.m.Lock()
 	r.finished = time.Now()
 	r.m.Unlock()
 
 	// callback function to capture the result
-	r.recordResult(&result{vertexName: r.vertexName, startTime: r.start})
+	r.recordResult(&result{
+		vertexName: r.vertexName,
+		startTime:  r.start,
+		endTime:    r.finished,
+		success:    success,
+		reason:     reason,
+	})
 
 	// signal to the dependent function the result of the vertex fn execution
 	for vertexName, doneCh := range r.doneChs {
-		doneCh <- true
+		doneCh <- success
 		close(doneCh)
 		fmt.Printf("%s -> %s send done\n", r.vertexName, vertexName)
 	}
 	// signal the result of the vertex execution to the main walk
-	r.doneFnCh <- true
+	r.doneFnCh <- success
 	close(r.doneFnCh)
 	fmt.Printf("%s -> walk main fn done\n", r.vertexName)
 }
 
-func (r *vertexContext) waitDependencies(ctx context.Context) bool {
+func (r *execContext) waitDependencies(ctx context.Context) bool {
 	// for each dependency wait till a it completed, either through
 	// the dependency Channel or cancel or
 

@@ -7,15 +7,28 @@ import (
 	"time"
 
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"github.com/yndd/lcnc-runtime/pkg/fnmap"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type Scheduler interface {
+	Execute(ctx context.Context, req ctrl.Request)
+	GetExecResult()
+}
+
 type scheduler struct {
+	d     dag.DAG
+	fnMap fnmap.FnMap
+	req   ctrl.Request
+
+	// cancelFn
 	cancelFn context.CancelFunc
 
 	// used during the Walk func
 	mw        sync.RWMutex
-	walkMap   map[string]*vertexContext
+	execMap   map[string]*execContext
 	fnDoneMap map[string]chan bool
 
 	mr         sync.RWMutex
@@ -23,47 +36,43 @@ type scheduler struct {
 	//finaloutput map[string][]unstructured.Unstructured
 }
 
-func New() *scheduler {
-	return &scheduler{
+type SchedulerConfig struct {
+	Client client.Client
+	GVK    schema.GroupVersionKind
+	DAG    dag.DAG
+}
+
+func New(cfg *SchedulerConfig) Scheduler {
+	s := &scheduler{
+		d: cfg.DAG,
+		// fnMap contains the internal functions
+		fnMap: fnmap.New(&fnmap.FnMapConfig{
+			Client: cfg.Client,
+			GVK:    cfg.GVK,
+		}),
 		mw:         sync.RWMutex{},
-		walkMap:    map[string]*vertexContext{},
+		execMap:    map[string]*execContext{},
 		fnDoneMap:  map[string]chan bool{},
 		mr:         sync.RWMutex{},
 		execResult: []*result{},
 	}
+	s.init()
+	return s
 }
 
-func (r *scheduler) Walk(ctx context.Context, d dag.DAG) {
-	// walk initialization
-	from := d.GetRootVertex()
-	r.initWalk(d)
-	start := time.Now()
-	ctx, cancelFn := context.WithCancel(ctx)
-	// to be changed
-	r.cancelFn = cancelFn
-	r.walk(ctx, d, from, true, 1)
-	// add total as a last entry in the result
-	r.recordResult(&result{
-		vertexName: "total",
-		startTime:  start,
-		endTime:    time.Now(),
-	})
-}
-
-func (r *scheduler) initWalk(d dag.DAG) {
-	//d.wg = new(sync.WaitGroup)
+func (r *scheduler) init() {
 	r.execResult = []*result{}
-	r.walkMap = map[string]*vertexContext{}
-	for vertexName, dvc := range d.GetVertices() {
+	r.execMap = map[string]*execContext{}
+	for vertexName, dvc := range r.d.GetVertices() {
 		//fmt.Printf("init vertexName: %s\n", vertexName)
-		r.walkMap[vertexName] = &vertexContext{
+		r.execMap[vertexName] = &execContext{
 			vertexName:    vertexName,
 			vertexContext: dvc,
-			//cancelFn:   cancelFn,
-			doneChs: make(map[string]chan bool), //snd
-			depChs:  make(map[string]chan bool), //rcv
+			doneChs:       make(map[string]chan bool), //snd
+			depChs:        make(map[string]chan bool), //rcv
 			// callback to gather the result
 			recordResult: r.recordResult,
+			fnMap:        r.fnMap,
 		}
 	}
 	// build the channel matrix to signal dependencies through channels
@@ -73,12 +82,12 @@ func (r *scheduler) initWalk(d dag.DAG) {
 	// usedto signal/send the vertex finished the function/job
 	// add the channel to the downstream vertex depCh map ->
 	// used to wait for the upstream vertex to signal the fn/job is done
-	for vertexName, wCtx := range r.walkMap {
+	for vertexName, wCtx := range r.execMap {
 		// only run these channels when we want to add dependency validation
-		for _, depVertexName := range d.GetUpVertexes(vertexName) {
+		for _, depVertexName := range r.d.GetUpVertexes(vertexName) {
 			//fmt.Printf("vertexName: %s, depBVertexName: %s\n", vertexName, depVertexName)
 			depCh := make(chan bool)
-			r.walkMap[depVertexName].AddDoneCh(vertexName, depCh) // send when done
+			r.execMap[depVertexName].AddDoneCh(vertexName, depCh) // send when done
 			wCtx.AddDepCh(depVertexName, depCh)                   // rcvr when done
 		}
 		doneFnCh := make(chan bool)
@@ -87,8 +96,23 @@ func (r *scheduler) initWalk(d dag.DAG) {
 	}
 }
 
-func (r *scheduler) walk(ctx context.Context, d dag.DAG, from string, init bool, depth int) {
-	wCtx := r.getWalkContext(from)
+func (r *scheduler) Execute(ctx context.Context, req ctrl.Request) {
+	r.req = req
+	from := r.d.GetRootVertex()
+	start := time.Now()
+	ctx, cancelFn := context.WithCancel(ctx)
+	r.cancelFn = cancelFn
+	r.execute(ctx, req, from, true)
+	// add total as a last entry in the result
+	r.recordResult(&result{
+		vertexName: "total",
+		startTime:  start,
+		endTime:    time.Now(),
+	})
+}
+
+func (r *scheduler) execute(ctx context.Context, req ctrl.Request, from string, init bool) {
+	wCtx := r.getExecContext(from)
 	// avoid scheduling a vertex that is already visted
 	if !wCtx.isVisted() {
 		wCtx.m.Lock()
@@ -105,14 +129,13 @@ func (r *scheduler) walk(ctx context.Context, d dag.DAG, from string, init bool,
 				return
 			}
 			// execute the vertex function
-			wCtx.run(ctx)
+			wCtx.run(ctx, req)
 		}()
 	}
 	// continue walking the graph
-	depth++
-	for _, downEdge := range d.GetDownVertexes(from) {
+	for _, downEdge := range r.d.GetDownVertexes(from) {
 		go func(downEdge string) {
-			r.walk(ctx, d, downEdge, false, depth)
+			r.execute(ctx, req, downEdge, false)
 		}(downEdge)
 	}
 	if init {
@@ -120,15 +143,15 @@ func (r *scheduler) walk(ctx context.Context, d dag.DAG, from string, init bool,
 	}
 }
 
-func (r *scheduler) getWalkContext(s string) *vertexContext {
+func (r *scheduler) getExecContext(s string) *execContext {
 	r.mw.RLock()
 	defer r.mw.RUnlock()
-	return r.walkMap[s]
+	return r.execMap[s]
 }
 
 func (r *scheduler) dependenciesFinished(dep map[string]chan bool) bool {
 	for vertexName := range dep {
-		if !r.getWalkContext(vertexName).isFinished() {
+		if !r.getExecContext(vertexName).isFinished() {
 			return false
 		}
 	}

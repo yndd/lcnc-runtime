@@ -12,19 +12,20 @@ type FnMap interface {
 	RunFn(ctx context.Context, fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (any, error)
 }
 
-func New(c client.Client, gvk schema.GroupVersionKind) FnMap {
-	f := &fnmap{
-		client: c,
-		gvk:    gvk,
-		//fns:    map[string]interface{}{},
-	}
-	//f.fns["queryClient"] = f.queryGvk
+type FnMapConfig struct {
+	Client client.Client
+	GVK    schema.GroupVersionKind
+}
 
+func New(fmc *FnMapConfig) FnMap {
+	f := &fnmap{
+		client: fmc.Client,
+		gvk:    fmc.GVK,
+	}
 	return f
 }
 
 type fnmap struct {
 	client client.Client
 	gvk    schema.GroupVersionKind
-	//fns    map[string]interface{}
 }

@@ -1,0 +1,28 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: topoController
+  namespace: default
+spec:
+  properties:
+    for: 
+      topoDef: 
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Definition
+        pipelineRef: forPipeline
+    pipelines:
+      - name: forPipeline
+        vars:
+          targets:
+            type: query
+            input:
+              resource: 
+                apiVersion: target.yndd.io/v1
+                kind: Target 
+          allTemplates:
+            type: query
+            input: 
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Template
