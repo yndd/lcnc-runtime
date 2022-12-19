@@ -68,6 +68,7 @@ func (r *cfgExecContext) GetDAG(fow FOW, gvk schema.GroupVersionKind) dag.DAG {
 }
 
 func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]dag.DAG {
+	// TODO make a copy
 	r.m.RLock()
 	defer r.m.RUnlock()
 	switch fow {

@@ -50,5 +50,5 @@ func (r *executor) GetResult() {
 			}
 		}
 	}
-	fmt.Printf("overall result success : %t, duration: %s", overallSuccess, overallDuration)
+	fmt.Printf("overall result success : %t, duration: %s\n", overallSuccess, overallDuration)
 }

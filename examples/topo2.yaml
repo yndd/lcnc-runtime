@@ -53,9 +53,7 @@ spec:
           #    expression: $allTemplates | select(.metadata.name as $a | $VALUE | index($a)) | {(.metadata.name): .}
           childTemplates:
             range: 
-              value: $parentTemplates
-              range:
-                value: $VALUE.spec.properties.fabric.pod[*].TemplateRef
+              value: $parentTemplates[].spec.properties.fabric.pod[].TemplateRef
             type: map
             input:
               key: $VALUE.metadata.name

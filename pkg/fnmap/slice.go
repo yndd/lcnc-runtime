@@ -13,29 +13,33 @@ type varItem struct {
 	value any
 }
 
-func buildSliceItem(value string, input any, vars ...varItem) (any, error) {
+func buildSliceItem(value string, input map[string]any, vars ...varItem) (any, error) {
 	if value == "" {
 		return nil, errors.New("missing input value")
 	}
-	q, err := gojq.Parse(value)
-	if err != nil {
-		return nil, err
-	}
-	varNames := make([]string, 0, len(vars))
-	varValues := make([]any, 0, len(vars))
+	varNames := make([]string, 0, len(vars)+len(input))
+	varValues := make([]any, 0, len(vars)+len(input))
 	for _, v := range vars {
 		varNames = append(varNames, "$"+v.name)
 		varValues = append(varValues, v.value)
 	}
+	for name, v := range input {
+		varNames = append(varNames, "$"+name)
+		varValues = append(varValues, v)
+	}
 	fmt.Printf("buildSliceItem varNames: %v, varValues: %v\n", varNames, varValues)
 	fmt.Printf("buildSliceItem exp: %s\n", value)
 
+	q, err := gojq.Parse(value)
+	if err != nil {
+		return nil, err
+	}
 	code, err := gojq.Compile(q, gojq.WithVariables(varNames))
 	if err != nil {
 		return nil, err
 	}
 
-	iter := code.Run(input, varValues...)
+	iter := code.Run(nil, varValues...)
 	v, ok := iter.Next()
 	if !ok {
 		return nil, errors.New("no value")
@@ -51,11 +55,17 @@ func buildSliceItem(value string, input any, vars ...varItem) (any, error) {
 }
 
 func runJQOnce(code *gojq.Code, input any, vars ...any) (any, error) {
-	iter := code.Run(input, vars)
+	iter := code.Run(input, vars...)
 
 	v, ok := iter.Next()
 	if !ok {
 		return nil, errors.New("no result")
+	}
+	if err, ok := v.(error); ok {
+		if err != nil {
+			fmt.Printf("runJQOnce err: %v\n", err)
+			return nil, err
+		}
 	}
 	return v, nil
 }

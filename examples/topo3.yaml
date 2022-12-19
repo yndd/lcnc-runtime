@@ -16,7 +16,7 @@ spec:
         vars:
           targets:
             condition:
-              expression: $discoveryRuleNames | length
+              expression: $discoveryRuleNames | length != 0
             type: query
             input:
               resource: 
@@ -24,7 +24,7 @@ spec:
                 kind: Target
           allTemplates:
             condition:
-              expression: $parentTemplateNames | length
+              expression: $parentTemplateNames | length != 0
             type: query
             input: 
               resource: 
@@ -39,14 +39,28 @@ spec:
           parentTemplateNames:
             type: jq
             input: 
-              expression: $topoDef | .spec.properties.templates[] | select((. | length) > 0) | [.templateRef.name]
-          discoveryRuleNames:
-            range:
-              value: $topoDef | .spec.properties.discoveryRules[]
-            type: slice
-            input:
-              value: $VALUE.discoveryRuleRef.name
+              expression: $topoDef | .spec.properties.templates | select((. | length) > 0) | .[].templateRef.name
           #discoveryRuleNames:
-          #  type: jq
-          #  input: 
-          #    expression: $topoDef | [.spec.properties.discoveryRules[].discoveryRuleRef.name]
+          #  range:
+          #    value: $topoDef | .spec.properties.discoveryRules[]
+          #  type: slice
+          #  input:
+          #    value: $VALUE.discoveryRuleRef.name
+          discoveryRuleNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
+          parentTemplates:
+            range:
+              value: $parentTemplateNames | .[]
+            type: map
+            input: 
+              key: $VALUE
+              value: $allTemplates | .[] | select(.metadata.name == $VALUE)
+          childTemplates:
+            range: 
+              value: $parentTemplates | .[].spec.properties.fabric.pod | select((. | length) > 0) | .[].TemplateRef
+            type: map
+            input:
+              key: $VALUE.metadata.name
+              value: $allTemplates | .[] | select(.metadata.name == $VALUE.metadata.name)

@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -146,6 +147,10 @@ func (r *output) GetOutput() {
 			} else {
 				varName = fmt.Sprintf("%s.%s", vertexName, outputName)
 			}
+			b, err := json.Marshal(or.value)
+			fmt.Printf("output marshal err %s\n", err)
+			fmt.Printf("output variable err %s\n", string(b))
+
 			fmt.Printf("output varName: %s, type: %s kind: %s value: %#v\n", varName, oi.kind, or.kind, or.value)
 		}
 	}

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -92,7 +93,9 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 	reason := ""
 	o, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, input)
 	if err != nil {
-		success = false
+		if !errors.Is(err, fnmap.ErrConditionFalse) {
+			success = false
+		}
 		reason = err.Error()
 	}
 	fmt.Printf("vertex: %s, success: %t, reason: %s, output: %v\n", r.vertexName, success, reason, o)

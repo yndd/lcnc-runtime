@@ -25,7 +25,7 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 						return nil, err
 					}
 					if !ok {
-						return nil, errors.New("does not need to run") // error to be ignored
+						return nil, ErrConditionFalse // error to be ignored
 					}
 				}
 			}
@@ -187,7 +187,7 @@ func runRange(exp string, input map[string]any) ([]*item, error) {
 				return nil, err
 			}
 		}
-		fmt.Printf("runRange result item: %v\n", v)
+		fmt.Printf("runRange result item: %#v\n", v)
 		result = append(result, &item{val: v})
 	}
 
@@ -212,6 +212,21 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 				return false, err
 			}
 			varValues = append(varValues, rj)
+		case []unstructured.Unstructured:
+			rj := make([]interface{}, len(x))
+			for _, v := range x {
+				b, err := json.Marshal(v.UnstructuredContent())
+				if err != nil {
+					return false, err
+				}
+
+				vrj := map[string]interface{}{}
+				if err := json.Unmarshal(b, &rj); err != nil {
+					return false, err
+				}
+				rj = append(rj, vrj)
+			}
+			varValues = append(varValues, rj)
 		default:
 			varValues = append(varValues, v)
 		}
@@ -227,7 +242,7 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	iter := code.Run(nil, varValues)
+	iter := code.Run(nil, varValues...)
 
 	v, ok := iter.Next()
 	if !ok {
@@ -237,13 +252,13 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 	if err, ok := v.(error); ok {
 		if err != nil {
 			fmt.Printf("runCondition err: %v\n", err)
-			if strings.Contains(err.Error(), "cannot iterate over: null") {
-				return false, nil
-			}
+			//if strings.Contains(err.Error(), "cannot iterate over: null") {
+			//	return false, nil
+			//}
 			return false, err
 		}
 	}
-
+	fmt.Printf("runCondition value: %t\n", v)
 	if r, ok := v.(bool); ok {
 		return r, nil
 	}

@@ -61,6 +61,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
 
+	// TODO should be per crName
 	r.exec.Run(ctx, req)
 
 	r.exec.GetOutput()
