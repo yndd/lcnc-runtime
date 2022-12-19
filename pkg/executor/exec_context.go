@@ -81,11 +81,12 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 		// we use a dedicated key for the for
 		input[fnmap.ForKey] = req.NamespacedName
 	default:
-		input := map[string]any{}
+		fmt.Printf("references: %v\n", r.vertexContext.References)
 		for _, ref := range r.vertexContext.References {
 			input[ref] = r.output.Get(ref)
 		}
 	}
+	fmt.Printf("vertex: %s input: %#v\n", r.vertexName, input)
 
 	success := true
 	reason := ""
@@ -94,11 +95,6 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 		success = false
 		reason = err.Error()
 	}
-	//fmt.Printf("vertex: %s, output: %v, err: %s\n", r.vertexName, o, err.Error())
-	//	} else {
-	//	success = true
-	//fmt.Printf("vertex: %s, output: %v\n", r.vertexName, o)
-	//}
 	fmt.Printf("vertex: %s, success: %t, reason: %s, output: %v\n", r.vertexName, success, reason, o)
 
 	fmt.Printf("%s fn executed, doneChs: %v\n", r.vertexName, r.doneChs)

@@ -2,6 +2,7 @@ package fnmap
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/itchyny/gojq"
 	// ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
@@ -23,9 +24,12 @@ func buildSliceItem(value string, input any, vars ...varItem) (any, error) {
 	varNames := make([]string, 0, len(vars))
 	varValues := make([]any, 0, len(vars))
 	for _, v := range vars {
-		varNames = append(varNames, v.name)
+		varNames = append(varNames, "$"+v.name)
 		varValues = append(varValues, v.value)
 	}
+	fmt.Printf("buildSliceItem varNames: %v, varValues: %v\n", varNames, varValues)
+	fmt.Printf("buildSliceItem exp: %s\n", value)
+
 	code, err := gojq.Compile(q, gojq.WithVariables(varNames))
 	if err != nil {
 		return nil, err
@@ -36,6 +40,13 @@ func buildSliceItem(value string, input any, vars ...varItem) (any, error) {
 	if !ok {
 		return nil, errors.New("no value")
 	}
+	if err, ok := v.(error); ok {
+		if err != nil {
+			fmt.Printf("buildSliceItem err: %v\n", err)
+			return nil, err
+		}
+	}
+	fmt.Printf("buildSliceItem value: %v\n", v)
 	return v, nil
 }
 

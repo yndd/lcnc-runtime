@@ -32,7 +32,23 @@ func (r *executor) recordResult(re *result) {
 func (r *executor) GetResult() {
 	r.mr.RLock()
 	defer r.mr.RUnlock()
+	overallSuccess := true
+	var overallDuration time.Duration
 	for i, result := range r.execResult {
-		fmt.Printf("result order: %d vertex: %s, duration %s\n", i, result.vertexName, result.endTime.Sub(result.startTime))
+		if result.vertexName == "total" {
+			overallDuration = result.endTime.Sub(result.startTime)
+		} else {
+			fmt.Printf("result order: %d vertex: %s, duration %s, success: %t, reason: %s\n",
+				i,
+				result.vertexName,
+				result.endTime.Sub(result.startTime),
+				result.success,
+				result.reason)
+
+			if !result.success {
+				overallSuccess = false
+			}
+		}
 	}
+	fmt.Printf("overall result success : %t, duration: %s", overallSuccess, overallDuration)
 }

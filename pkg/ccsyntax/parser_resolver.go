@@ -63,6 +63,9 @@ func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	if v.Input.Value != "" {
 		r.resolveRefs(oc, v.Input.Value)
 	}
+	if v.Input.Expression != "" {
+		r.resolveRefs(oc, v.Input.Expression)
+	}
 	for _, v := range v.Input.GenericInput {
 		r.resolveRefs(oc, v)
 	}

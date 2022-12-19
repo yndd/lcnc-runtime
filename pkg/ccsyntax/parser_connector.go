@@ -80,6 +80,9 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		if v.Input.Value != "" {
 			r.connectRefs(oc, v.Input.Value)
 		}
+		if v.Input.Expression != "" {
+			r.connectRefs(oc, v.Input.Expression)
+		}
 		for _, v := range v.Input.GenericInput {
 			r.connectRefs(oc, v)
 		}

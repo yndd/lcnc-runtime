@@ -73,7 +73,7 @@ spec:
           createFabric:
             range:
               value: $parentTemplates
-            image: topologyBuilderFromTemplate
+            image: docker.io/yndd/topologyBuilderFromTemplate
             vars:
               localChildTemplates:
                 range:

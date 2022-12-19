@@ -100,6 +100,7 @@ func (r *output) Get(v string) any {
 
 	s := strings.Split(v, ".")
 	oi, ok := r.o[s[0]]
+	fmt.Printf("output get ref: %s, oi: %v, ok: %t\n", v, oi, ok)
 	if !ok {
 		// not found -> should not happend
 		return nil
@@ -107,6 +108,7 @@ func (r *output) Get(v string) any {
 	oi.m.RLock()
 	defer oi.m.RUnlock()
 	if len(s) == 1 {
+		fmt.Printf("output get ref: %s, oi result: %v, ok: %t\n", v, oi.result[s[0]].value, ok)
 		return oi.result[s[0]].value
 	}
 	return oi.result[s[1]].value

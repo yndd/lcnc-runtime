@@ -15,14 +15,38 @@ spec:
       - name: forPipeline
         vars:
           targets:
+            condition:
+              expression: $discoveryRuleNames | length
             type: query
             input:
               resource: 
                 apiVersion: target.yndd.io/v1
                 kind: Target
           allTemplates:
+            condition:
+              expression: $parentTemplateNames | length
             type: query
             input: 
               resource: 
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Template
+          #parentTemplateNames:
+          #  range:
+          #    value: $topoDef | .spec.properties.templates[]
+          #  type: slice # output is name of the function
+          #  input: 
+          #    value: $VALUE.templateRef.name
+          parentTemplateNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.templates[] | select((. | length) > 0) | [.templateRef.name]
+          discoveryRuleNames:
+            range:
+              value: $topoDef | .spec.properties.discoveryRules[]
+            type: slice
+            input:
+              value: $VALUE.discoveryRuleRef.name
+          #discoveryRuleNames:
+          #  type: jq
+          #  input: 
+          #    expression: $topoDef | [.spec.properties.discoveryRules[].discoveryRuleRef.name]
