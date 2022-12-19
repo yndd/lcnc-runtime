@@ -171,6 +171,9 @@ func runRange(exp string, input map[string]any) ([]*item, error) {
 				return nil, err
 			}
 		}
+		if v == nil {
+			continue
+		}
 		fmt.Printf("runRange result item: %#v\n", v)
 		result = append(result, &item{val: v})
 	}
