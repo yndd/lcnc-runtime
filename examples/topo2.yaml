@@ -60,14 +60,14 @@ spec:
               value: $allTemplates | .select(.metadata.name == $VALUE.metadata.name)
         tasks:
           createTopology:
-            image: topology
+            type: gotemplate
             input:
-              topology: $topoDef # can be implicit
-            output: 
-              topologies: 
-                resource: 
-                  apiVersion: topo.yndd.io/v1alpha1
-                  kind: Topology
+              topotDef: $topoDef
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Topology
+                metadata:
+                  name: "{{ .topoDef.metadata.name }}"
           createFabric:
             range:
               value: $parentTemplates

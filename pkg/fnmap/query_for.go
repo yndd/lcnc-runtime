@@ -2,6 +2,7 @@ package fnmap
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/yndd/lcnc-runtime/pkg/meta"
@@ -23,5 +24,14 @@ func (r *fnmap) forQuery(ctx context.Context, input map[string]any) (any, error)
 	if err := r.client.Get(ctx, key, o); err != nil {
 		return nil, err
 	}
-	return *o, nil
+	b, err := json.Marshal(o.UnstructuredContent())
+	if err != nil {
+		return false, err
+	}
+
+	rj := map[string]interface{}{}
+	if err := json.Unmarshal(b, &rj); err != nil {
+		return false, err
+	}
+	return rj, nil
 }

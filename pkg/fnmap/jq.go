@@ -1,13 +1,11 @@
 package fnmap
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/itchyny/gojq"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func runJQ(exp string, input map[string]any) (any, error) {
@@ -18,21 +16,7 @@ func runJQ(exp string, input map[string]any) (any, error) {
 	varValues := make([]any, 0, len(input))
 	for name, v := range input {
 		varNames = append(varNames, "$"+name)
-
-		switch x := v.(type) {
-		case unstructured.Unstructured:
-			b, err := json.Marshal(x.UnstructuredContent())
-			if err != nil {
-				return nil, err
-			}
-
-			rj := map[string]interface{}{}
-			if err := json.Unmarshal(b, &rj); err != nil {
-				return nil, err
-			}
-
-			varValues = append(varValues, rj)
-		}
+		varValues = append(varValues, v)
 	}
 	fmt.Printf("runJQ varNames: %v, varValues: %v\n", varNames, varValues)
 	fmt.Printf("runJQ exp: %s\n", exp)

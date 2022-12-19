@@ -1,12 +1,10 @@
 package fnmap
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/itchyny/gojq"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func buildKV(key, value string, input map[string]any, vars ...varItem) (string, any, error) {
@@ -24,37 +22,7 @@ func buildKV(key, value string, input map[string]any, vars ...varItem) (string, 
 	}
 	for name, v := range input {
 		varNames = append(varNames, "$"+name)
-
-		switch x := v.(type) {
-		case unstructured.Unstructured:
-			b, err := json.Marshal(x.UnstructuredContent())
-			if err != nil {
-				return "", nil, err
-			}
-
-			rj := map[string]interface{}{}
-			if err := json.Unmarshal(b, &rj); err != nil {
-				return "", nil, err
-			}
-			varValues = append(varValues, rj)
-		case []unstructured.Unstructured:
-			rj := make([]interface{}, len(x))
-			for _, v := range x {
-				b, err := json.Marshal(v.UnstructuredContent())
-				if err != nil {
-					return "", nil, err
-				}
-
-				vrj := map[string]interface{}{}
-				if err := json.Unmarshal(b, &vrj); err != nil {
-					return "", nil, err
-				}
-				rj = append(rj, vrj)
-			}
-			varValues = append(varValues, rj)
-		default:
-			varValues = append(varValues, v)
-		}
+		varValues = append(varValues, v)
 	}
 	fmt.Printf("buildKV varNames: %v, varValues: %v\n", varNames, varValues)
 	fmt.Printf("buildKV exp: %s\n", value)

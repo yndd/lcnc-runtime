@@ -2,14 +2,12 @@ package fnmap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (any, error) {
@@ -144,21 +142,7 @@ func runRange(exp string, input map[string]any) ([]*item, error) {
 	varValues := make([]any, 0, len(input))
 	for name, v := range input {
 		varNames = append(varNames, "$"+name)
-
-		switch x := v.(type) {
-		case unstructured.Unstructured:
-			b, err := json.Marshal(x.UnstructuredContent())
-			if err != nil {
-				return nil, err
-			}
-			rj := map[string]interface{}{}
-			if err := json.Unmarshal(b, &rj); err != nil {
-				return nil, err
-			}
-			varValues = append(varValues, rj)
-		default:
-			varValues = append(varValues, v)
-		}
+		varValues = append(varValues, v)
 	}
 	fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
 	fmt.Printf("runRange exp: %s\n", exp)
@@ -199,37 +183,7 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 	varValues := make([]any, 0, len(input))
 	for name, v := range input {
 		varNames = append(varNames, "$"+name)
-
-		switch x := v.(type) {
-		case unstructured.Unstructured:
-			b, err := json.Marshal(x.UnstructuredContent())
-			if err != nil {
-				return false, err
-			}
-
-			rj := map[string]interface{}{}
-			if err := json.Unmarshal(b, &rj); err != nil {
-				return false, err
-			}
-			varValues = append(varValues, rj)
-		case []unstructured.Unstructured:
-			rj := make([]interface{}, len(x))
-			for _, v := range x {
-				b, err := json.Marshal(v.UnstructuredContent())
-				if err != nil {
-					return false, err
-				}
-
-				vrj := map[string]interface{}{}
-				if err := json.Unmarshal(b, &rj); err != nil {
-					return false, err
-				}
-				rj = append(rj, vrj)
-			}
-			varValues = append(varValues, rj)
-		default:
-			varValues = append(varValues, v)
-		}
+		varValues = append(varValues, v)
 	}
 	fmt.Printf("runCondition varNames: %v, varValues: %v\n", varNames, varValues)
 	fmt.Printf("runCondition exp: %s\n", exp)

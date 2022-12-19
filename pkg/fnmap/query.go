@@ -2,6 +2,7 @@ package fnmap
 
 import (
 	"context"
+	"encoding/json"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
@@ -25,5 +26,20 @@ func (r *fnmap) query(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 	if err := r.client.List(ctx, o, opts...); err != nil {
 		return nil, err
 	}
-	return o.Items, nil
+
+	rj := make([]interface{}, len(o.Items))
+	for _, v := range o.Items {
+		b, err := json.Marshal(v.UnstructuredContent())
+		if err != nil {
+			return false, err
+		}
+
+		vrj := map[string]interface{}{}
+		if err := json.Unmarshal(b, &vrj); err != nil {
+			return false, err
+		}
+		rj = append(rj, vrj)
+	}
+
+	return rj, nil
 }
