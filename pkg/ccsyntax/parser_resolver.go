@@ -37,7 +37,7 @@ func (r *resolver) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	if v.HasVars() {
 		oc := oc.DeepCopy()
 		for localVarName, v := range v.Vars {

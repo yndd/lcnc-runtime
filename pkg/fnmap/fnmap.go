@@ -9,7 +9,7 @@ import (
 )
 
 type FnMap interface {
-	RunFn(ctx context.Context, fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (any, error)
+	RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (any, error)
 }
 
 type FnMapConfig struct {

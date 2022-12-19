@@ -60,7 +60,7 @@ func (r *ControllerConfig) GetWatchGvks() ([]schema.GroupVersionKind, error) {
 	return gvrs, nil
 }
 
-func (r *ControllerConfig) getGvkList(gvrObjs map[string]*ControllerConfigGvkObject) ([]schema.GroupVersionKind, error) {
+func (r *ControllerConfig) getGvkList(gvrObjs map[string]*GvkObject) ([]schema.GroupVersionKind, error) {
 	gvks := make([]schema.GroupVersionKind, 0, len(gvrObjs))
 	for _, gvrObj := range gvrObjs {
 		gvk, err := GetGVK(gvrObj.Resource)
@@ -96,11 +96,11 @@ func GetGVK(gvr runtime.RawExtension) (schema.GroupVersionKind, error) {
 	}, nil
 }
 
-func (v *ControllerConfigFunction) HasVars() bool {
+func (v *Function) HasVars() bool {
 	return v.Vars != nil
 }
 
-func (v *ControllerConfigFunction) HasBlock() bool {
+func (v *Function) HasBlock() bool {
 	return v.Block.Range != nil || v.Block.Condition != nil
 }
 
@@ -113,8 +113,8 @@ func (v *Block) HasRange() bool {
 	//return v.Condition.Block.HasRange()
 }
 
-func (r *ControllerConfig) GetPipeline(s string) *ControllerConfigPipeline {
-	for _, pipeline := range r.Spec.Properties.ControllerConfigPipelines {
+func (r *ControllerConfig) GetPipeline(s string) *Pipeline {
+	for _, pipeline := range r.Spec.Properties.Pipelines {
 		if pipeline.Name == s {
 			return pipeline
 		}

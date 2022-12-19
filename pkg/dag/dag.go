@@ -58,25 +58,35 @@ type dag struct {
 type VertexKind string
 
 const (
-	RootVertexKind VertexKind = "root"
-	//BlockVertexKind    VertexKind = "block"
+	RootVertexKind     VertexKind = "root"
 	FunctionVertexKind VertexKind = "function"
 	OutputVertexKind   VertexKind = "output"
 	LocalVarVertexKind VertexKind = "localvar"
 )
 
 type VertexContext struct {
+	m sync.Mutex
 	// block indicates we have to execute the pipeline or not
 	Name        string
 	Kind        VertexKind
 	OutputDAG   DAG
 	LocalVarDag DAG
-	// if it is a block we execute the block and call the dag
-	//ControllerConfigBlock ctrlcfgv1.ControllerConfigBlock
-	//ChildDAG              DAG
-	// if is not a block we execute the function with the functionconfig
-	// root is modelled as a function
-	Function *ctrlcfgv1.ControllerConfigFunction
+	Function    *ctrlcfgv1.Function
+	References  []string
+}
+
+func (r *VertexContext) AddReference(s string) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	found := false
+	for _, ref := range r.References {
+		if ref == s {
+			found = true
+		}
+	}
+	if !found {
+		r.References = append(r.References, s)
+	}
 }
 
 //type DagContext struct {
@@ -108,13 +118,6 @@ func (r *dag) AddVertex(s string, v *VertexContext) error {
 	if _, ok := r.vertices[s]; ok {
 		return fmt.Errorf("duplicate vertex entry: %s", s)
 	}
-	/*
-		if r.dagCtx.ParentDag == nil {
-			if len(r.GetVertices()) > 0 {
-				return fmt.Errorf("we can only have 1 root dag")
-			}
-		}
-	*/
 	r.vertices[s] = v
 
 	return nil
@@ -343,7 +346,7 @@ func (r *dag) lookupRootVertex(idx int, s []string) (int, string, error) {
 		if idx == 2 {
 			return idx, s[idx-2], nil
 		}
-		
+
 	}
 	if v.OutputDAG != nil {
 		idx++

@@ -38,7 +38,7 @@ func (r *connector) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{
@@ -50,7 +50,7 @@ func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigG
 	return gvk
 }
 
-func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	if v.HasVars() {
 		oc := oc.DeepCopy()
 		for localVarName, v := range v.Vars {
@@ -119,6 +119,9 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 					continue
 				}
 			}
+			// this is a global reference
+			// we add this to the vertexContext references
+			vc.AddReference(ref.Value)
 			vertexName, err := r.ceCtx.GetDAG(oc.FOW, oc.GVK).LookupRootVertex(strings.Split(ref.Value, "."))
 			if err != nil {
 				r.recordResult(Result{

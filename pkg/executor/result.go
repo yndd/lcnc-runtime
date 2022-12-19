@@ -1,10 +1,10 @@
-package scheduler
+package executor
 
 import (
 	"fmt"
 	"time"
 
-	//"github.com/yndd/lcnc-runtime/pkg/dag"
+	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
 // ResultFunc is the callback used for gathering the
@@ -12,21 +12,24 @@ import (
 type ResultFunc func(*result)
 
 type result struct {
-	vertexName    string
-	startTime     time.Time
-	endTime       time.Time
-	//vertexContext *dag.VertexContext
-	success        bool
-	reason        string
+	vertexName string
+	startTime  time.Time
+	endTime    time.Time
+	outputCfg  map[string]*ctrlcfgv1.Output
+	output     any
+	success    bool
+	reason     string
 }
 
-func (r *scheduler) recordResult(re *result) {
+func (r *executor) recordResult(re *result) {
 	r.mr.Lock()
 	defer r.mr.Unlock()
 	r.execResult = append(r.execResult, re)
+
+	r.output.Update(re.vertexName, re.outputCfg, re.output)
 }
 
-func (r *scheduler) GetExecResult() {
+func (r *executor) GetResult() {
 	r.mr.RLock()
 	defer r.mr.RUnlock()
 	for i, result := range r.execResult {

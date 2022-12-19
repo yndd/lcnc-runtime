@@ -45,7 +45,7 @@ func (o *RunnerOptions) InitDefaults() {
 // and it's config.
 func NewRunner(
 	ctx context.Context,
-	fn *ctrlcfgv1.ControllerConfigFunction,
+	fn *ctrlcfgv1.Function,
 	//fnResults *fnresultv1.ResultList,
 	opts RunnerOptions,
 	//runtime fn.FunctionRuntime,

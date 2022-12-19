@@ -1,4 +1,4 @@
-package scheduler
+package executor
 
 import (
 	"context"
@@ -13,12 +13,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type Scheduler interface {
-	Execute(ctx context.Context, req ctrl.Request)
-	GetExecResult()
+type Executor interface {
+	Run(ctx context.Context, req ctrl.Request)
+	GetResult()
+	GetOutput()
 }
 
-type scheduler struct {
+type executor struct {
 	d     dag.DAG
 	fnMap fnmap.FnMap
 	req   ctrl.Request
@@ -33,17 +34,18 @@ type scheduler struct {
 
 	mr         sync.RWMutex
 	execResult []*result
-	//finaloutput map[string][]unstructured.Unstructured
+
+	output Output
 }
 
-type SchedulerConfig struct {
+type Config struct {
 	Client client.Client
 	GVK    schema.GroupVersionKind
 	DAG    dag.DAG
 }
 
-func New(cfg *SchedulerConfig) Scheduler {
-	s := &scheduler{
+func New(cfg *Config) Executor {
+	s := &executor{
 		d: cfg.DAG,
 		// fnMap contains the internal functions
 		fnMap: fnmap.New(&fnmap.FnMapConfig{
@@ -55,12 +57,13 @@ func New(cfg *SchedulerConfig) Scheduler {
 		fnDoneMap:  map[string]chan bool{},
 		mr:         sync.RWMutex{},
 		execResult: []*result{},
+		output:     NewOutput(),
 	}
 	s.init()
 	return s
 }
 
-func (r *scheduler) init() {
+func (r *executor) init() {
 	r.execResult = []*result{}
 	r.execMap = map[string]*execContext{}
 	for vertexName, dvc := range r.d.GetVertices() {
@@ -73,6 +76,7 @@ func (r *scheduler) init() {
 			// callback to gather the result
 			recordResult: r.recordResult,
 			fnMap:        r.fnMap,
+			output:       r.output,
 		}
 	}
 	// build the channel matrix to signal dependencies through channels
@@ -96,7 +100,7 @@ func (r *scheduler) init() {
 	}
 }
 
-func (r *scheduler) Execute(ctx context.Context, req ctrl.Request) {
+func (r *executor) Run(ctx context.Context, req ctrl.Request) {
 	r.req = req
 	from := r.d.GetRootVertex()
 	start := time.Now()
@@ -111,7 +115,7 @@ func (r *scheduler) Execute(ctx context.Context, req ctrl.Request) {
 	})
 }
 
-func (r *scheduler) execute(ctx context.Context, req ctrl.Request, from string, init bool) {
+func (r *executor) execute(ctx context.Context, req ctrl.Request, from string, init bool) {
 	wCtx := r.getExecContext(from)
 	// avoid scheduling a vertex that is already visted
 	if !wCtx.isVisted() {
@@ -143,13 +147,13 @@ func (r *scheduler) execute(ctx context.Context, req ctrl.Request, from string, 
 	}
 }
 
-func (r *scheduler) getExecContext(s string) *execContext {
+func (r *executor) getExecContext(s string) *execContext {
 	r.mw.RLock()
 	defer r.mw.RUnlock()
 	return r.execMap[s]
 }
 
-func (r *scheduler) dependenciesFinished(dep map[string]chan bool) bool {
+func (r *executor) dependenciesFinished(dep map[string]chan bool) bool {
 	for vertexName := range dep {
 		if !r.getExecContext(vertexName).isFinished() {
 			return false
@@ -158,7 +162,7 @@ func (r *scheduler) dependenciesFinished(dep map[string]chan bool) bool {
 	return true
 }
 
-func (r *scheduler) waitFunctionCompletion(ctx context.Context) {
+func (r *executor) waitFunctionCompletion(ctx context.Context) {
 	fmt.Printf("main walk wait waiting for function completion...\n")
 DepSatisfied:
 	for vertexName, doneFnCh := range r.fnDoneMap {

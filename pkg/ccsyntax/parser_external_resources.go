@@ -64,13 +64,13 @@ func (r *er) addGvk(gvk schema.GroupVersionKind) {
 	r.addGVK(gvk)
 }
 
-func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
 	gvk := r.getgvk(oc, v.Resource)
 	r.addGvk(gvk)
 	return gvk
 }
 
-func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.Function) {
 	if len(v.Input.Resource.Raw) != 0 {
 		gvk := r.getgvk(oc, v.Input.Resource)
 		r.addGvk(gvk)

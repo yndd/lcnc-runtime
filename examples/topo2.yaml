@@ -27,7 +27,7 @@ spec:
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Template
           #parentTemplateNames:
-          #  type: jq
+          #  kind: jq
           #  input: 
           #    expression: $topoDef | [.spec.properties.templates[].templateRef.name]
           parentTemplateNames:
@@ -80,7 +80,7 @@ spec:
                   value: $childTemplates
                   condition:
                     expression: xxx
-                type: slice
+                kind: slice
                 input: 
                   value: $KEY 
             input:

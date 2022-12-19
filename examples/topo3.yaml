@@ -19,7 +19,7 @@ spec:
             input:
               resource: 
                 apiVersion: target.yndd.io/v1
-                kind: Target 
+                kind: Target
           allTemplates:
             type: query
             input: 

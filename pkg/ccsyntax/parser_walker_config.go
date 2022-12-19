@@ -10,8 +10,8 @@ type cfgPreHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 type cfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 
 // gvkObjectFn processes the for, own, watch per item
-type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind
-type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject)
+type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind
+type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject)
 
 // lcncBlockFn processes the block part of the Variables and functions
 //type pipelineBlockFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock)
@@ -23,11 +23,11 @@ type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObj
 // lcncVarFn processes the variable in the variables section
 //type lcncVarFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar)
 
-type pipelinePreHookFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigPipeline)
-type pipelinePostHookFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigPipeline)
+type pipelinePreHookFn func(oc *OriginContext, v *ctrlcfgv1.Pipeline)
+type pipelinePostHookFn func(oc *OriginContext, v *ctrlcfgv1.Pipeline)
 
 // functionFn processes the function in the functions section
-type functionFn func(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction)
+type functionFn func(oc *OriginContext, v *ctrlcfgv1.Function)
 
 //type lcncServicesPreHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
 
@@ -84,7 +84,7 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 
 }
 
-func (r *parser) processGvkObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
+func (r *parser) processGvkObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfgv1.GvkObject) {
 	if fnc.gvkObjectFn != nil {
 		gvk := fnc.gvkObjectFn(oc, v)
 		oc.GVK = gvk
@@ -99,7 +99,7 @@ func (r *parser) processGvkObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfg
 	}
 }
 
-func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerConfigPipeline) {
+func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 	pipelineName := v.Name
 	if fnc.pipelinePreHookFn != nil {
 		oc := &OriginContext{

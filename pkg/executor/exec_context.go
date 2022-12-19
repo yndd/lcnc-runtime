@@ -1,4 +1,4 @@
-package scheduler
+package executor
 
 import (
 	"context"
@@ -40,6 +40,8 @@ type execContext struct {
 
 	// callback
 	recordResult ResultFunc
+	// output
+	output Output
 }
 
 func (r *execContext) AddDoneCh(n string, c chan bool) {
@@ -60,58 +62,44 @@ func (r *execContext) isFinished() bool {
 	return !r.finished.IsZero()
 }
 
-/*
-func (r *vertexcontext) hasStarted() bool {
-	return !r.start.IsZero()
-}
-*/
-
 func (r *execContext) isVisted() bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	return !r.visited.IsZero()
 }
 
-/*
-func (r *vertexContext) getDuration() time.Duration {
-	return r.finished.Sub(r.start)
-}
-*/
-
 func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 	r.m.Lock()
 	r.start = time.Now()
 	r.m.Unlock()
 
-	var success bool
-	var reason string
+	input := map[string]any{}
 	// todo execute the function
 	switch r.vertexContext.Function.Type {
 	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
 	case ctrlcfgv1.ForQueryType:
 		// we use a dedicated key for the for
-		x, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, map[string]any{fnmap.ForKey: req.NamespacedName})
-		if err != nil {
-			success = false
-			reason = err.Error()
-			fmt.Printf("vertex: %s, output: %v, err: %s\n", r.vertexName, x, err.Error())
-		} else {
-			success = true
-			fmt.Printf("vertex: %s, output: %v\n", r.vertexName, x)
+		input[fnmap.ForKey] = req.NamespacedName
+	default:
+		input := map[string]any{}
+		for _, ref := range r.vertexContext.References {
+			input[ref] = r.output.Get(ref)
 		}
-
-	case ctrlcfgv1.QueryType:
-		x, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, nil)
-		if err != nil {
-			success = false
-			reason = err.Error()
-			fmt.Printf("vertex: %s, output: %v, err: %s\n", r.vertexName, x, err.Error())
-		} else {
-			success = true
-			fmt.Printf("vertex: %s, output: %v\n", r.vertexName, x)
-		}
-	case ctrlcfgv1.MapType, ctrlcfgv1.SliceType, ctrlcfgv1.JQType:
 	}
+
+	success := true
+	reason := ""
+	o, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, input)
+	if err != nil {
+		success = false
+		reason = err.Error()
+	}
+	//fmt.Printf("vertex: %s, output: %v, err: %s\n", r.vertexName, o, err.Error())
+	//	} else {
+	//	success = true
+	//fmt.Printf("vertex: %s, output: %v\n", r.vertexName, o)
+	//}
+	fmt.Printf("vertex: %s, success: %t, reason: %s, output: %v\n", r.vertexName, success, reason, o)
 
 	fmt.Printf("%s fn executed, doneChs: %v\n", r.vertexName, r.doneChs)
 	r.m.Lock()
@@ -123,6 +111,8 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 		vertexName: r.vertexName,
 		startTime:  r.start,
 		endTime:    r.finished,
+		outputCfg:  r.vertexContext.Function.Output,
+		output:     o,
 		success:    success,
 		reason:     reason,
 	})

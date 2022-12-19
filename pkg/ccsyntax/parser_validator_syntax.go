@@ -47,7 +47,7 @@ func (r *vs) validatePreHook(lcncCfg *ctrlcfgv1.ControllerConfig) {
 	}
 }
 
-func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
 	if len(v.Resource.Raw) == 0 {
 		r.recordResult(Result{
 			OriginContext: oc,
@@ -64,7 +64,7 @@ func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObje
 	return gvk
 }
 
-func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) {
+func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.GvkObject) {
 	if oc.FOW != FOWOwn {
 		r.recordResult(Result{
 			OriginContext: oc,
@@ -73,7 +73,7 @@ func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.ControllerCon
 	}
 }
 
-func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	// validate block
 	if v.HasBlock() {
 		r.validateBlock(oc, v.Block)
@@ -146,7 +146,7 @@ func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	}
 	if v.Range != nil {
 		if v.Range.Value != "" {
-			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, v.Range.Value)
+			r.validateContext(oc, &ctrlcfgv1.Function{Block: v}, v.Range.Value)
 			//r.validateBlock(oc, v.Range.Block)
 		} else {
 			r.recordResult(Result{
@@ -160,7 +160,7 @@ func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	}
 	if v.Condition != nil {
 		if v.Condition.Expression != "" {
-			r.validateContext(oc, &ctrlcfgv1.ControllerConfigFunction{Block: v}, v.Condition.Expression)
+			r.validateContext(oc, &ctrlcfgv1.Function{Block: v}, v.Condition.Expression)
 			//r.validateBlock(oc, v.Condition.Block)
 		} else {
 			r.recordResult(Result{
@@ -177,7 +177,7 @@ func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 //func (r *vs) validateService(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
 //}
 
-func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction, s string) {
+func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.Function, s string) {
 	rfs := NewReferences()
 	refs := rfs.GetReferences(s)
 	//fmt.Printf("validate ctxName: %s, value: %s, kind: %s, variable: %v\n", o.VertexName, s, value.Kind, value.Variable)

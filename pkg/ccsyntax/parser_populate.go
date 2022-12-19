@@ -38,7 +38,7 @@ func (r *populator) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{
@@ -50,9 +50,9 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkOb
 	if oc.FOW != FOWOwn && err == nil {
 		if err := r.cec.GetDAG(oc.FOW, gvk).AddVertex(oc.VertexName, &dag.VertexContext{
 			Kind: dag.RootVertexKind,
-			Function: &ctrlcfgv1.ControllerConfigFunction{
+			Function: &ctrlcfgv1.Function{
 				Type: ctrlcfgv1.ForQueryType,
-				Input: &ctrlcfgv1.ControllerConfigInput{
+				Input: &ctrlcfgv1.Input{
 					Resource: v.Resource,
 				},
 			},
@@ -66,7 +66,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkOb
 	return gvk
 }
 
-func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfigFunction) {
+func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	// add output in a seperate DAG
 	outputDAG := dag.New()
 	for outputName := range v.Output {
@@ -101,6 +101,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.ControllerConfig
 		OutputDAG:   outputDAG,
 		LocalVarDag: localVarsDAG,
 		Function:    v,
+		References:  []string{},
 	}); err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,

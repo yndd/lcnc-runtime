@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *fnmap) query(ctx context.Context, fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (any, error) {
+func (r *fnmap) query(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (any, error) {
 	gvk, err := ctrlcfgv1.GetGVK(fnconfig.Input.Resource)
 	if err != nil {
 		return nil, err

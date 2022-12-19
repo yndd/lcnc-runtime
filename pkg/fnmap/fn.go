@@ -9,7 +9,7 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
-func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.ControllerConfigFunction, input map[string]any) (any, error) {
+func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (any, error) {
 	switch fnconfig.Type {
 	case ctrlcfgv1.ForQueryType:
 		return r.forQuery(ctx, input)

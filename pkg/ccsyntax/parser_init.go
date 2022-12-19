@@ -35,7 +35,7 @@ func (r *initializer) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.ControllerConfigGvkObject) schema.GroupVersionKind {
+func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{

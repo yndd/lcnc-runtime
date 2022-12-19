@@ -12,7 +12,7 @@ import (
 
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
-	"github.com/yndd/lcnc-runtime/pkg/scheduler"
+	"github.com/yndd/lcnc-runtime/pkg/executor"
 	"github.com/yndd/ndd-runtime/pkg/logging"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -39,7 +39,7 @@ func New(ri *ReconcileInfo) reconcile.Reconciler {
 		pollInterval: ri.PollInterval,
 		ceCtx:        ri.CeCtx,
 		log:          ri.Log,
-		sched: scheduler.New(&scheduler.SchedulerConfig{
+		exec: executor.New(&executor.Config{
 			Client: ri.Client,
 			GVK:    ri.CeCtx.GetForGVK(),
 			DAG:    ri.CeCtx.GetDAG(ccsyntax.FOWFor, ri.CeCtx.GetForGVK()),
@@ -51,7 +51,7 @@ type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
-	sched        scheduler.Scheduler
+	exec         executor.Executor
 
 	log logging.Logger
 	//record event.Recorder
@@ -61,7 +61,10 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
 
-	r.sched.Execute(ctx, req)
+	r.exec.Run(ctx, req)
+
+	r.exec.GetOutput()
+	r.exec.GetResult()
 
 	/*
 		cr := meta.GetUnstructuredFromGVK(r.ceCtx.GetForGVK())
@@ -115,7 +118,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	*/
 
-	r.sched = scheduler.New(&scheduler.SchedulerConfig{
+	r.exec = executor.New(&executor.Config{
 		Client: r.client,
 		GVK:    r.ceCtx.GetForGVK(),
 		DAG:    r.ceCtx.GetDAG(ccsyntax.FOWFor, r.ceCtx.GetForGVK()),
