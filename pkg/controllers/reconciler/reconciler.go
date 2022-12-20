@@ -61,11 +61,18 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	log := r.log.WithValues("request", req)
 	log.Debug("Reconciling")
 
-	// TODO should be per crName
-	r.exec.Run(ctx, req)
+	e := executor.New(&executor.Config{
+		Client: r.client,
+		GVK:    r.ceCtx.GetForGVK(),
+		DAG:    r.ceCtx.GetDAG(ccsyntax.FOWFor, r.ceCtx.GetForGVK()),
+	})
 
-	r.exec.GetOutput()
-	r.exec.GetResult()
+	// TODO should be per crName
+	e.Run(ctx, req)
+	e.GetOutput()
+	e.GetResult()
+
+	time.Sleep(60 * time.Second)
 
 	/*
 		cr := meta.GetUnstructuredFromGVK(r.ceCtx.GetForGVK())
@@ -119,13 +126,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	*/
 
-	r.exec = executor.New(&executor.Config{
-		Client: r.client,
-		GVK:    r.ceCtx.GetForGVK(),
-		DAG:    r.ceCtx.GetDAG(ccsyntax.FOWFor, r.ceCtx.GetForGVK()),
-	})
-
-	return reconcile.Result{RequeueAfter: r.pollInterval}, nil
+	return reconcile.Result{}, nil
 	//return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 }
 
