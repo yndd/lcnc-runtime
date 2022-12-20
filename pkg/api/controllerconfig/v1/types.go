@@ -98,6 +98,7 @@ const (
 	JQType       FunctionType = "jq"
 	Container    FunctionType = "container"
 	Wasm         FunctionType = "wasm"
+	GoTemplate   FunctionType = "gotemplate"
 )
 
 type Function struct {

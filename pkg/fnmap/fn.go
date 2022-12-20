@@ -54,12 +54,12 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 						}
 					}
 					if fnconfig.Block.Condition.Block.Range != nil {
-					items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
-					if err != nil {
-						return nil, err
+						items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
+						if err != nil {
+							return nil, err
+						}
+						isRange = true
 					}
-					isRange = true
-				}
 				}
 			}
 			numItems := len(items)
@@ -143,6 +143,24 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 		}
 	case ctrlcfgv1.JQType:
 		return runJQ(fnconfig.Input.Expression, input)
+	case ctrlcfgv1.GoTemplate:
+		if fnconfig.Vars != nil {
+			vars := make(map[string]any)
+			for n, fn := range fnconfig.Vars {
+				v, err := r.RunFn(ctx, fn, input)
+				if err != nil {
+					return nil, err
+				}
+				vars[n] = v
+			}
+			for k, v := range vars {
+				input[k] = v
+			}
+		}
+		if fnconfig.Input.Resource.Raw != nil {
+			return runGT(string(fnconfig.Input.Resource.Raw), input)
+		}
+		return runGT(fnconfig.Input.Template, input)
 	case "": // image
 	}
 
