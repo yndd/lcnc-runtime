@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/profile"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/builder"
+	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -95,7 +96,6 @@ func main() {
 	}
 	logger.Debug("parsing succeeded")
 
-
 	gvks, result := p.GetExternalResources()
 	if len(result) > 0 {
 		logger.Debug("config get external resources failed", "result", result)
@@ -116,7 +116,9 @@ func main() {
 	//s.Walk(context.TODO(), d)
 	//s.GetWalkResult()
 
-	b := builder.New(mgr, ceCtx)
+	b := builder.New(mgr, ceCtx, controller.Options{
+		MaxConcurrentReconciles: 10,
+	})
 	_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
 		Client:       mgr.GetClient(),
 		PollInterval: 1 * time.Minute,

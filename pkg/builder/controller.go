@@ -31,10 +31,11 @@ type builder struct {
 	ctrlOptions      controller.Options
 }
 
-func New(mgr manager.Manager, ceCtx ccsyntax.ConfigExecutionContext) Builder {
+func New(mgr manager.Manager, ceCtx ccsyntax.ConfigExecutionContext, opts controller.Options) Builder {
 	b := &builder{
 		mgr:   mgr,
 		ceCtx: ceCtx,
+		ctrlOptions: opts,
 	}
 	return b
 }
@@ -130,6 +131,7 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 
 	gvk := blder.ceCtx.GetForGVK()
 	// Setup concurrency.
+	/*
 	if ctrlOptions.MaxConcurrentReconciles == 0 {
 		groupKind := gvk.GroupKind().String()
 
@@ -137,6 +139,7 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 			ctrlOptions.MaxConcurrentReconciles = concurrency
 		}
 	}
+	*/
 
 	// Setup cache sync timeout.
 	if ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout != nil {
