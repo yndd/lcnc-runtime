@@ -109,21 +109,6 @@ func (in *ResourceContextProperties) DeepCopyInto(out *ResourceContextProperties
 			(*out)[key] = outVal
 		}
 	}
-	if in.Allocations != nil {
-		in, out := &in.Allocations, &out.Allocations
-		*out = make(map[string][]KRMResource, len(*in))
-		for key, val := range *in {
-			var outVal []KRMResource
-			if val == nil {
-				(*out)[key] = nil
-			} else {
-				in, out := &val, &outVal
-				*out = make([]KRMResource, len(*in))
-				copy(*out, *in)
-			}
-			(*out)[key] = outVal
-		}
-	}
 	if in.Output != nil {
 		in, out := &in.Output, &out.Output
 		*out = make(map[string][]KRMResource, len(*in))

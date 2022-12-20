@@ -40,7 +40,11 @@ spec:
               nodeEpA: .select($nodes.metadata.labels[yndd.io/nodeName] == $VALUE.spec.endpointA)
               nodeEpB: .select($nodes.metadata.labels[yndd.io/nodeName] == $VALUE.spec.endpointB)
             output: 
-              nodeInfo: nodeInfo
+              nodeInfo: 
+                internal: true
+                gvk: 
+                  apiVersion: yndd.io/v1alpha1
+                  kind: NodeInfo
               asAllocations: asAllocations 
               niAllocations: niAllocations 
               ipAllocations: ipAllocations 
@@ -56,9 +60,9 @@ spec:
               nodeNiAllocations: .select(${infra.getNetworkAllocations.networkInfraAllocator.ipAllocations}.metadata.labels[yndd.io/nodeName] == $VALUE.metadata.name)  
             output: 
               config: 
-                gvr: 
+                gvk: 
                   apiVersion: yndd.io/v1alpha1
-                  resource: networkConfigs
+                  kind: networkConfigs
           infraState:
             image: infraState
             config: stateInfo
@@ -66,9 +70,9 @@ spec:
               nodeInfo: $VALUE
             output: 
               state: 
-                gvr:
+                gvk:
                   apiVersion: yndd.io/v1alpha1
-                  resource: networkStates
+                  kind: networkStates
     services:
       - asInjection: { image: asInjection }
         ipInjection: { image: ipInjection }

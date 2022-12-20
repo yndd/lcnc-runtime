@@ -68,18 +68,24 @@ func (r *cfgExecContext) GetDAG(fow FOW, gvk schema.GroupVersionKind) dag.DAG {
 }
 
 func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]dag.DAG {
-	// TODO make a copy
+	gvkDAGMap := map[schema.GroupVersionKind]dag.DAG{}
 	r.m.RLock()
 	defer r.m.RUnlock()
 	switch fow {
 	case FOWFor:
-		return r.For
+		for gvk, d := range r.For {
+			gvkDAGMap[gvk] = d
+		}
 	case FOWOwn:
-		return r.own
+		for gvk, d := range r.own {
+			gvkDAGMap[gvk] = d
+		}
 	case FOWWatch:
-		return r.watch
+		for gvk, d := range r.watch {
+			gvkDAGMap[gvk] = d
+		}
 	}
-	return map[schema.GroupVersionKind]dag.DAG{}
+	return gvkDAGMap
 }
 
 func (r *cfgExecContext) GetForGVK() schema.GroupVersionKind {

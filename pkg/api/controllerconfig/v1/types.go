@@ -126,6 +126,7 @@ type Input struct {
 	GenericInput map[string]string     `json:",inline" yaml:",inline"`
 	Expression   string                `json:"expression,omitempty" yaml:"expression,omitempty"`
 	Resource     runtime.RawExtension  `json:"resource,omitempty" yaml:"resource,omitempty"`
+	Template     string                `json:"template,omitempty" yaml:"template,omitempty"`
 }
 
 type Executor struct {

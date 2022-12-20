@@ -2,20 +2,26 @@ package executor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/fnruntime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type execContext struct {
-	vertexName string
-	fnMap      fnmap.FnMap
+	vertexName     string
+	rootVertexName string
+	fnMap          fnmap.FnMap
 
 	// used to handle the dependencies between the functions
 	m sync.RWMutex
@@ -74,10 +80,17 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 	r.start = time.Now()
 	r.m.Unlock()
 
+	// Gather the input based on the function type
+	// Determine if this is an internal fn runner or not
 	input := map[string]any{}
-	// todo execute the function
+	internalRunner := true
 	switch r.vertexContext.Function.Type {
 	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
+		input[r.rootVertexName] = r.output.Get(r.rootVertexName)
+		for _, ref := range r.vertexContext.References {
+			input[ref] = r.output.Get(ref)
+		}
+		internalRunner = false
 	case ctrlcfgv1.ForQueryType:
 		// we use a dedicated key for the for
 		input[fnmap.ForKey] = req.NamespacedName
@@ -89,15 +102,42 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 	}
 	fmt.Printf("vertex: %s input: %#v\n", r.vertexName, input)
 
+	// Run the execution context
 	success := true
 	reason := ""
-	o, err := r.fnMap.RunFn(ctx, r.vertexContext.Function, input)
-	if err != nil {
-		if !errors.Is(err, fnmap.ErrConditionFalse) {
-			success = false
+	var o any //outout
+	if internalRunner {
+		var err error
+		o, err = r.fnMap.RunFn(ctx, r.vertexContext.Function, input)
+		if err != nil {
+			if !errors.Is(err, fnmap.ErrConditionFalse) {
+				success = false
+			}
+			reason = err.Error()
 		}
-		reason = err.Error()
+	} else {
+		runner, err := fnruntime.NewRunner(ctx, r.vertexContext.Function,
+			fnruntime.RunnerOptions{
+				ResolveToImage: fnruntime.ResolveToImageForCLI,
+			},
+		)
+		if err != nil {
+			success = false
+			reason = err.Error()
+		}
+		rctx, err := buildResourceContext(req, input)
+		if err != nil {
+			success = false
+			reason = err.Error()
+		}
+		newRctx, err := runner.Run(rctx)
+		if err != nil {
+			success = false
+			reason = err.Error()
+		}
+		fmt.Printf("rctx: %v\n", newRctx)
 	}
+
 	fmt.Printf("vertex: %s, success: %t, reason: %s, output: %v\n", r.vertexName, success, reason, o)
 
 	fmt.Printf("%s fn executed, doneChs: %v\n", r.vertexName, r.doneChs)
@@ -156,4 +196,99 @@ DepSatisfied:
 	}
 	fmt.Printf("%s finished waiting\n", r.vertexName)
 	return true
+}
+
+func buildResourceContext(req ctrl.Request, input map[string]any) (*rctxv1.ResourceContext, error) {
+	props, err := buildResourceContextProperties(input)
+	if err != nil {
+		return nil, err
+	}
+
+	rctx := &rctxv1.ResourceContext{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ResourceContext",
+			APIVersion: "lcnc.yndd.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+		Spec: rctxv1.ResourceContextSpec{
+			Properties: props,
+		},
+	}
+
+	gvk := schema.GroupVersionKind{
+		Group:   "lcnc.yndd.io",
+		Version: "v1",
+		Kind:    "ResourceContext",
+	}
+
+	rctx.SetGroupVersionKind(gvk)
+	return rctx, nil
+}
+
+func buildResourceContextProperties(input map[string]any) (*rctxv1.ResourceContextProperties, error) {
+	props := &rctxv1.ResourceContextProperties{
+		Origin: map[string]rctxv1.KRMResource{},
+		Input:  map[string][]rctxv1.KRMResource{},
+		Output: map[string][]rctxv1.KRMResource{},
+	}
+	for _, v := range input {
+		switch x := v.(type) {
+		case map[string]any:
+			// we should only have 1 resource with this type which is the origin
+			gvk, res, err := getGVKREsource(x)
+			if err != nil {
+				return nil, err
+			}
+			props.Origin[gvk.String()] = rctxv1.KRMResource(res)
+		case []any:
+			l := len(x)
+			if l > 0 {
+				for _, v := range x {
+					switch x := v.(type) {
+					case map[string]any:
+						gvk, res, err := getGVKREsource(x)
+						if err != nil {
+							return nil, err
+						}
+						if _, ok := props.Input[gvk.String()]; !ok {
+							props.Input[gvk.String()] = make([]rctxv1.KRMResource, 0, l)
+						}
+						props.Input[gvk.String()] = append(props.Input[gvk.String()], rctxv1.KRMResource(res))
+					default:
+						return nil, fmt.Errorf("unexpected object in []any: got %T", v)
+					}
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unexpected input object: got %T", v)
+		}
+	}
+	return props, nil
+}
+
+func getGVKREsource(x map[string]any) (schema.GroupVersionKind, string, error) {
+	apiVersion, ok := x["apiVersion"]
+	if !ok {
+		return schema.GroupVersionKind{}, "", fmt.Errorf("origin is not a KRM resource apiVersion missing")
+	}
+	kind, ok := x["kind"]
+	if !ok {
+		return schema.GroupVersionKind{}, "", fmt.Errorf("origin is not a KRM resource kind missing")
+	}
+	gv, err := schema.ParseGroupVersion(apiVersion.(string))
+	if err != nil {
+		return schema.GroupVersionKind{}, "", err
+	}
+	b, err := json.Marshal(x)
+	if err != nil {
+		return schema.GroupVersionKind{}, "", err
+	}
+	return schema.GroupVersionKind{
+			Group:   gv.Group,
+			Version: gv.Version,
+			Kind:    kind.(string)},
+		string(b), nil
 }

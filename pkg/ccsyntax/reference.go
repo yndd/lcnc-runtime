@@ -44,7 +44,7 @@ func (r *references) GetReferences(s string) []*Reference {
 			idx = k
 			continue
 		}
-		if (v == '.' || v == ' ' || v == ')') && found {
+		if (v == '.' || v == ' ' || v == ')' || v == '[') && found {
 			r.addReference(s[idx+1 : k])
 			found = false
 		}

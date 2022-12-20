@@ -53,7 +53,7 @@ spec:
           #    expression: $allTemplates | select(.metadata.name as $a | $VALUE | index($a)) | {(.metadata.name): .}
           childTemplates:
             range: 
-              value: $parentTemplates[].spec.properties.fabric.pod[].TemplateRef
+              value: '$parentTemplates[].spec.properties.fabric.pod[].TemplateRef | as $_a |  $allTemplates | .select(.metadata.name == $_a.metadata.name) | {($_a): .}'
             type: map
             input:
               key: $VALUE.metadata.name
@@ -61,13 +61,16 @@ spec:
         tasks:
           createTopology:
             type: gotemplate
-            input:
-              topotDef: $topoDef
+            vars:
+              topoDefX: $topoDef
+              ##gt: gt(.....)
+              ##jq: jq(.....)
+            input:  
               resource: 
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Topology
                 metadata:
-                  name: "{{ .topoDef.metadata.name }}"
+                  name: "{{ .topoDefX.metadata.name }}"
           createFabric:
             range:
               value: $parentTemplates

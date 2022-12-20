@@ -45,28 +45,28 @@ func (o *RunnerOptions) InitDefaults() {
 // and it's config.
 func NewRunner(
 	ctx context.Context,
-	fn *ctrlcfgv1.Function,
+	fnc *ctrlcfgv1.Function,
 	//fnResults *fnresultv1.ResultList,
 	opts RunnerOptions,
 	//runtime fn.FunctionRuntime,
 ) (*FunctionRunner, error) {
-	if *fn.Executor.Image != "" {
+	if *fnc.Executor.Image != "" {
 		// resolve partial image
-		img, err := opts.ResolveToImage(ctx, *fn.Executor.Image)
+		img, err := opts.ResolveToImage(ctx, *fnc.Executor.Image)
 		if err != nil {
 			return nil, err
 		}
-		fn.Executor.Image = &img
+		fnc.Executor.Image = &img
 	}
 
 	fnResult := &fnresultv1.Result{
-		Image:    *fn.Executor.Image,
-		ExecPath: *fn.Executor.Exec,
+		Image:    *fnc.Executor.Image,
+		ExecPath: *fnc.Executor.Exec,
 	}
 
 	var run Run
 	switch {
-	case fn.Executor.Image != nil:
+	case fnc.Executor.Image != nil:
 		// If allowWasm is true, we will use wasm runtime for image field.
 		/*
 			if opts.AllowWasm {
@@ -81,14 +81,14 @@ func NewRunner(
 			} else {
 		*/
 		cfn := &ContainerFn{
-			Image:           *fn.Executor.Image,
+			Image:           *fnc.Executor.Image,
 			ImagePullPolicy: opts.ImagePullPolicy,
 			Ctx:             ctx,
 			FnResult:        fnResult,
 		}
 		run = cfn.Run
 		//}
-	case fn.Executor.Exec != nil:
+	case fnc.Executor.Exec != nil:
 		// If AllowWasm is true, we will use wasm runtime for exec field.
 		/*
 			if opts.AllowWasm {
@@ -102,11 +102,11 @@ func NewRunner(
 		*/
 		var execArgs []string
 		// assuming exec here
-		s, err := shlex.Split(*fn.Executor.Exec)
+		s, err := shlex.Split(*fnc.Executor.Exec)
 		if err != nil {
-			return nil, fmt.Errorf("exec command %q must be valid: %w", *fn.Executor.Exec, err)
+			return nil, fmt.Errorf("exec command %q must be valid: %w", *fnc.Executor.Exec, err)
 		}
-		execPath := *fn.Executor.Exec
+		execPath := *fnc.Executor.Exec
 		if len(s) > 0 {
 			execPath = s[0]
 		}

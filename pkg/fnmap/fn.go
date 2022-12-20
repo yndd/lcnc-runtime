@@ -54,12 +54,12 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 						}
 					}
 					if fnconfig.Block.Condition.Block.Range != nil {
-						items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
-						if err != nil {
-							return nil, err
-						}
-						isRange = true
+					items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
+					if err != nil {
+						return nil, err
 					}
+					isRange = true
+				}
 				}
 			}
 			numItems := len(items)
