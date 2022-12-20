@@ -51,16 +51,20 @@ spec:
             input: 
               expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
           parentTemplates:
-            range:
-              value: $parentTemplateNames | .[]
+            condition:
+              expression: $parentTemplateNames | length != 0
+              range:
+                value: $parentTemplateNames | .[]
             type: map
             input: 
               key: $VALUE
               value: $allTemplates | .[] | select(.metadata.name == $VALUE)
           childTemplates:
-            range: 
-              value: $parentTemplates | .[].spec.properties.fabric.pod | select((. | length) > 0) | .[].TemplateRef
+            condition:
+              expression: $parentTemplateNames | length != 0
+              range: 
+                value: $parentTemplates | .[].spec.properties.fabric.pod | .[].templateRef.name
             type: map
             input:
-              key: $VALUE.metadata.name
-              value: $allTemplates | .[] | select(.metadata.name == $VALUE.metadata.name)
+              key: $VALUE
+              value: $allTemplates | .[] | select(.metadata.name == $VALUE)

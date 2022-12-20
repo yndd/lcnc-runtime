@@ -50,8 +50,15 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 							return nil, err
 						}
 						if !ok {
-							return nil, errors.New("does not need to run") // error to be ignored
+							return nil, ErrConditionFalse // error to be ignored
 						}
+					}
+					if fnconfig.Block.Condition.Block.Range != nil {
+						items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
+						if err != nil {
+							return nil, err
+						}
+						isRange = true
 					}
 				}
 			}
@@ -62,16 +69,19 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 			if numItems > 0 && isRange {
 				result := make(map[string]any, numItems)
 				for i, item := range items {
-					varItems := []varItem{
-						{name: "VALUE", value: item.val},
-						{name: "KEY", value: fmt.Sprint(i)},
-						{name: "INDEX", value: i},
+					// protection
+					if item.val != nil {
+						varItems := []varItem{
+							{name: "VALUE", value: item.val},
+							{name: "KEY", value: fmt.Sprint(i)},
+							{name: "INDEX", value: i},
+						}
+						k, v, err := buildKV(fnconfig.Input.Key, fnconfig.Input.Value, input, varItems...)
+						if err != nil {
+							return nil, err
+						}
+						result[k] = v
 					}
-					k, v, err := buildKV(fnconfig.Input.Key, fnconfig.Input.Value, input, varItems...)
-					if err != nil {
-						return nil, err
-					}
-					result[k] = v
 				}
 				return result, nil
 			}
@@ -97,8 +107,15 @@ func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 						return nil, err
 					}
 					if !ok {
-						return nil, errors.New("does not need to run") // error to be ignored
+						return nil, ErrConditionFalse // error to be ignored
 					}
+				}
+				if fnconfig.Block.Condition.Block.Range != nil {
+					items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
+					if err != nil {
+						return nil, err
+					}
+					isRange = true
 				}
 			}
 		}

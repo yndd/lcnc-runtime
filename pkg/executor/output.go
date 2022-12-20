@@ -148,10 +148,11 @@ func (r *output) GetOutput() {
 				varName = fmt.Sprintf("%s.%s", vertexName, outputName)
 			}
 			b, err := json.Marshal(or.value)
-			fmt.Printf("output marshal err %s\n", err)
-			fmt.Printf("output variable err %s\n", string(b))
-
-			fmt.Printf("output varName: %s, type: %s kind: %s value: %#v\n", varName, oi.kind, or.kind, or.value)
+			if err != nil {
+				fmt.Printf("output %s: marshal err %s\n", varName, err.Error())
+			}
+			fmt.Printf("output %s: json %s\n", varName, string(b))
+			//fmt.Printf("output varName: %s, type: %s kind: %s value: %#v\n", varName, oi.kind, or.kind, or.value)
 		}
 	}
 }

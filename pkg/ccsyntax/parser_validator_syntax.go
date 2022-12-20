@@ -169,7 +169,7 @@ func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 			})
 		}
 		if v.Condition.Range != nil || v.Condition.Condition != nil {
-			r.validateBlock(oc, v.Range.Block)
+			r.validateBlock(oc, v.Condition.Block)
 		}
 	}
 }

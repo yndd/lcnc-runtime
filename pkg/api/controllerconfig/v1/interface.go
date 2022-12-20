@@ -108,7 +108,7 @@ func (v *Block) HasRange() bool {
 	if v.Range != nil {
 		return true
 	}
-	return v.Range.Block.HasRange()
+	return v.Condition.Block.HasRange()
 
 	//return v.Condition.Block.HasRange()
 }

@@ -27,7 +27,7 @@ func (r *fnmap) query(ctx context.Context, fnconfig *ctrlcfgv1.Function, input m
 		return nil, err
 	}
 
-	rj := make([]interface{}, len(o.Items))
+	rj := make([]interface{}, 0, len(o.Items))
 	for _, v := range o.Items {
 		b, err := json.Marshal(v.UnstructuredContent())
 		if err != nil {
