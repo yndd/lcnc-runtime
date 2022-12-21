@@ -5,6 +5,7 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -57,7 +58,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Gro
 				},
 			},
 			OutputContext: map[string]*dag.OutputContext{
-				oc.VertexName: &dag.OutputContext{
+				oc.VertexName: {
 					Internal: true,
 					GVK:      &gvk,
 				},
@@ -75,6 +76,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Gro
 func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	// prepare the output context
 	outputCtx := map[string]*dag.OutputContext{}
+	gvkToVarName := map[string]string{}
 	// add output in a seperate DAG
 	outputDAG := dag.New()
 	for varName, outputCfg := range v.Output {
@@ -98,22 +100,39 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			Internal: outputCfg.Internal,
 			GVK:      &gvk,
 		}
+		gvkToVarName[meta.GVKToString(&gvk)] = varName
 	}
-	// if no output, initialize the variable with the vertexName
+	// if no output, initialize the output Context variable with the vertexName
 	if v.Output == nil {
-		// TODO gotemplate
-		outputCtx[oc.VertexName] = &dag.OutputContext{
-			Internal: true,
+		if v.Type == ctrlcfgv1.GoTemplate {
+			if len(v.Input.Resource.Raw) != 0 {
+				gvk, err := ctrlcfgv1.GetGVK(v.Input.Resource)
+				if err != nil {
+					r.recordResult(Result{
+						OriginContext: oc,
+						Error:         err.Error(),
+					})
+				}
+				outputCtx[oc.VertexName] = &dag.OutputContext{
+					Internal: false,
+					GVK:      &gvk,
+				}
+			}
+			// TODO what to do for a template ??? How do i get a GVK, is it also an external resource
+		} else {
+			outputCtx[oc.VertexName] = &dag.OutputContext{
+				Internal: true,
+			}
 		}
 	}
 
 	// add localVars in a seperate DAG
 	// only used for resolution and dependencies
 	localVarsDAG := dag.New()
-	for localVarName, v := range v.Vars {
+	for localVarName := range v.Vars {
 		if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
-			Kind:     dag.LocalVarVertexKind,
-			Function: v,
+			Kind: dag.LocalVarVertexKind,
+			//Function: v,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -130,6 +149,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		Function:      v,
 		References:    []string{}, // initialize reference
 		OutputContext: outputCtx,  // provide the preparsed output context to the vertex
+		GVKToVerName: gvkToVarName, // provide a preparsed mapping from gvk to varName
 	}); err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,

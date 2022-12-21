@@ -10,9 +10,11 @@ spec:
         resource: 
           apiVersion: topo.yndd.io/v1alpha1
           kind: Definition
-        pipelineRef: forPipeline
+        doApply: forApplyPipeline
+        doDelete: forDeletePipeline
     pipelines:
-      - name: forPipeline
+      - name: forDeletePipeline
+      - name: forApplyPipeline
         vars:
           targets:
             type: query

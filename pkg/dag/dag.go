@@ -75,6 +75,7 @@ type VertexContext struct {
 	Function      *ctrlcfgv1.Function
 	References    []string
 	OutputContext map[string]*OutputContext
+	GVKToVerName  map[string]string
 }
 
 type OutputContext struct {
@@ -96,15 +97,13 @@ func (r *VertexContext) AddReference(s string) {
 	}
 }
 
+/*
 func (r *VertexContext) AddOuputContext(varName string, oc *OutputContext) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.OutputContext[varName] = oc
 }
-
-//type DagContext struct {
-//	ParentDag DAG
-//}
+*/
 
 func New() DAG {
 	return &dag{

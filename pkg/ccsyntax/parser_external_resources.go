@@ -75,6 +75,12 @@ func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.Function) {
 		gvk := r.getgvk(oc, v.Input.Resource)
 		r.addGvk(gvk)
 	}
+	if v.Type == ctrlcfgv1.GoTemplate {
+		if len(v.Input.Resource.Raw) != 0 {
+			gvk := r.getgvk(oc, v.Input.Resource)
+			r.addGvk(gvk)
+		}
+	}
 	for _, v := range v.Output {
 		if !v.Internal && len(v.Resource.Raw) != 0 {
 			gvk := r.getgvk(oc, v.Resource)
@@ -90,7 +96,6 @@ func (r *er) getgvk(oc *OriginContext, v runtime.RawExtension) schema.GroupVersi
 			OriginContext: oc,
 			Error:         err.Error(),
 		})
-		return gvk
 	}
 	return gvk
 }

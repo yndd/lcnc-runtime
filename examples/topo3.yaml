@@ -68,3 +68,20 @@ spec:
             input:
               key: $VALUE
               value: $allTemplates | .[] | select(.metadata.name == $VALUE)
+        tasks:
+          topology:
+            type: gotemplate
+            vars:
+              topoDef: $topoDef
+            input:  
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Topology
+                metadata:
+                  name: '{{ .topodef.metadata.name }}'
+                  namespace: default
+                spec:
+                  properties:
+                    location:
+                      latitude: a
+                      longitude: b

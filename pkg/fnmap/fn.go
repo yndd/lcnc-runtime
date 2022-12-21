@@ -8,167 +8,146 @@ import (
 
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *fnmap) RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (any, error) {
-	switch fnconfig.Type {
+func (r *fnmap) RunFn(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+	switch vertexContext.Function.Type {
 	case ctrlcfgv1.ForQueryType:
-		return r.forQuery(ctx, input)
+		// does not run in a block
+		return r.runForQuery(ctx, req, vertexContext, input)
 	case ctrlcfgv1.QueryType:
-		if fnconfig.HasBlock() {
-			if fnconfig.Block.Condition != nil {
-				if exp := fnconfig.Block.Condition.Expression; exp != "" {
-					ok, err := runCondition(exp, input)
-					if err != nil {
-						return nil, err
-					}
-					if !ok {
-						return nil, ErrConditionFalse // error to be ignored
-					}
-				}
-			}
-		}
-		return r.query(ctx, fnconfig, input)
+		return r.runQuery(ctx, req, vertexContext, input)
 	case ctrlcfgv1.MapType:
-		if fnconfig.HasBlock() {
-			var items []*item
-			var isRange bool
-			var ok bool
-			var err error
-			if fnconfig.HasBlock() {
-				if fnconfig.Block.Range != nil {
-					items, err = runRange(fnconfig.Block.Range.Value, input)
-					if err != nil {
-						return nil, err
-					}
-					isRange = true
-				}
-				if fnconfig.Block.Condition != nil {
-					if exp := fnconfig.Block.Condition.Expression; exp != "" {
-						ok, err = runCondition(exp, input)
-						if err != nil {
-							return nil, err
-						}
-						if !ok {
-							return nil, ErrConditionFalse // error to be ignored
-						}
-					}
-					if fnconfig.Block.Condition.Block.Range != nil {
-						items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
-						if err != nil {
-							return nil, err
-						}
-						isRange = true
-					}
-				}
-			}
-			numItems := len(items)
-			if numItems == 0 && isRange {
-				return nil, nil
-			}
-			if numItems > 0 && isRange {
-				result := make(map[string]any, numItems)
-				for i, item := range items {
-					// protection
-					if item.val != nil {
-						varItems := []varItem{
-							{name: "VALUE", value: item.val},
-							{name: "KEY", value: fmt.Sprint(i)},
-							{name: "INDEX", value: i},
-						}
-						k, v, err := buildKV(fnconfig.Input.Key, fnconfig.Input.Value, input, varItems...)
-						if err != nil {
-							return nil, err
-						}
-						result[k] = v
-					}
-				}
-				return result, nil
-			}
-			// TODO: run single function ?
-		}
+		return r.runMap(ctx, req, vertexContext, input)
 	case ctrlcfgv1.SliceType:
-		var items []*item
-		var isRange bool
-		var ok bool
-		var err error
-		if fnconfig.HasBlock() {
-			if fnconfig.Block.Range != nil {
-				items, err = runRange(fnconfig.Block.Range.Value, input)
-				if err != nil {
-					return nil, err
-				}
-				isRange = true
-			}
-			if fnconfig.Block.Condition != nil {
-				if exp := fnconfig.Block.Condition.Expression; exp != "" {
-					ok, err = runCondition(exp, input)
-					if err != nil {
-						return nil, err
-					}
-					if !ok {
-						return nil, ErrConditionFalse // error to be ignored
-					}
-				}
-				if fnconfig.Block.Condition.Block.Range != nil {
-					items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
-					if err != nil {
-						return nil, err
-					}
-					isRange = true
-				}
-			}
-		}
-
-		numItems := len(items)
-		if numItems == 0 && isRange {
-			return nil, nil
-		}
-		if numItems > 0 && isRange {
-			result := make([]any, 0, numItems)
-			for i, item := range items {
-				varItems := []varItem{
-					{name: "VALUE", value: item.val},
-					{name: "KEY", value: fmt.Sprint(i)},
-					{name: "INDEX", value: i},
-				}
-
-				v, err := buildSliceItem(fnconfig.Input.Value, input, varItems...)
-				if err != nil {
-					return nil, err
-				}
-				result = append(result, v)
-			}
-			return result, nil
-		}
+		return r.runSlice(ctx, req, vertexContext, input)
 	case ctrlcfgv1.JQType:
-		return runJQ(fnconfig.Input.Expression, input)
+		// does not run in a block
+		x, err := runJQ(vertexContext.Function.Input.Expression, input)
+		if err != nil {
+			return nil, err
+		}
+		res := make(map[string]*Output, 1)
+		for varName, outputCtx := range vertexContext.OutputContext {
+			res[varName] = &Output{
+				Internal: outputCtx.Internal,
+				Value:    x,
+			}
+		}
+		return res, nil
 	case ctrlcfgv1.GoTemplate:
-		if fnconfig.Vars != nil {
-			vars := make(map[string]any)
-			for n, fn := range fnconfig.Vars {
-				v, err := r.RunFn(ctx, fn, input)
-				if err != nil {
-					return nil, err
-				}
-				vars[n] = v
-			}
-			for k, v := range vars {
-				input[k] = v
-			}
-		}
-		if fnconfig.Input.Resource.Raw != nil {
-			return runGT(string(fnconfig.Input.Resource.Raw), input)
-		}
-		return runGT(fnconfig.Input.Template, input)
-	case "": // image
+		fmt.Printf("runGT\n")
+		return r.runGT(ctx, req, vertexContext, input)
+	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
+		// image
+		return r.runImage(ctx, req, vertexContext, input)
+	default:
+		// should not happen
 	}
 
 	return nil, nil
 }
 
+type initResultFn func(numItems int)
+type recordResultFn func(any)
+type getResultFn func() map[string]*Output
+
+type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
+type runFn func(context.Context, ctrl.Request, any, map[string]any) (any, error)
+
+type fnExecConfig struct {
+	executeRange  bool
+	executeSingle bool
+	// execution functions
+	prepareInputFn prepareInputFn
+	runFn          runFn
+	// result functions
+	initResultFn   initResultFn
+	recordResultFn recordResultFn
+	getResultFn    getResultFn
+}
+
+func (fec *fnExecConfig) run(ctx context.Context, req ctrl.Request, fnconfig *ctrlcfgv1.Function, input map[string]any) (map[string]*Output, error) {
+	var items []*item
+	var isRange bool
+	var ok bool
+	var err error
+	if fnconfig.HasBlock() {
+		if fnconfig.Block.Range != nil {
+			items, err = runRange(fnconfig.Block.Range.Value, input)
+			if err != nil {
+				return nil, err
+			}
+			isRange = true
+		}
+		if fnconfig.Block.Condition != nil {
+			if exp := fnconfig.Block.Condition.Expression; exp != "" {
+				ok, err = runCondition(exp, input)
+				if err != nil {
+					return nil, err
+				}
+				if !ok {
+					return nil, ErrConditionFalse // error to be ignored, condition false, so we dont have to run
+				}
+			}
+			if fnconfig.Block.Condition.Block.Range != nil {
+				items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
+				if err != nil {
+					return nil, err
+				}
+				isRange = true
+			}
+		}
+	}
+	numItems := len(items)
+	if numItems == 0 && isRange {
+		return nil, nil // no entries in the range, so we are done
+	}
+	if numItems > 0 && isRange {
+		fec.initResultFn(numItems)
+		for i, item := range items {
+			// this is a protection to ensure we dont use the nil result in a range
+			if item.val != nil {
+				input["VALUE"] = item.val
+				input["KEY"] = fmt.Sprint(i)
+				input["INDEX"] = i
+
+				// resolve the local vars using jq and add them to the input
+				if err := resolveLocalVars(fnconfig, input); err != nil {
+					return nil, err
+				}
+
+				if fec.executeRange {
+					extraInput := fec.prepareInputFn(fnconfig)
+					x, err := fec.runFn(ctx, req, extraInput, input)
+					if err != nil {
+						return nil, err
+					}
+					fec.recordResultFn(x)
+				}
+			}
+		}
+	}
+	if fec.executeSingle {
+		fec.initResultFn(1)
+		// resolve the local vars using jq and add them to the input
+		if err := resolveLocalVars(fnconfig, input); err != nil {
+			return nil, err
+		}
+		extraInput := fec.prepareInputFn(fnconfig)
+		x, err := fec.runFn(ctx, req, extraInput, input)
+		if err != nil {
+			return nil, err
+		}
+		fec.recordResultFn(x)
+	}
+	return fec.getResultFn(), nil
+}
+
 type item struct {
-	key string
+	//key string
 	val any
 }
 
@@ -255,4 +234,29 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 		return r, nil
 	}
 	return false, fmt.Errorf("unexpected result type, want bool got %T", v)
+}
+
+func resolveLocalVars(fnconfig *ctrlcfgv1.Function, input map[string]any) error {
+	if fnconfig.Vars != nil {
+		for varName, expression := range fnconfig.Vars {
+			// We are lazy and provide all reference input to JQ
+			// the below aproach could be a more optimal solution
+			// but for now we keep it simple
+			/*
+				localVarRefs := make(map[string]any)
+				rfs := ccsyntax.NewReferences()
+				refs := rfs.GetReferences(expression)
+				for _, ref := range refs {
+					localVarRefs[ref.Value] = input[ref.Value]
+				}
+			*/
+
+			v, err := runJQ(expression, input)
+			if err != nil {
+				return err
+			}
+			input[varName] = v
+		}
+	}
+	return nil
 }

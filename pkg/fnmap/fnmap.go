@@ -3,13 +3,14 @@ package fnmap
 import (
 	"context"
 
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type FnMap interface {
-	RunFn(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (any, error)
+	RunFn(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error)
 }
 
 type FnMapConfig struct {
@@ -28,4 +29,11 @@ func New(fmc *FnMapConfig) FnMap {
 type fnmap struct {
 	client client.Client
 	gvk    schema.GroupVersionKind
+}
+
+type Result map[string]*Output
+
+type Output struct {
+	Internal bool
+	Value    any
 }

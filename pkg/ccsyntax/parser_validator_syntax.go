@@ -107,6 +107,30 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				OriginContext: oc,
 				Error:         fmt.Errorf("gvk needs to be present in %s", v.Type).Error(),
 			})
+		} else {
+			_, err := ctrlcfgv1.GetGVK(v.Input.Resource)
+			if err != nil {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         err.Error(),
+				})
+			}
+		}
+	case ctrlcfgv1.GoTemplate:
+		if len(v.Input.Resource.Raw) == 0 && v.Input.Template == "" {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("resource or template need to be present in %s", v.Type).Error(),
+			})
+		}
+		if len(v.Input.Resource.Raw) != 0 {
+			_, err := ctrlcfgv1.GetGVK(v.Input.Resource)
+			if err != nil {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         err.Error(),
+				})
+			}
 		}
 	default:
 	}

@@ -55,7 +55,8 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		oc := oc.DeepCopy()
 		for localVarName, v := range v.Vars {
 			oc.LocalVarName = localVarName
-			r.connectFunction(oc, v)
+			r.connectRefs(oc, v)
+			//r.connectFunction(oc, v)
 		}
 	}
 
@@ -112,7 +113,10 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 
 	for _, ref := range refs {
 		// RangeRefKind do nothing
-		if ref.Kind == RegularReferenceKind {
+		// for regular values we resolve the variables
+		// for varibales that start with _ this is a special case and 
+		// should only be used within a jq construct
+		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
 			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(oc.VertexName)
 			// lookup the localDAG first

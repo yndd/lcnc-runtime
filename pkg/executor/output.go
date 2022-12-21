@@ -6,11 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/fnmap"
 )
 
 type Output interface {
-	Update(vertexName, varName string, oc *dag.OutputContext, value any)
+	Update(vertexName, varName string, oc *fnmap.Output)
 	Get(string) any
 	GetFinalOutput() []any
 	GetOutput()
@@ -48,7 +48,7 @@ type outputResult struct {
 	value    any
 }
 
-func (r *output) Update(vertexName, varName string, oc *dag.OutputContext, value any) {
+func (r *output) Update(vertexName, varName string, oc *fnmap.Output) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	// initialize the context if the vertex is not yet initialized
@@ -57,16 +57,16 @@ func (r *output) Update(vertexName, varName string, oc *dag.OutputContext, value
 			result: map[string]*outputResult{},
 		}
 	}
-	r.o[vertexName].Update(varName, oc, value)
+	r.o[vertexName].Update(varName, oc)
 
 }
 
-func (r *outputInfo) Update(varName string, oc *dag.OutputContext, value any) {
+func (r *outputInfo) Update(varName string, oc *fnmap.Output) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.result[varName] = &outputResult{
 		internal: oc.Internal,
-		value:    value,
+		value:    oc.Value,
 	}
 }
 

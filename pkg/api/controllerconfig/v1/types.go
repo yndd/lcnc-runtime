@@ -104,9 +104,12 @@ const (
 type Function struct {
 	Block    `json:",inline" yaml:",inline"`
 	Executor `json:",inline" yaml:",inline"`
-	Vars     map[string]*Function `json:"vars,omitempty" yaml:"vars,omitempty"`
-	Type     FunctionType         `json:"type,omitempty" yaml:"type,omitempty"`
-	Config   string               `json:"config,omitempty" yaml:"config,omitempty"`
+	// Vars define the local variables in the function
+	// The Key respresents the local variable name
+	// The Value represents the jq expression
+	Vars     map[string]string `json:"vars,omitempty" yaml:"vars,omitempty"`
+	Type     FunctionType      `json:"type,omitempty" yaml:"type,omitempty"`
+	Config   string            `json:"config,omitempty" yaml:"config,omitempty"`
 	// input is always a GVK of some sort
 	Input *Input `json:"input,omitempty" yaml:"input,omitempty"`
 	// key = variableName, value is gvr format or not -> gvr format is needed for external resources
@@ -114,8 +117,8 @@ type Function struct {
 }
 
 type Output struct {
-	Internal      bool                 `json:"internal" yaml:"internal"`
-	Resource      runtime.RawExtension `json:"resource" yaml:"resource"`
+	Internal bool                 `json:"internal" yaml:"internal"`
+	Resource runtime.RawExtension `json:"resource" yaml:"resource"`
 	//GenericOutput string               `json:",inline" yaml:",inline"`
 }
 

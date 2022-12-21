@@ -117,7 +117,7 @@ func main() {
 	//s.GetWalkResult()
 
 	b := builder.New(mgr, ceCtx, controller.Options{
-		MaxConcurrentReconciles: 10,
+		//MaxConcurrentReconciles: 10,
 	})
 	_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
 		Client:       mgr.GetClient(),

@@ -42,7 +42,7 @@ func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		oc := oc.DeepCopy()
 		for localVarName, v := range v.Vars {
 			oc.LocalVarName = localVarName
-			r.resolveFunction(oc, v)
+			r.resolveRefs(oc, v)
 		}
 	}
 
@@ -95,8 +95,10 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 	refs := rfs.GetReferences(s)
 
 	for _, ref := range refs {
-		// for val
-		if ref.Kind == RegularReferenceKind {
+		// for regular values we resolve the variables
+		// for varibales that start with _ this is a special case and 
+		// should only be used within a jq construct
+		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_'{
 			// get the vertexContext from the function
 			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(oc.VertexName)
 			// lookup the localDAG first

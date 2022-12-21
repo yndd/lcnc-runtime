@@ -158,17 +158,9 @@ func (in *Function) DeepCopyInto(out *Function) {
 	in.Executor.DeepCopyInto(&out.Executor)
 	if in.Vars != nil {
 		in, out := &in.Vars, &out.Vars
-		*out = make(map[string]*Function, len(*in))
+		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
-			var outVal *Function
-			if val == nil {
-				(*out)[key] = nil
-			} else {
-				in, out := &val, &outVal
-				*out = new(Function)
-				(*in).DeepCopyInto(*out)
-			}
-			(*out)[key] = outVal
+			(*out)[key] = val
 		}
 	}
 	if in.Input != nil {
