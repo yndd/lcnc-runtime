@@ -1,12 +1,12 @@
 package executor
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/yndd/lcnc-runtime/pkg/fnmap"
+	"sigs.k8s.io/yaml"
 )
 
 type Output interface {
@@ -122,11 +122,11 @@ func (r *output) GetOutput() {
 			} else {
 				varName = fmt.Sprintf("%s.%s", vertexName, outputName)
 			}
-			b, err := json.Marshal(or.value)
+			b, err := yaml.Marshal(or.value)
 			if err != nil {
 				fmt.Printf("output %s: marshal err %s\n", varName, err.Error())
 			}
-			fmt.Printf("output %s: json %s\n", varName, string(b))
+			fmt.Printf("output %s: yaml %s\n", varName, string(b))
 			//fmt.Printf("output varName: %s, type: %s kind: %s value: %#v\n", varName, oi.kind, or.kind, or.value)
 		}
 	}

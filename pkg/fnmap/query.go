@@ -2,7 +2,6 @@ package fnmap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
@@ -10,6 +9,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 func (r *fnmap) runQuery(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
@@ -79,13 +79,13 @@ func (r *fnmap) query(ctx context.Context, req ctrl.Request, extraInput any, inp
 
 	rj := make([]interface{}, 0, len(o.Items))
 	for _, v := range o.Items {
-		b, err := json.Marshal(v.UnstructuredContent())
+		b, err := yaml.Marshal(v.UnstructuredContent())
 		if err != nil {
 			return nil, err
 		}
 
 		vrj := map[string]interface{}{}
-		if err := json.Unmarshal(b, &vrj); err != nil {
+		if err := yaml.Unmarshal(b, &vrj); err != nil {
 			return nil, err
 		}
 		rj = append(rj, vrj)

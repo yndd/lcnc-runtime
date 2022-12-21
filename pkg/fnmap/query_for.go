@@ -2,7 +2,6 @@ package fnmap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
@@ -10,6 +9,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -69,14 +69,14 @@ func (r *fnmap) forQuery(ctx context.Context, req ctrl.Request, extraInput any, 
 	if err := r.client.Get(ctx, key, o); err != nil {
 		return nil, err
 	}
-	b, err := json.Marshal(o.UnstructuredContent())
+	b, err := yaml.Marshal(o.UnstructuredContent())
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	rj := map[string]interface{}{}
-	if err := json.Unmarshal(b, &rj); err != nil {
-		return false, err
+	if err := yaml.Unmarshal(b, &rj); err != nil {
+		return nil, err
 	}
 	return rj, nil
 }

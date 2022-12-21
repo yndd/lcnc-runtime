@@ -3,6 +3,7 @@ package fnmap
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -103,11 +104,19 @@ func (r *gt) runGT(ctx context.Context, req ctrl.Request, extraInput any, input 
 	}
 	result := new(bytes.Buffer)
 	// TODO: add template custom functions
-	tpl, err := template.New("default").Parse(tmpl)
+	tpl, err := template.New("default").Option("missingkey=zero").Parse(tmpl)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("runGT input: %v\n", input)
 	err = tpl.Execute(result, input)
-	fmt.Printf("runGT result: %s", result.String())
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("runGT result: %#v\n", result)
 	return result.String(), err
+	fmt.Printf("runGT result: %s", result.String())
+	var x any
+	err = json.Unmarshal(result.Bytes(), &x)
+	return x, err
 }

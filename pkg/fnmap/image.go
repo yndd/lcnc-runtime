@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/yaml"
 )
 
 func (r *fnmap) runImage(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
@@ -199,7 +200,7 @@ func getGVKResource(x map[string]any) (*schema.GroupVersionKind, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
-	b, err := json.Marshal(x)
+	b, err := yaml.Marshal(x)
 	if err != nil {
 		return nil, "", err
 	}

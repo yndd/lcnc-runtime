@@ -238,6 +238,7 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 
 func resolveLocalVars(fnconfig *ctrlcfgv1.Function, input map[string]any) error {
 	if fnconfig.Vars != nil {
+		fmt.Printf("resolveLocalVars: input: %v\n", input)
 		for varName, expression := range fnconfig.Vars {
 			// We are lazy and provide all reference input to JQ
 			// the below aproach could be a more optimal solution

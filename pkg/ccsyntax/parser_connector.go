@@ -126,6 +126,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
 				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
+					vc.AddReference(ref.Value)
 					// if the localVar lookup succeeds we are done -> continue
 					continue
 				}

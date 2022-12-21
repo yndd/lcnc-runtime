@@ -78,7 +78,7 @@ spec:
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Topology
                 metadata:
-                  name: '{{ .topodef.metadata.name }}'
+                  name: '{{ .topoDef.metadata }}'
                   namespace: default
                 spec:
                   properties:
