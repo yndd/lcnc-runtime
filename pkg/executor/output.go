@@ -6,11 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
 )
 
 type Output interface {
-	Update(vertexName string, o map[string]*ctrlcfgv1.Output, value any)
+	Update(vertexName, varName string, oc *dag.OutputContext, value any)
 	Get(string) any
 	GetFinalOutput() []any
 	GetOutput()
@@ -22,37 +22,33 @@ func NewOutput() Output {
 	}
 }
 
-type output struct {
-	m sync.RWMutex
-	o map[string]*outputInfo
-}
-
+/*
 type OutputKind string
 
 const (
 	variable OutputKind = "var"
 	function OutputKind = "function"
 )
+*/
 
-type OutputResultKind string
+type OutputKind string
 
-const (
-	final        OutputResultKind = "final"
-	intermediate OutputResultKind = "intermediate"
-)
+type output struct {
+	m sync.RWMutex
+	o map[string]*outputInfo
+}
 
 type outputInfo struct {
-	kind   OutputKind
 	m      sync.RWMutex
 	result map[string]*outputResult
 }
 
 type outputResult struct {
-	kind  OutputResultKind
-	value any
+	internal bool
+	value    any
 }
 
-func (r *output) Update(vertexName string, oc map[string]*ctrlcfgv1.Output, value any) {
+func (r *output) Update(vertexName, varName string, oc *dag.OutputContext, value any) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	// initialize the context if the vertex is not yet initialized
@@ -61,37 +57,16 @@ func (r *output) Update(vertexName string, oc map[string]*ctrlcfgv1.Output, valu
 			result: map[string]*outputResult{},
 		}
 	}
-	if oc == nil {
-		// this is a variable -> the fn name = variable name
-		r.o[vertexName].UpdateVar(vertexName, value)
-	} else {
-		for ocVarName, ocInfo := range oc {
-			if len(ocInfo.Resource.Raw) != 0 {
-				r.o[vertexName].UpdateFn(ocVarName, final, value)
-			} else {
-				r.o[vertexName].UpdateFn(ocVarName, intermediate, value)
-			}
-		}
-	}
+	r.o[vertexName].Update(varName, oc, value)
+
 }
 
-func (r *outputInfo) UpdateVar(vertexName string, value any) {
+func (r *outputInfo) Update(varName string, oc *dag.OutputContext, value any) {
 	r.m.Lock()
 	defer r.m.Unlock()
-	r.kind = variable
-	r.result[vertexName] = &outputResult{
-		kind:  intermediate,
-		value: value,
-	}
-}
-
-func (r *outputInfo) UpdateFn(ocVarName string, k OutputResultKind, value any) {
-	r.m.Lock()
-	defer r.m.Unlock()
-	r.kind = function
-	r.result[ocVarName] = &outputResult{
-		kind:  k,
-		value: value,
+	r.result[varName] = &outputResult{
+		internal: oc.Internal,
+		value:    value,
 	}
 }
 
@@ -124,7 +99,7 @@ func (r *output) GetFinalOutput() []any {
 		oi.m.RLock()
 		defer oi.m.RUnlock()
 		for _, or := range oi.result {
-			if or.kind == final {
+			if !or.internal {
 				fo = append(fo, or.value)
 			}
 		}

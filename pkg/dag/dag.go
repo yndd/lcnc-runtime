@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type DAG interface {
@@ -67,12 +68,18 @@ const (
 type VertexContext struct {
 	m sync.Mutex
 	// block indicates we have to execute the pipeline or not
-	Name        string
-	Kind        VertexKind
-	OutputDAG   DAG
-	LocalVarDag DAG
-	Function    *ctrlcfgv1.Function
-	References  []string
+	Name          string
+	Kind          VertexKind
+	OutputDAG     DAG
+	LocalVarDag   DAG
+	Function      *ctrlcfgv1.Function
+	References    []string
+	OutputContext map[string]*OutputContext
+}
+
+type OutputContext struct {
+	Internal bool
+	GVK      *schema.GroupVersionKind
 }
 
 func (r *VertexContext) AddReference(s string) {
@@ -87,6 +94,12 @@ func (r *VertexContext) AddReference(s string) {
 	if !found {
 		r.References = append(r.References, s)
 	}
+}
+
+func (r *VertexContext) AddOuputContext(varName string, oc *OutputContext) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.OutputContext[varName] = oc
 }
 
 //type DagContext struct {

@@ -2,4 +2,4 @@ package fnmap
 
 import "errors"
 
-var ErrConditionFalse = errors.New("does not need to run")
+var ErrConditionFalse = errors.New("no need to run")

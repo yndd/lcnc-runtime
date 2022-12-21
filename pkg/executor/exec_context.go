@@ -13,6 +13,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/fnruntime"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -130,12 +131,13 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 			success = false
 			reason = err.Error()
 		}
-		newRctx, err := runner.Run(rctx)
+		o, err := runner.Run(rctx)
 		if err != nil {
 			success = false
 			reason = err.Error()
 		}
-		fmt.Printf("rctx: %v\n", newRctx)
+		// o is a resourceContext with output
+		fmt.Printf("rctx: %v\n", o)
 	}
 
 	fmt.Printf("vertex: %s, success: %t, reason: %s, output: %v\n", r.vertexName, success, reason, o)
@@ -150,7 +152,7 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 		vertexName: r.vertexName,
 		startTime:  r.start,
 		endTime:    r.finished,
-		outputCfg:  r.vertexContext.Function.Output,
+		outputCtx:  r.vertexContext.OutputContext,
 		output:     o,
 		success:    success,
 		reason:     reason,
@@ -238,25 +240,25 @@ func buildResourceContextProperties(input map[string]any) (*rctxv1.ResourceConte
 		switch x := v.(type) {
 		case map[string]any:
 			// we should only have 1 resource with this type which is the origin
-			gvk, res, err := getGVKREsource(x)
+			gvk, res, err := getGVKResource(x)
 			if err != nil {
 				return nil, err
 			}
-			props.Origin[gvk.String()] = rctxv1.KRMResource(res)
+			props.Origin[meta.GVKToString(gvk)] = rctxv1.KRMResource(res)
 		case []any:
 			l := len(x)
 			if l > 0 {
 				for _, v := range x {
 					switch x := v.(type) {
 					case map[string]any:
-						gvk, res, err := getGVKREsource(x)
+						gvk, res, err := getGVKResource(x)
 						if err != nil {
 							return nil, err
 						}
-						if _, ok := props.Input[gvk.String()]; !ok {
+						if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
 							props.Input[gvk.String()] = make([]rctxv1.KRMResource, 0, l)
 						}
-						props.Input[gvk.String()] = append(props.Input[gvk.String()], rctxv1.KRMResource(res))
+						props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], rctxv1.KRMResource(res))
 					default:
 						return nil, fmt.Errorf("unexpected object in []any: got %T", v)
 					}
@@ -269,24 +271,24 @@ func buildResourceContextProperties(input map[string]any) (*rctxv1.ResourceConte
 	return props, nil
 }
 
-func getGVKREsource(x map[string]any) (schema.GroupVersionKind, string, error) {
+func getGVKResource(x map[string]any) (*schema.GroupVersionKind, string, error) {
 	apiVersion, ok := x["apiVersion"]
 	if !ok {
-		return schema.GroupVersionKind{}, "", fmt.Errorf("origin is not a KRM resource apiVersion missing")
+		return nil, "", fmt.Errorf("origin is not a KRM resource apiVersion missing")
 	}
 	kind, ok := x["kind"]
 	if !ok {
-		return schema.GroupVersionKind{}, "", fmt.Errorf("origin is not a KRM resource kind missing")
+		return nil, "", fmt.Errorf("origin is not a KRM resource kind missing")
 	}
 	gv, err := schema.ParseGroupVersion(apiVersion.(string))
 	if err != nil {
-		return schema.GroupVersionKind{}, "", err
+		return nil, "", err
 	}
 	b, err := json.Marshal(x)
 	if err != nil {
-		return schema.GroupVersionKind{}, "", err
+		return nil, "", err
 	}
-	return schema.GroupVersionKind{
+	return &schema.GroupVersionKind{
 			Group:   gv.Group,
 			Version: gv.Version,
 			Kind:    kind.(string)},

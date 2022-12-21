@@ -76,7 +76,7 @@ func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.Function) {
 		r.addGvk(gvk)
 	}
 	for _, v := range v.Output {
-		if len(v.Resource.Raw) != 0 {
+		if !v.Internal && len(v.Resource.Raw) != 0 {
 			gvk := r.getgvk(oc, v.Resource)
 			r.addGvk(gvk)
 		}

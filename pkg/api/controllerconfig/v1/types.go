@@ -114,13 +114,12 @@ type Function struct {
 }
 
 type Output struct {
-	//Gvr           *ControllerConfigGvr `json:"gvr,omitempty" yaml:"gvr,omitempty"`
-	Resource      runtime.RawExtension `json:"resource,omitempty" yaml:"resource,omitempty"`
-	GenericOutput string               `json:",inline" yaml:",inline"`
+	Internal      bool                 `json:"internal" yaml:"internal"`
+	Resource      runtime.RawExtension `json:"resource" yaml:"resource"`
+	//GenericOutput string               `json:",inline" yaml:",inline"`
 }
 
 type Input struct {
-	//Gvr          *ControllerConfigGvr  `json:"gvr,omitempty" yaml:"gvr,omitempty"`
 	Selector     *metav1.LabelSelector `json:"selector,omitempty" yaml:"selector,omitempty"`
 	Key          string                `json:"key,omitempty" yaml:"key,omitempty"`
 	Value        string                `json:"value,omitempty" yaml:"value,omitempty"`

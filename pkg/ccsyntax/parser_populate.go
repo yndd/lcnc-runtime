@@ -56,6 +56,12 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Gro
 					Resource: v.Resource,
 				},
 			},
+			OutputContext: map[string]*dag.OutputContext{
+				oc.VertexName: &dag.OutputContext{
+					Internal: true,
+					GVK:      &gvk,
+				},
+			},
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -67,16 +73,37 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Gro
 }
 
 func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
+	// prepare the output context
+	outputCtx := map[string]*dag.OutputContext{}
 	// add output in a seperate DAG
 	outputDAG := dag.New()
-	for outputName := range v.Output {
-		if err := outputDAG.AddVertex(outputName, &dag.VertexContext{
+	for varName, outputCfg := range v.Output {
+		if err := outputDAG.AddVertex(varName, &dag.VertexContext{
 			Kind: dag.OutputVertexKind,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         err.Error(),
 			})
+		}
+		// prepare output context
+		gvk, err := ctrlcfgv1.GetGVK(outputCfg.Resource)
+		if err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+		outputCtx[varName] = &dag.OutputContext{
+			Internal: outputCfg.Internal,
+			GVK:      &gvk,
+		}
+	}
+	// if no output, initialize the variable with the vertexName
+	if v.Output == nil {
+		// TODO gotemplate
+		outputCtx[oc.VertexName] = &dag.OutputContext{
+			Internal: true,
 		}
 	}
 
@@ -97,11 +124,12 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 	// add the function vertex to the dag
 	if err := r.cec.GetDAG(oc.FOW, oc.GVK).AddVertex(oc.VertexName, &dag.VertexContext{
-		Kind:        dag.FunctionVertexKind,
-		OutputDAG:   outputDAG,
-		LocalVarDag: localVarsDAG,
-		Function:    v,
-		References:  []string{},
+		Kind:          dag.FunctionVertexKind,
+		OutputDAG:     outputDAG,
+		LocalVarDag:   localVarsDAG,
+		Function:      v,
+		References:    []string{}, // initialize reference
+		OutputContext: outputCtx,  // provide the preparsed output context to the vertex
 	}); err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,

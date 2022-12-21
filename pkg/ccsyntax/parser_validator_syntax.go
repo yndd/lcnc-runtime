@@ -130,7 +130,26 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 	}
 
-	// validate output -> TBD
+	// validate Ouput
+	if v.Output != nil {
+		for _, v := range v.Output {
+			if len(v.Resource.Raw) == 0 {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         fmt.Errorf("cannot use output without data").Error(),
+				})
+			} else {
+				_, err := ctrlcfgv1.GetGVK(v.Resource)
+				if err != nil {
+					r.recordResult(Result{
+						OriginContext: oc,
+						Error:         err.Error(),
+					})
+				}
+			}
+		}
+	}
+	
 
 	// validate local vars -> TBD
 
