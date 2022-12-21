@@ -88,6 +88,10 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			r.connectRefs(oc, v)
 		}
 	}
+
+	if len(v.DependsOn) != 0 {
+		r.connectDependsOn(oc, v.DependsOn)
+	}
 }
 
 func (r *connector) connectBlock(oc *OriginContext, v ctrlcfgv1.Block) {
@@ -114,7 +118,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 	for _, ref := range refs {
 		// RangeRefKind do nothing
 		// for regular values we resolve the variables
-		// for varibales that start with _ this is a special case and 
+		// for varibales that start with _ this is a special case and
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
@@ -139,5 +143,11 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			}
 			r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(vertexName, oc.VertexName)
 		}
+	}
+}
+
+func (r *connector) connectDependsOn(oc *OriginContext, vertexNames []string) {
+	for _, vertexName := range vertexNames {
+		r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(vertexName, oc.VertexName)
 	}
 }

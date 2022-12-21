@@ -107,13 +107,14 @@ type Function struct {
 	// Vars define the local variables in the function
 	// The Key respresents the local variable name
 	// The Value represents the jq expression
-	Vars     map[string]string `json:"vars,omitempty" yaml:"vars,omitempty"`
-	Type     FunctionType      `json:"type,omitempty" yaml:"type,omitempty"`
-	Config   string            `json:"config,omitempty" yaml:"config,omitempty"`
+	Vars   map[string]string `json:"vars,omitempty" yaml:"vars,omitempty"`
+	Type   FunctionType      `json:"type,omitempty" yaml:"type,omitempty"`
+	Config string            `json:"config,omitempty" yaml:"config,omitempty"`
 	// input is always a GVK of some sort
 	Input *Input `json:"input,omitempty" yaml:"input,omitempty"`
 	// key = variableName, value is gvr format or not -> gvr format is needed for external resources
-	Output map[string]*Output `json:"output,omitempty" yaml:"output,omitempty"`
+	Output    map[string]*Output `json:"output,omitempty" yaml:"output,omitempty"`
+	DependsOn []string           `json:"dependsOn,omitempty" yaml:"dependsOn,omitempty"`
 }
 
 type Output struct {

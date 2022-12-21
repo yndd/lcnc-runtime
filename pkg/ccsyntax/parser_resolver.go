@@ -69,6 +69,9 @@ func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	for _, v := range v.Input.GenericInput {
 		r.resolveRefs(oc, v)
 	}
+	if len(v.DependsOn) > 0 {
+		r.resolveDependsOn(oc, v.DependsOn)
+	}
 }
 
 func (r *resolver) resolveBlock(oc *OriginContext, v ctrlcfgv1.Block) {
@@ -96,9 +99,9 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 
 	for _, ref := range refs {
 		// for regular values we resolve the variables
-		// for varibales that start with _ this is a special case and 
+		// for varibales that start with _ this is a special case and
 		// should only be used within a jq construct
-		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_'{
+		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
 			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(oc.VertexName)
 			// lookup the localDAG first
@@ -116,6 +119,17 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 					Error:         fmt.Errorf("cannot resolve %s", ref.Value).Error(),
 				})
 			}
+		}
+	}
+}
+
+func (r *resolver) resolveDependsOn(oc *OriginContext, vertexNames []string) {
+	for _, vertexName := range vertexNames {
+		if r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(vertexName) == nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("vertex in depndsOn does not exist %s", vertexName).Error(),
+			})
 		}
 	}
 }
