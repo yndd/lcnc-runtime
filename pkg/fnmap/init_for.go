@@ -2,21 +2,17 @@ package fnmap
 
 import (
 	"context"
-	"fmt"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	"github.com/yndd/lcnc-runtime/pkg/meta"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/yaml"
 )
 
 const (
 	ForKey = "for"
 )
 
-func (r *fnmap) runForQuery(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runForInit(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &forQuery{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -26,7 +22,7 @@ func (r *fnmap) runForQuery(ctx context.Context, req ctrl.Request, vertexContext
 		executeSingle: true,
 		// execution functions
 		prepareInputFn: rx.prepareInput,
-		runFn:          r.forQuery,
+		runFn:          r.forInit,
 		// result functions
 		initResultFn:   rx.initResult,
 		recordResultFn: rx.recordResult,
@@ -58,25 +54,9 @@ func (r *forQuery) getResult() map[string]*Output {
 
 func (r *forQuery) prepareInput(fnconfig *ctrlcfgv1.Function) any { return fnconfig }
 
-func (r *fnmap) forQuery(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
-	// key is namespaced name
-	key, ok := input[ForKey].(types.NamespacedName)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type, expected namespacedName, got: %v", input[ForKey])
+func (r *fnmap) forInit(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
+	for _, data := range input {
+		return data, nil
 	}
-	//o := getUnstructured(r.gvk)
-	o := meta.GetUnstructuredFromGVK(r.gvk)
-	if err := r.client.Get(ctx, key, o); err != nil {
-		return nil, err
-	}
-	b, err := yaml.Marshal(o.UnstructuredContent())
-	if err != nil {
-		return nil, err
-	}
-
-	rj := map[string]interface{}{}
-	if err := yaml.Unmarshal(b, &rj); err != nil {
-		return nil, err
-	}
-	return rj, nil
+	return nil, nil
 }

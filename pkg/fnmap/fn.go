@@ -14,9 +14,10 @@ import (
 
 func (r *fnmap) RunFn(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	switch vertexContext.Function.Type {
-	case ctrlcfgv1.ForQueryType:
+	case ctrlcfgv1.ForInitType:
 		// does not run in a block
-		return r.runForQuery(ctx, req, vertexContext, input)
+		fmt.Printf("forInit: input %v\n", input)
+		return r.runForInit(ctx, req, vertexContext, input)
 	case ctrlcfgv1.QueryType:
 		return r.runQuery(ctx, req, vertexContext, input)
 	case ctrlcfgv1.MapType:
@@ -243,19 +244,27 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, input map[string]any) error 
 			// We are lazy and provide all reference input to JQ
 			// the below aproach could be a more optimal solution
 			// but for now we keep it simple
-			/*
-				localVarRefs := make(map[string]any)
-				rfs := ccsyntax.NewReferences()
-				refs := rfs.GetReferences(expression)
-				for _, ref := range refs {
-					localVarRefs[ref.Value] = input[ref.Value]
-				}
-			*/
+
+			//	localVarRefs := make(map[string]any)
+			//	rfs := ccsyntax.NewReferences()
+			//	refs := rfs.GetReferences(expression)
+			//	for _, ref := range refs {
+			//		localVarRefs[ref.Value] = input[ref.Value]
+			//	}
 
 			v, err := runJQ(expression, input)
 			if err != nil {
 				return err
 			}
+			fmt.Printf("resolveLocalVars jq %#v\n", v)
+			/*
+				b, err := yaml.Marshal(v)
+				if err != nil {
+					return err
+				}
+				x := map[string]interface{}
+				if err:= yaml
+			*/
 			input[varName] = v
 		}
 	}

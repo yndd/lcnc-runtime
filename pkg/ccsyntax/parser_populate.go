@@ -1,6 +1,7 @@
 package ccsyntax
 
 import (
+	"fmt"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
@@ -39,7 +40,7 @@ func (r *populator) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
+func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{
@@ -47,12 +48,14 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Gro
 			Error:         err.Error(),
 		})
 	}
-	// Own does not have a pipeline so there is no point in populating the DAG
-	if oc.FOW != FOWOwn && err == nil {
-		if err := r.cec.GetDAG(oc.FOW, gvk).AddVertex(oc.VertexName, &dag.VertexContext{
+	oc.GVK = gvk
+	fmt.Printf("addGvk: gvk: %#v\n", *gvk)
+	fmt.Printf("addGvk: oc: %#v\n", oc)
+	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
+		if err := r.cec.GetDAG(oc.FOW, GVKOperation{GVK: *gvk, Operation: OperationApply}).AddVertex(oc.VertexName, &dag.VertexContext{
 			Kind: dag.RootVertexKind,
 			Function: &ctrlcfgv1.Function{
-				Type: ctrlcfgv1.ForQueryType,
+				Type: ctrlcfgv1.ForInitType,
 				Input: &ctrlcfgv1.Input{
 					Resource: v.Resource,
 				},
@@ -60,7 +63,30 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Gro
 			OutputContext: map[string]*dag.OutputContext{
 				oc.VertexName: {
 					Internal: true,
-					GVK:      &gvk,
+					GVK:      gvk,
+				},
+			},
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+	}
+	// Own does not have a pipeline so there is no point in populating the DAG
+	if oc.FOW == FOWFor {
+		if err := r.cec.GetDAG(oc.FOW, GVKOperation{GVK: *gvk, Operation: OperationDelete}).AddVertex(oc.VertexName, &dag.VertexContext{
+			Kind: dag.RootVertexKind,
+			Function: &ctrlcfgv1.Function{
+				Type: ctrlcfgv1.ForInitType,
+				Input: &ctrlcfgv1.Input{
+					Resource: v.Resource,
+				},
+			},
+			OutputContext: map[string]*dag.OutputContext{
+				oc.VertexName: {
+					Internal: true,
+					GVK:      gvk,
 				},
 			},
 		}); err != nil {
@@ -98,9 +124,9 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 		outputCtx[varName] = &dag.OutputContext{
 			Internal: outputCfg.Internal,
-			GVK:      &gvk,
+			GVK:      gvk,
 		}
-		gvkToVarName[meta.GVKToString(&gvk)] = varName
+		gvkToVarName[meta.GVKToString(gvk)] = varName
 	}
 	// if no output, initialize the output Context variable with the vertexName
 	if v.Output == nil {
@@ -115,7 +141,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				}
 				outputCtx[oc.VertexName] = &dag.OutputContext{
 					Internal: false,
-					GVK:      &gvk,
+					GVK:      gvk,
 				}
 			}
 			// TODO what to do for a template ??? How do i get a GVK, is it also an external resource
@@ -142,14 +168,14 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	}
 
 	// add the function vertex to the dag
-	if err := r.cec.GetDAG(oc.FOW, oc.GVK).AddVertex(oc.VertexName, &dag.VertexContext{
+	if err := r.cec.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).AddVertex(oc.VertexName, &dag.VertexContext{
 		Kind:          dag.FunctionVertexKind,
 		OutputDAG:     outputDAG,
 		LocalVarDag:   localVarsDAG,
 		Function:      v,
-		References:    []string{}, // initialize reference
-		OutputContext: outputCtx,  // provide the preparsed output context to the vertex
-		GVKToVerName: gvkToVarName, // provide a preparsed mapping from gvk to varName
+		References:    []string{},   // initialize reference
+		OutputContext: outputCtx,    // provide the preparsed output context to the vertex
+		GVKToVerName:  gvkToVarName, // provide a preparsed mapping from gvk to varName
 	}); err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,

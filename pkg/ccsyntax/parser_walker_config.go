@@ -10,7 +10,7 @@ type cfgPreHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 type cfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 
 // gvkObjectFn processes the for, own, watch per item
-type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind
+type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind
 type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject)
 
 // lcncBlockFn processes the block part of the Variables and functions
@@ -61,6 +61,7 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	// process for, own, watch
 	idx := 0
 	for vertexName, v := range r.cCfg.Spec.Properties.For {
+		// we run this once for apply and once for delete
 		oc := &OriginContext{FOW: FOWFor, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 		idx++
@@ -68,12 +69,14 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	}
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Own {
+		// For Own the oepration is irrelevant
 		oc := &OriginContext{FOW: FOWOwn, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 		idx++
 	}
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Watch {
+		// we run this only for operation apply, NOT for delete
 		oc := &OriginContext{FOW: FOWWatch, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 	}
@@ -81,21 +84,31 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	if fnc.cfgPostHookFn != nil {
 		fnc.cfgPostHookFn(r.cCfg)
 	}
-
 }
 
 func (r *parser) processGvkObject(fnc *WalkConfig, oc *OriginContext, v *ctrlcfgv1.GvkObject) {
 	if fnc.gvkObjectFn != nil {
 		gvk := fnc.gvkObjectFn(oc, v)
 		oc.GVK = gvk
-		pipeline := r.cCfg.GetPipeline(v.PipelineRef)
-		if pipeline == nil {
+		oc.Operation = OperationApply
+		applyPipeline := r.cCfg.GetPipeline(v.ApplyPipelineRef)
+		if applyPipeline == nil {
 			if fnc.emptyPipelineFn != nil {
 				fnc.emptyPipelineFn(oc, v)
-				return
 			}
+		} else {
+			fnc.walkPipeline(oc, applyPipeline)
 		}
-		fnc.walkPipeline(oc, pipeline)
+
+		oc.Operation = OperationDelete
+		deletePipeline := r.cCfg.GetPipeline(v.DeletePipelineRef)
+		if deletePipeline == nil {
+			if fnc.emptyPipelineFn != nil {
+				fnc.emptyPipelineFn(oc, v)
+			}
+		} else {
+			fnc.walkPipeline(oc, deletePipeline)
+		}
 	}
 }
 
@@ -104,6 +117,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 	if fnc.pipelinePreHookFn != nil {
 		oc := &OriginContext{
 			FOW:        oc.FOW,
+			Operation:  oc.Operation,
 			GVK:        oc.GVK,
 			Pipeline:   pipelineName,
 			Origin:     oc.Origin,
@@ -116,6 +130,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 		if fnc.functionFn != nil {
 			oc := &OriginContext{
 				FOW:        oc.FOW,
+				Operation:  oc.Operation,
 				GVK:        oc.GVK,
 				Pipeline:   pipelineName,
 				Origin:     OriginVariable,
@@ -129,6 +144,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 		if fnc.functionFn != nil {
 			oc := &OriginContext{
 				FOW:        oc.FOW,
+				Operation:  oc.Operation,
 				GVK:        oc.GVK,
 				Pipeline:   pipelineName,
 				Origin:     OriginFunction,
@@ -141,6 +157,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 	if fnc.pipelinePostHookFn != nil {
 		oc := &OriginContext{
 			FOW:        oc.FOW,
+			Operation:  oc.Operation,
 			GVK:        oc.GVK,
 			Pipeline:   pipelineName,
 			Origin:     oc.Origin,

@@ -91,7 +91,9 @@ func main() {
 
 	ceCtx, result := p.Parse()
 	if len(result) != 0 {
-		logger.Debug("cannot parse resources", "result", result)
+		for _, res := range result {
+			logger.Debug("cannot parse resources", "result", res)
+		}
 		os.Exit(1)
 	}
 	logger.Debug("parsing succeeded")

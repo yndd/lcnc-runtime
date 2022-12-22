@@ -1,11 +1,12 @@
 package meta
 
 import (
+	"sigs.k8s.io/yaml"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func GetUnstructuredFromGVK(gvk schema.GroupVersionKind) *unstructured.Unstructured {
+func GetUnstructuredFromGVK(gvk *schema.GroupVersionKind) *unstructured.Unstructured {
 	var u unstructured.Unstructured
 	u.SetAPIVersion(gvk.GroupVersion().String())
 	u.SetKind(gvk.Kind)
@@ -13,10 +14,23 @@ func GetUnstructuredFromGVK(gvk schema.GroupVersionKind) *unstructured.Unstructu
 	return uCopy
 }
 
-func GetUnstructuredListFromGVK(gvk schema.GroupVersionKind) *unstructured.UnstructuredList {
+func GetUnstructuredListFromGVK(gvk *schema.GroupVersionKind) *unstructured.UnstructuredList {
 	var u unstructured.UnstructuredList
 	u.SetAPIVersion(gvk.GroupVersion().String())
 	u.SetKind(gvk.Kind)
 	uCopy := u.DeepCopy()
 	return uCopy
+}
+
+func MarshalData(o *unstructured.Unstructured) (any, error) {
+	b, err := yaml.Marshal(o.UnstructuredContent())
+	if err != nil {
+		return nil, err
+	}
+
+	rj := map[string]interface{}{}
+	if err := yaml.Unmarshal(b, &rj); err != nil {
+		return nil, err
+	}
+	return rj, nil
 }

@@ -35,7 +35,7 @@ func (r *ControllerConfig) GetRootVertexName() string {
 	return ""
 }
 
-func (r *ControllerConfig) GetForGvk() ([]schema.GroupVersionKind, error) {
+func (r *ControllerConfig) GetForGvk() ([]*schema.GroupVersionKind, error) {
 	gvks, err := r.getGvkList(r.Spec.Properties.For)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func (r *ControllerConfig) GetForGvk() ([]schema.GroupVersionKind, error) {
 	return gvks, nil
 }
 
-func (r *ControllerConfig) GetOwnGvks() ([]schema.GroupVersionKind, error) {
+func (r *ControllerConfig) GetOwnGvks() ([]*schema.GroupVersionKind, error) {
 	gvks, err := r.getGvkList(r.Spec.Properties.Own)
 	if err != nil {
 		return nil, err
@@ -52,16 +52,16 @@ func (r *ControllerConfig) GetOwnGvks() ([]schema.GroupVersionKind, error) {
 	return gvks, nil
 }
 
-func (r *ControllerConfig) GetWatchGvks() ([]schema.GroupVersionKind, error) {
-	gvrs, err := r.getGvkList(r.Spec.Properties.Watch)
+func (r *ControllerConfig) GetWatchGvks() ([]*schema.GroupVersionKind, error) {
+	gvks, err := r.getGvkList(r.Spec.Properties.Watch)
 	if err != nil {
 		return nil, err
 	}
-	return gvrs, nil
+	return gvks, nil
 }
 
-func (r *ControllerConfig) getGvkList(gvrObjs map[string]*GvkObject) ([]schema.GroupVersionKind, error) {
-	gvks := make([]schema.GroupVersionKind, 0, len(gvrObjs))
+func (r *ControllerConfig) getGvkList(gvrObjs map[string]*GvkObject) ([]*schema.GroupVersionKind, error) {
+	gvks := make([]*schema.GroupVersionKind, 0, len(gvrObjs))
 	for _, gvrObj := range gvrObjs {
 		gvk, err := GetGVK(gvrObj.Resource)
 		if err != nil {
@@ -78,18 +78,18 @@ func GetIdxName(idxName string) (string, int) {
 	return split[0], idx
 }
 
-func GetGVK(gvr runtime.RawExtension) (schema.GroupVersionKind, error) {
+func GetGVK(gvr runtime.RawExtension) (*schema.GroupVersionKind, error) {
 	//fmt.Println(string(gvr.Raw))
 	var u unstructured.Unstructured
 	if err := json.Unmarshal(gvr.Raw, &u); err != nil {
-		return schema.GroupVersionKind{}, err
+		return nil, err
 	}
 	gv, err := schema.ParseGroupVersion(u.GetAPIVersion())
 	if err != nil {
-		return schema.GroupVersionKind{}, err
+		return nil, err
 	}
 
-	return schema.GroupVersionKind{
+	return &schema.GroupVersionKind{
 		Group:   gv.Group,
 		Version: gv.Version,
 		Kind:    u.GetKind(),

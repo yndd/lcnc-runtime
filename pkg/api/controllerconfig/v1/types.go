@@ -59,8 +59,9 @@ type Properties struct {
 }
 
 type GvkObject struct {
-	Resource    runtime.RawExtension `json:"resource,omitempty" yaml:"resource,omitempty"`
-	PipelineRef string               `json:"pipelineRef,omitempty" yaml:"pipelineRef,omitempty"`
+	Resource          runtime.RawExtension `json:"resource,omitempty" yaml:"resource,omitempty"`
+	ApplyPipelineRef  string               `json:"applyPipelineRef,omitempty" yaml:"applyPipelineRef,omitempty"`
+	DeletePipelineRef string               `json:"deletePipelineRef,omitempty" yaml:"deletePipelineRef,omitempty"`
 }
 
 type Pipeline struct {
@@ -91,14 +92,14 @@ type ConditionExpression struct {
 type FunctionType string
 
 const (
-	ForQueryType FunctionType = "forQuery"
-	QueryType    FunctionType = "query"
-	SliceType    FunctionType = "slice"
-	MapType      FunctionType = "map"
-	JQType       FunctionType = "jq"
-	Container    FunctionType = "container"
-	Wasm         FunctionType = "wasm"
-	GoTemplate   FunctionType = "gotemplate"
+	ForInitType FunctionType = "forInit"
+	QueryType   FunctionType = "query"
+	SliceType   FunctionType = "slice"
+	MapType     FunctionType = "map"
+	JQType      FunctionType = "jq"
+	Container   FunctionType = "container"
+	Wasm        FunctionType = "wasm"
+	GoTemplate  FunctionType = "gotemplate"
 )
 
 type Function struct {

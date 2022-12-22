@@ -84,9 +84,8 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 		for _, ref := range r.vertexContext.References {
 			input[ref] = r.output.Get(ref)
 		}
-	case ctrlcfgv1.ForQueryType:
-		// we use a dedicated key for the for
-		input[fnmap.ForKey] = req.NamespacedName
+	case ctrlcfgv1.ForInitType:
+		input[r.vertexName] = r.output.Get(r.vertexName)
 	default:
 		fmt.Printf("references: %v\n", r.vertexContext.References)
 		for _, ref := range r.vertexContext.References {

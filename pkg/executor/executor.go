@@ -39,9 +39,11 @@ type executor struct {
 }
 
 type Config struct {
-	Client client.Client
-	GVK    schema.GroupVersionKind
-	DAG    dag.DAG
+	RootVertex string
+	Data       any
+	Client     client.Client
+	GVK        *schema.GroupVersionKind
+	DAG        dag.DAG
 }
 
 func New(cfg *Config) Executor {
@@ -59,10 +61,15 @@ func New(cfg *Config) Executor {
 		execResult: []*result{},
 		output:     NewOutput(),
 	}
+
+	// initialize the initial data in the executor
+	s.output.Update(cfg.RootVertex, cfg.RootVertex, &fnmap.Output{Internal: true, Value: cfg.Data})
 	s.init()
 	return s
 }
 
+// init initializes the executor with channels and cancel context
+// so it is prepaared to execute the dependency map
 func (r *executor) init() {
 	r.execResult = []*result{}
 	r.execMap = map[string]*execContext{}

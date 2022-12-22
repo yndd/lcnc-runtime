@@ -33,8 +33,8 @@ type builder struct {
 
 func New(mgr manager.Manager, ceCtx ccsyntax.ConfigExecutionContext, opts controller.Options) Builder {
 	b := &builder{
-		mgr:   mgr,
-		ceCtx: ceCtx,
+		mgr:         mgr,
+		ceCtx:       ceCtx,
 		ctrlOptions: opts,
 	}
 	return b
@@ -44,9 +44,9 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	if blder.mgr == nil {
 		return nil, fmt.Errorf("must provide a non-nil Manager")
 	}
-	if len(blder.ceCtx.GetFOW(ccsyntax.FOWFor)) != 1 {
-		return nil, fmt.Errorf("cannot have more than 1 for")
-	}
+	//if len(blder.ceCtx.GetFOW(ccsyntax.FOWFor)) != 1 {
+	//	return nil, fmt.Errorf("cannot have more than 1 for")
+	//}
 	// Set the ControllerManagedBy
 	if err := blder.doController(r); err != nil {
 		return nil, err
@@ -74,8 +74,8 @@ func (blder *builder) doWatch() error {
 
 	// hanlde Own
 	// Watches the managed types
-	for gvk := range blder.ceCtx.GetFOW(ccsyntax.FOWOwn) {
-		obj := meta.GetUnstructuredFromGVK(gvk)
+	for gvkop := range blder.ceCtx.GetFOW(ccsyntax.FOWOwn) {
+		obj := meta.GetUnstructuredFromGVK(&gvkop.GVK)
 
 		src := &source.Kind{Type: obj}
 		hdler := &handler.EnqueueRequestForOwner{
@@ -90,9 +90,9 @@ func (blder *builder) doWatch() error {
 	}
 
 	// handle Watch
-	for gvk := range blder.ceCtx.GetFOW(ccsyntax.FOWWatch) {
+	for gvkop := range blder.ceCtx.GetFOW(ccsyntax.FOWWatch) {
 		//var obj client.Object
-		obj := meta.GetUnstructuredFromGVK(gvk)
+		obj := meta.GetUnstructuredFromGVK(&gvkop.GVK)
 
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, []predicate.Predicate{}...)
@@ -114,7 +114,7 @@ func (blder *builder) doWatch() error {
 	return nil
 }
 
-func (blder *builder) getControllerName(gvk schema.GroupVersionKind) string {
+func (blder *builder) getControllerName(gvk *schema.GroupVersionKind) string {
 	if blder.ceCtx.GetName() != "" {
 		return blder.ceCtx.GetName()
 	}
@@ -132,13 +132,13 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 	gvk := blder.ceCtx.GetForGVK()
 	// Setup concurrency.
 	/*
-	if ctrlOptions.MaxConcurrentReconciles == 0 {
-		groupKind := gvk.GroupKind().String()
+		if ctrlOptions.MaxConcurrentReconciles == 0 {
+			groupKind := gvk.GroupKind().String()
 
-		if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
-			ctrlOptions.MaxConcurrentReconciles = concurrency
+			if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
+				ctrlOptions.MaxConcurrentReconciles = concurrency
+			}
 		}
-	}
 	*/
 
 	// Setup cache sync timeout.

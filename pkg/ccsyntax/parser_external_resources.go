@@ -8,10 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) GetExternalResources() ([]schema.GroupVersionKind, []Result) {
+func (r *parser) GetExternalResources() ([]*schema.GroupVersionKind, []Result) {
 	er := &er{
 		result:    []Result{},
-		resources: []schema.GroupVersionKind{},
+		resources: []*schema.GroupVersionKind{},
 	}
 	er.resultFn = er.recordResult
 	er.addKindFn = er.addGVK
@@ -31,11 +31,11 @@ type er struct {
 	result    []Result
 	resultFn  recordResultFn
 	mrs       sync.RWMutex
-	resources []schema.GroupVersionKind
+	resources []*schema.GroupVersionKind
 	addKindFn erAddKindFn
 }
 
-type erAddKindFn func(schema.GroupVersionKind)
+type erAddKindFn func(*schema.GroupVersionKind)
 
 func (r *er) recordResult(result Result) {
 	r.mr.Lock()
@@ -43,7 +43,7 @@ func (r *er) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *er) addGVK(gvk schema.GroupVersionKind) {
+func (r *er) addGVK(gvk *schema.GroupVersionKind) {
 	//fmt.Printf("add gvk: %v \n", gvk)
 	r.mrs.Lock()
 	defer r.mrs.Unlock()
@@ -60,11 +60,11 @@ func (r *er) addGVK(gvk schema.GroupVersionKind) {
 	}
 }
 
-func (r *er) addGvk(gvk schema.GroupVersionKind) {
+func (r *er) addGvk(gvk *schema.GroupVersionKind) {
 	r.addGVK(gvk)
 }
 
-func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
+func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind {
 	gvk := r.getgvk(oc, v.Resource)
 	r.addGvk(gvk)
 	return gvk
@@ -89,7 +89,7 @@ func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.Function) {
 	}
 }
 
-func (r *er) getgvk(oc *OriginContext, v runtime.RawExtension) schema.GroupVersionKind {
+func (r *er) getgvk(oc *OriginContext, v runtime.RawExtension) *schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v)
 	if err != nil {
 		r.recordResult(Result{

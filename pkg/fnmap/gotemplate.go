@@ -15,6 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+/*
 func convert(i any) any {
 	switch x := i.(type) {
 	case map[any]any:
@@ -34,16 +35,19 @@ func convert(i any) any {
 	}
 	return i
 }
+*/
 
 func (r *fnmap) runGT(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &gt{
 		outputContext: vertexContext.OutputContext,
 	}
-	in := convert(input)
-	switch in := in.(type) {
-	case map[string]any:
-		input = in
-	}
+	/*
+		in := convert(input)
+		switch in := in.(type) {
+		case map[string]any:
+			input = in
+		}
+	*/
 	fec := &fnExecConfig{
 		executeRange:  true,
 		executeSingle: true,

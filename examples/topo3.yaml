@@ -10,9 +10,11 @@ spec:
         resource: 
           apiVersion: topo.yndd.io/v1alpha1
           kind: Definition
-        pipelineRef: forPipeline
+        applyPipelineRef: forApplyPipeline
+        deletePipelineRef: forDeletePipeline
     pipelines:
-      - name: forPipeline
+      - name: forDeletePipeline
+      - name: forApplyPipeline
         vars:
           targets:
             condition:
@@ -78,7 +80,7 @@ spec:
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Topology
                 metadata:
-                  name: '{{ .topoDef.metadata }}'
+                  name: '{{ .topoDef }}'
                   namespace: default
                 spec:
                   properties:

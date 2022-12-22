@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -35,7 +34,7 @@ func (r *initializer) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
+func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{
@@ -43,12 +42,15 @@ func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.
 			Error:         err.Error(),
 		})
 	}
-
-	if err := r.cec.Add(oc.FOW, gvk, dag.New()); err != nil {
-		r.recordResult(Result{
-			OriginContext: oc,
-			Error:         err.Error(),
-		})
+	// initialize execution context for thr for and watch
+	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
+		// initialize the gvk in the execution context
+		if err := r.cec.Add(oc.FOW, gvk); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
 	}
 	return gvk
 }

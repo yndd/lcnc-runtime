@@ -47,7 +47,7 @@ func (r *vs) validatePreHook(lcncCfg *ctrlcfgv1.ControllerConfig) {
 	}
 }
 
-func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
+func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind {
 	if len(v.Resource.Raw) == 0 {
 		r.recordResult(Result{
 			OriginContext: oc,
@@ -65,10 +65,23 @@ func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.Group
 }
 
 func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.GvkObject) {
-	if oc.FOW != FOWOwn {
+	issue := false
+	switch oc.FOW {
+	case FOWFor:
+		// for a for we need to supply both an apply AND a delete pipeline
+		issue = true
+	case FOWWatch:
+		// for a watch we need an apply pipeline but NOT a delete pipeline
+		if oc.Operation == OperationApply {
+			issue = true
+		}
+	default:
+		// FOWOwn we dont need a pipeline
+	}
+	if issue {
 		r.recordResult(Result{
 			OriginContext: oc,
-			Error:         fmt.Errorf("a pipeline must be present for %v", *oc).Error(),
+			Error:         fmt.Errorf("a %s pipeline must be present for %v", oc.Operation, *oc).Error(),
 		})
 	}
 }
@@ -173,7 +186,6 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			}
 		}
 	}
-	
 
 	// validate local vars -> TBD
 

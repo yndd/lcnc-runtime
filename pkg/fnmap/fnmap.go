@@ -15,7 +15,7 @@ type FnMap interface {
 
 type FnMapConfig struct {
 	Client client.Client
-	GVK    schema.GroupVersionKind
+	GVK    *schema.GroupVersionKind
 }
 
 func New(fmc *FnMapConfig) FnMap {
@@ -28,7 +28,7 @@ func New(fmc *FnMapConfig) FnMap {
 
 type fnmap struct {
 	client client.Client
-	gvk    schema.GroupVersionKind
+	gvk    *schema.GroupVersionKind
 }
 
 type Result map[string]*Output

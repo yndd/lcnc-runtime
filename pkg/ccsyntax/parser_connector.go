@@ -38,7 +38,7 @@ func (r *connector) recordResult(result Result) {
 	r.result = append(r.result, result)
 }
 
-func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema.GroupVersionKind {
+func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind {
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{
@@ -46,7 +46,9 @@ func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) schema
 			Error:         err.Error(),
 		})
 	}
-	r.rootVertexName = r.ceCtx.GetDAG(oc.FOW, gvk).GetRootVertex()
+
+	// TBD if this is the right approach, but the rootVertex is for the For only
+	r.rootVertexName = r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *gvk, Operation: OperationApply}).GetRootVertex()
 	return gvk
 }
 
@@ -73,7 +75,7 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 	if v.Input != nil {
 		if len(v.Input.Resource.Raw) != 0 {
-			r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(r.rootVertexName, oc.VertexName)
+			r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Connect(r.rootVertexName, oc.VertexName)
 		}
 		if v.Input.Key != "" {
 			r.connectRefs(oc, v.Input.Key)
@@ -122,7 +124,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
-			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK).GetVertex(oc.VertexName)
+			vc := r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
 				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
@@ -134,7 +136,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			// this is a global reference
 			// we add this to the vertexContext references
 			vc.AddReference(ref.Value)
-			vertexName, err := r.ceCtx.GetDAG(oc.FOW, oc.GVK).LookupRootVertex(strings.Split(ref.Value, "."))
+			vertexName, err := r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).LookupRootVertex(strings.Split(ref.Value, "."))
 			if err != nil {
 				r.recordResult(Result{
 					OriginContext: oc,
@@ -142,13 +144,13 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 				})
 				continue
 			}
-			r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(vertexName, oc.VertexName)
+			r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Connect(vertexName, oc.VertexName)
 		}
 	}
 }
 
 func (r *connector) connectDependsOn(oc *OriginContext, vertexNames []string) {
 	for _, vertexName := range vertexNames {
-		r.ceCtx.GetDAG(oc.FOW, oc.GVK).Connect(vertexName, oc.VertexName)
+		r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Connect(vertexName, oc.VertexName)
 	}
 }

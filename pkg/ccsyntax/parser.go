@@ -6,7 +6,7 @@ import (
 )
 
 type Parser interface {
-	GetExternalResources() ([]schema.GroupVersionKind, []Result)
+	GetExternalResources() ([]*schema.GroupVersionKind, []Result)
 	Parse() (ConfigExecutionContext, []Result)
 }
 
