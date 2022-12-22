@@ -116,10 +116,8 @@ func (r *gt) runGT(ctx context.Context, extraInput any, input map[string]any) (a
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("runGT result: %#v\n", result)
-	return result.String(), err
-	fmt.Printf("runGT result: %s", result.String())
 	var x any
 	err = json.Unmarshal(result.Bytes(), &x)
+	fmt.Printf("runGT result: %s", x)
 	return x, err
 }

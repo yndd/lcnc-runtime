@@ -14,6 +14,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/executor"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
+	"github.com/yndd/ndd-runtime/pkg/event"
 	"github.com/yndd/ndd-runtime/pkg/logging"
 )
 
@@ -49,6 +50,7 @@ func New(ri *ReconcileInfo) reconcile.Reconciler {
 		ceCtx:        ri.CeCtx,
 		l:            ctrl.Log.WithName("lcnc reconcile"),
 		f:            meta.NewAPIFinalizer(ri.Client, defaultFinalizerName),
+		record:       event.NewNopRecorder(),
 	}
 }
 
@@ -57,9 +59,9 @@ type reconciler struct {
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
 
-	f meta.Finalizer
-	l logr.Logger
-	//record event.Recorder
+	f      meta.Finalizer
+	l      logr.Logger
+	record event.Recorder
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -74,6 +76,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.l.Info(errGetCr, "error", err)
 		return reconcile.Result{}, errors.Wrap(meta.IgnoreNotFound(err), errGetCr)
 	}
+
+	//record := r.record.WithAnnotations()
 
 	x, err := meta.MarshalData(cr)
 	if err != nil {

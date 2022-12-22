@@ -12,6 +12,11 @@ spec:
           kind: Definition
         applyPipelineRef: forApplyPipeline
         deletePipelineRef: forDeletePipeline
+    own:
+      x:
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Node
     watch:
       topeDef:
         resource:
@@ -94,7 +99,7 @@ spec:
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Topology
                 metadata:
-                  name: '{{ .topoDef }}'
+                  name: '{{ (index .topoDef 0).metadata.name }}'
                   namespace: default
                 spec:
                   properties:

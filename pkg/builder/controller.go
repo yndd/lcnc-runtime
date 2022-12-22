@@ -73,7 +73,7 @@ func (blder *builder) doWatch() error {
 		return err
 	}
 
-	// hanlde Own
+	// handle Own
 	// Watches the managed types
 	for gvk := range blder.ceCtx.GetFOW(ccsyntax.FOWOwn) {
 		obj := meta.GetUnstructuredFromGVK(&gvk)

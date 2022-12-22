@@ -47,8 +47,9 @@ func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schem
 		})
 	}
 	oc.GVK = gvk
-	// TBD if this is the right approach, but the rootVertex is for the For only
-	r.rootVertexName = r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).DAG.GetRootVertex()
+	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
+		r.rootVertexName = r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).RootVertexName
+	}
 	return gvk
 }
 
