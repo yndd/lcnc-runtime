@@ -87,15 +87,15 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if meta.WasDeleted(cr) {
 		r.l.Info("reconcile delete started...")
 		// handle delete branch
-		deleteDAG := r.ceCtx.GetDAG(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
+		deleteDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
 		e := executor.New(&executor.Config{
 			Name:       req.Name,
 			Namespace:  req.Namespace,
-			RootVertex: deleteDAG.GetRootVertex(),
+			RootVertex: deleteDAGCtx.RootVertexName,
 			Data:       x,
 			Client:     r.client,
 			GVK:        gvk,
-			DAG:        deleteDAG,
+			DAG:        deleteDAGCtx.DAG,
 		})
 
 		// TODO should be per crName
@@ -111,15 +111,15 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	// apply branch -> used for create and update
 	r.l.Info("reconcile apply started...")
-	applyDAG := r.ceCtx.GetDAG(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
+	applyDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
 	e := executor.New(&executor.Config{
 		Name:       req.Name,
 		Namespace:  req.Namespace,
-		RootVertex: applyDAG.GetRootVertex(),
+		RootVertex: applyDAGCtx.RootVertexName,
 		Data:       x,
 		Client:     r.client,
 		GVK:        gvk,
-		DAG:        applyDAG,
+		DAG:        applyDAGCtx.DAG,
 	})
 
 	// TODO should be per crName

@@ -103,8 +103,9 @@ func (blder *builder) doWatch() error {
 
 		eh := eventhandler.New(&eventhandler.EventHandlerInfo{
 			Client: blder.mgr.GetClient(),
+			RootVertexName: od[ccsyntax.OperationApply].RootVertexName,
 			GVK:    &gvk,
-			DAG:    od[ccsyntax.OperationApply],
+			DAG:    od[ccsyntax.OperationApply].DAG,
 		})
 
 		if err := blder.ctrl.Watch(src, eh, allPredicates...); err != nil {

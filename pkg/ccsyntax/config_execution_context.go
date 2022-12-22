@@ -10,28 +10,33 @@ import (
 
 type ConfigExecutionContext interface {
 	GetName() string
-	Add(fow FOW, gvk *schema.GroupVersionKind) error
-	GetDAG(fow FOW, gvk *schema.GroupVersionKind, op Operation) dag.DAG
-	GetFOW(fow FOW) map[schema.GroupVersionKind]OperationDAG
+	Add(fow FOW, gvk *schema.GroupVersionKind, rootVertexName string) error
+	GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *DAGCtx
+	GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx
 	GetForGVK() *schema.GroupVersionKind
 }
 
 type cfgExecContext struct {
 	name  string
 	m     sync.RWMutex
-	For   map[schema.GroupVersionKind]OperationDAG
-	own   map[schema.GroupVersionKind]OperationDAG
-	watch map[schema.GroupVersionKind]OperationDAG
+	For   map[schema.GroupVersionKind]OperationCtx
+	own   map[schema.GroupVersionKind]OperationCtx
+	watch map[schema.GroupVersionKind]OperationCtx
 }
 
-type OperationDAG map[Operation]dag.DAG
+type OperationCtx map[Operation]*DAGCtx
+
+type DAGCtx struct {
+	DAG            dag.DAG
+	RootVertexName string
+}
 
 func NewConfigExecutionContext(n string) ConfigExecutionContext {
 	return &cfgExecContext{
 		name:  n,
-		For:   make(map[schema.GroupVersionKind]OperationDAG),
-		own:   make(map[schema.GroupVersionKind]OperationDAG),
-		watch: make(map[schema.GroupVersionKind]OperationDAG),
+		For:   make(map[schema.GroupVersionKind]OperationCtx),
+		own:   make(map[schema.GroupVersionKind]OperationCtx),
+		watch: make(map[schema.GroupVersionKind]OperationCtx),
 	}
 }
 
@@ -39,20 +44,20 @@ func (r *cfgExecContext) GetName() string {
 	return r.name
 }
 
-func (r *cfgExecContext) Add(fow FOW, gvk *schema.GroupVersionKind) error {
+func (r *cfgExecContext) Add(fow FOW, gvk *schema.GroupVersionKind, rootVertexName string) error {
 	r.m.Lock()
 	defer r.m.Unlock()
 	switch fow {
 	case FOWFor:
-		r.For[*gvk] = map[Operation]dag.DAG{
-			OperationApply:  dag.New(),
-			OperationDelete: dag.New(),
+		r.For[*gvk] = map[Operation]*DAGCtx{
+			OperationApply:  {DAG: dag.New(), RootVertexName: rootVertexName},
+			OperationDelete: {DAG: dag.New(), RootVertexName: rootVertexName},
 		}
 	case FOWOwn:
-		r.own[*gvk] = map[Operation]dag.DAG{}
+		r.own[*gvk] = map[Operation]*DAGCtx{}
 	case FOWWatch:
-		r.watch[*gvk] = map[Operation]dag.DAG{
-			OperationApply: dag.New(),
+		r.watch[*gvk] = map[Operation]*DAGCtx{
+			OperationApply: {DAG: dag.New(), RootVertexName: rootVertexName},
 		}
 	default:
 		return fmt.Errorf("unknown FOW, got: %s", fow)
@@ -60,7 +65,7 @@ func (r *cfgExecContext) Add(fow FOW, gvk *schema.GroupVersionKind) error {
 	return nil
 }
 
-func (r *cfgExecContext) GetDAG(fow FOW, gvk *schema.GroupVersionKind, op Operation) dag.DAG {
+func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *DAGCtx {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	switch fow {
@@ -69,58 +74,58 @@ func (r *cfgExecContext) GetDAG(fow FOW, gvk *schema.GroupVersionKind, op Operat
 		if !ok {
 			return nil
 		}
-		d, ok := od[op]
+		dctx, ok := od[op]
 		if !ok {
 			return nil
 		}
-		return d
+		return dctx
 	case FOWOwn:
 		od, ok := r.own[*gvk]
 		if !ok {
 			return nil
 		}
-		d, ok := od[op]
+		dctx, ok := od[op]
 		if !ok {
 			return nil
 		}
-		return d
+		return dctx
 	case FOWWatch:
 		od, ok := r.watch[*gvk]
 		if !ok {
 			return nil
 		}
-		d, ok := od[op]
+		dctx, ok := od[op]
 		if !ok {
 			return nil
 		}
-		return d
+		return dctx
 	}
 	return nil
 }
 
-func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]OperationDAG {
+func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx {
 	// A copy is returned
-	gvkDAGMap := map[schema.GroupVersionKind]OperationDAG{}
+	gvkDAGMap := map[schema.GroupVersionKind]OperationCtx{}
 	r.m.RLock()
 	defer r.m.RUnlock()
 	switch fow {
 	case FOWFor:
 		for gvk, od := range r.For {
-			gvkDAGMap[gvk] = map[Operation]dag.DAG{}
+			gvkDAGMap[gvk] = map[Operation]*DAGCtx{}
 			for op, d := range od {
 				gvkDAGMap[gvk][op] = d
 			}
 		}
 	case FOWOwn:
 		for gvk, od := range r.own {
-			gvkDAGMap[gvk] = map[Operation]dag.DAG{}
+			gvkDAGMap[gvk] = map[Operation]*DAGCtx{}
 			for op, d := range od {
 				gvkDAGMap[gvk][op] = d
 			}
 		}
 	case FOWWatch:
 		for gvk, od := range r.watch {
-			gvkDAGMap[gvk] = map[Operation]dag.DAG{}
+			gvkDAGMap[gvk] = map[Operation]*DAGCtx{}
 			for op, d := range od {
 				gvkDAGMap[gvk][op] = d
 			}

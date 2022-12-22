@@ -35,9 +35,10 @@ import (
 )
 
 type EventHandlerInfo struct {
-	Client client.Client
-	GVK    *schema.GroupVersionKind
-	DAG    dag.DAG
+	Client         client.Client
+	RootVertexName string
+	GVK            *schema.GroupVersionKind
+	DAG            dag.DAG
 }
 
 func New(e *EventHandlerInfo) handler.EventHandler {
@@ -48,18 +49,20 @@ func New(e *EventHandlerInfo) handler.EventHandler {
 
 	return &eventhandler{
 		//ctx:    ctx,
-		client: e.Client,
-		gvk:    e.GVK,
-		d:      e.DAG,
-		l:      ctrl.Log.WithName("lcnc eventhandler"),
+		client:         e.Client,
+		gvk:            e.GVK,
+		d:              e.DAG,
+		rootVertexName: e.RootVertexName,
+		l:              ctrl.Log.WithName("lcnc eventhandler"),
 	}
 }
 
 type eventhandler struct {
 	client client.Client
 	//ctx    context.Context
-	gvk *schema.GroupVersionKind
-	d   dag.DAG
+	gvk            *schema.GroupVersionKind
+	d              dag.DAG
+	rootVertexName string
 
 	l logr.Logger
 }
@@ -106,7 +109,7 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	e := executor.New(&executor.Config{
 		Name:       o.GetName(),
 		Namespace:  namespace,
-		RootVertex: r.d.GetRootVertex(),
+		RootVertex: r.rootVertexName,
 		Data:       x,
 		Client:     r.client,
 		GVK:        r.gvk,

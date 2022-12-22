@@ -45,7 +45,7 @@ func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema
 	// initialize execution context for thr for and watch
 	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
 		// initialize the gvk in the execution context
-		if err := r.cec.Add(oc.FOW, gvk); err != nil {
+		if err := r.cec.Add(oc.FOW, gvk, oc.VertexName); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         err.Error(),
