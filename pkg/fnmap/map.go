@@ -9,7 +9,6 @@ import (
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type mapInput struct {
@@ -22,7 +21,7 @@ type mapOutput struct {
 	value any
 }
 
-func (r *fnmap) runMap(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runMap(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &kv{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -39,7 +38,7 @@ func (r *fnmap) runMap(ctx context.Context, req ctrl.Request, vertexContext *dag
 		getResultFn:    rx.getResult,
 	}
 
-	return fec.run(ctx, req, vertexContext.Function, input)
+	return fec.run(ctx, vertexContext.Function, input)
 }
 
 type kv struct {
@@ -80,7 +79,7 @@ func (r *kv) prepareInput(fnconfig *ctrlcfgv1.Function) any {
 	}
 }
 
-func (r *kv) buildKV(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
+func (r *kv) buildKV(ctx context.Context, extraInput any, input map[string]any) (any, error) {
 	kv, ok := extraInput.(*mapInput)
 	if !ok {
 		return nil, fmt.Errorf("expecting mapInput with Key and value input, got: %T", extraInput)

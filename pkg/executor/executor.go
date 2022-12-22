@@ -14,15 +14,17 @@ import (
 )
 
 type Executor interface {
-	Run(ctx context.Context, req ctrl.Request)
+	Run(ctx context.Context)
 	GetResult()
 	GetOutput()
 }
 
 type executor struct {
-	d     dag.DAG
-	fnMap fnmap.FnMap
-	req   ctrl.Request
+	name      string
+	namespace string
+	d         dag.DAG
+	fnMap     fnmap.FnMap
+	req       ctrl.Request
 
 	// cancelFn
 	cancelFn context.CancelFunc
@@ -39,6 +41,8 @@ type executor struct {
 }
 
 type Config struct {
+	Name       string
+	Namespace  string
 	RootVertex string
 	Data       any
 	Client     client.Client
@@ -48,11 +52,15 @@ type Config struct {
 
 func New(cfg *Config) Executor {
 	s := &executor{
-		d: cfg.DAG,
+		name:      cfg.Name,
+		namespace: cfg.Namespace,
+		d:         cfg.DAG,
 		// fnMap contains the internal functions
 		fnMap: fnmap.New(&fnmap.FnMapConfig{
-			Client: cfg.Client,
-			GVK:    cfg.GVK,
+			Name:      cfg.Name,
+			Namespace: cfg.Namespace,
+			Client:    cfg.Client,
+			GVK:       cfg.GVK,
 		}),
 		mw:         sync.RWMutex{},
 		execMap:    map[string]*execContext{},
@@ -107,13 +115,12 @@ func (r *executor) init() {
 	}
 }
 
-func (r *executor) Run(ctx context.Context, req ctrl.Request) {
-	r.req = req
+func (r *executor) Run(ctx context.Context) {
 	from := r.d.GetRootVertex()
 	start := time.Now()
 	ctx, cancelFn := context.WithCancel(ctx)
 	r.cancelFn = cancelFn
-	r.execute(ctx, req, from, true)
+	r.execute(ctx, from, true)
 	// add total as a last entry in the result
 	r.recordResult(&result{
 		vertexName: "total",
@@ -122,7 +129,7 @@ func (r *executor) Run(ctx context.Context, req ctrl.Request) {
 	})
 }
 
-func (r *executor) execute(ctx context.Context, req ctrl.Request, from string, init bool) {
+func (r *executor) execute(ctx context.Context, from string, init bool) {
 	wCtx := r.getExecContext(from)
 	// avoid scheduling a vertex that is already visted
 	if !wCtx.isVisted() {
@@ -140,13 +147,13 @@ func (r *executor) execute(ctx context.Context, req ctrl.Request, from string, i
 				return
 			}
 			// execute the vertex function
-			wCtx.run(ctx, req)
+			wCtx.run(ctx)
 		}()
 	}
 	// continue walking the graph
 	for _, downEdge := range r.d.GetDownVertexes(from) {
 		go func(downEdge string) {
-			r.execute(ctx, req, downEdge, false)
+			r.execute(ctx, downEdge, false)
 		}(downEdge)
 	}
 	if init {

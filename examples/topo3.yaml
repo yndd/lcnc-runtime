@@ -12,7 +12,21 @@ spec:
           kind: Definition
         applyPipelineRef: forApplyPipeline
         deletePipelineRef: forDeletePipeline
+    watch:
+      topeDef:
+        resource:
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Template
+        applyPipelineRef: watchTemplateApplyPipeline
     pipelines:
+      - name: watchTemplateApplyPipeline
+        vars:
+          watchAllDefinitions:
+            type: query
+            input: 
+              resource:
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Definition
       - name: forDeletePipeline
       - name: forApplyPipeline
         vars:

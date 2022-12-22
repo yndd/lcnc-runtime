@@ -17,7 +17,6 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	//"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
-	"github.com/yndd/ndd-runtime/pkg/logging"
 
 	//"gopkg.in/yaml.v3"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,9 +49,12 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	zlog := zap.New(zap.UseDevMode(debug), zap.JSONEncoder())
-	ctrl.SetLogger(zlog)
-	logger := logging.NewLogrLogger(zlog.WithName("lcnc runtime"))
+	//zlog := zap.New(zap.UseDevMode(debug), zap.JSONEncoder())
+	//ctrl.SetLogger(zlog)
+	//logger := logging.NewLogrLogger(zlog.WithName("lcnc runtime"))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	l := ctrl.Log.WithName("lcnc runtime")
+
 	if profiler {
 		defer profile.Start().Stop()
 		go func() {
@@ -64,43 +66,43 @@ func main() {
 		Namespace: os.Getenv("POD_NAMESPACE"),
 	})
 	if err != nil {
-		logger.Debug("unable to create manager", "error", err)
+		l.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
 	fb, err := os.ReadFile(yamlFile)
 	if err != nil {
-		logger.Debug("cannot read file", "error", err)
+		l.Error(err, "cannot read file")
 		os.Exit(1)
 	}
-	logger.Debug("read file")
+	l.Info("read file")
 
 	ctrlcfg := &ctrlcfgv1.ControllerConfig{}
 	if err := yaml.Unmarshal(fb, ctrlcfg); err != nil {
-		logger.Debug("cannot unmarshal", "error", err)
+		l.Error(err, "cannot unmarshal")
 		os.Exit(1)
 	}
-	logger.Debug("unmarshal succeeded", "cfg", ctrlcfg)
+	l.Info("unmarshal succeeded")
 
 	p, result := ccsyntax.NewParser(ctrlcfg)
 	if len(result) > 0 {
-		logger.Debug("config syntax validation failed", "result", result)
+		l.Error(err, "ccsyntax validation failed", "result", result)
 		os.Exit(1)
 	}
-	logger.Debug("new parser succeeded")
+	l.Info("ccsyntax validation succeeded")
 
 	ceCtx, result := p.Parse()
 	if len(result) != 0 {
 		for _, res := range result {
-			logger.Debug("cannot parse resources", "result", res)
+			l.Error(err, "ccsyntax parsing failed", "result", res)
 		}
 		os.Exit(1)
 	}
-	logger.Debug("parsing succeeded")
+	l.Info("ccsyntax parsing succeeded")
 
 	gvks, result := p.GetExternalResources()
 	if len(result) > 0 {
-		logger.Debug("config get external resources failed", "result", result)
+		l.Error(err, "ccsyntax get external resources failed", "result", result)
 		os.Exit(1)
 	}
 
@@ -108,15 +110,11 @@ func main() {
 	for _, gvk := range gvks {
 		gvk, err := mgr.GetRESTMapper().RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
 		if err != nil {
-			logger.Debug("Cannot get gvk in system", "error", err)
+			l.Error(err, "ccsyntax get gvk mapping in api server", "result", result)
 			os.Exit(1)
 		}
-		logger.Debug("gvk", "value", gvk)
+		l.Info("gvk", "value", gvk)
 	}
-
-	//s := scheduler.New()
-	//s.Walk(context.TODO(), d)
-	//s.GetWalkResult()
 
 	b := builder.New(mgr, ceCtx, controller.Options{
 		//MaxConcurrentReconciles: 10,
@@ -125,16 +123,15 @@ func main() {
 		Client:       mgr.GetClient(),
 		PollInterval: 1 * time.Minute,
 		CeCtx:        ceCtx,
-		Log:          logger,
 	}))
 	if err != nil {
-		logger.Debug("Cannot build controller", "error", err)
+		l.Error(err, "cannot build controller")
 		os.Exit(1)
 	}
 
-	logger.Debug("starting controller manager")
+	l.Info("starting controller manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.Debug("problem running manager", "error", err)
+		l.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }

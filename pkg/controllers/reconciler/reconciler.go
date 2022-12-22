@@ -6,8 +6,10 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/executor"
@@ -33,11 +35,16 @@ type ReconcileInfo struct {
 }
 
 func New(ri *ReconcileInfo) reconcile.Reconciler {
+	opts := zap.Options{
+		Development: true,
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	return &reconciler{
 		client:       ri.Client,
 		pollInterval: ri.PollInterval,
 		ceCtx:        ri.CeCtx,
-		log:          ri.Log,
+		l:            ctrl.Log.WithName("lcnc reconcile"),
 	}
 }
 
@@ -46,20 +53,20 @@ type reconciler struct {
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
 
-	log logging.Logger
+	l logr.Logger
 	//record event.Recorder
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.log.WithValues("request", req)
-	log.Debug("Reconciling")
+
+	r.l.Info("reconcile start...")
 
 	gvk := r.ceCtx.GetForGVK()
 	//o := getUnstructured(r.gvk)
 	cr := meta.GetUnstructuredFromGVK(gvk)
 	if err := r.client.Get(ctx, req.NamespacedName, cr); err != nil {
 		// if the CR no longer exist we are done
-		log.Debug(errGetCr, "error", err)
+		r.l.Info(errGetCr, "error", err)
 		return reconcile.Result{}, errors.Wrap(meta.IgnoreNotFound(err), errGetCr)
 	}
 
@@ -78,9 +85,12 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// delete branch -> used for delete
 	if meta.WasDeleted(cr) {
+		r.l.Info("reconcile delete started...")
 		// handle delete branch
-		deleteDAG := r.ceCtx.GetDAG(ccsyntax.FOWFor, ccsyntax.GVKOperation{GVK: *gvk, Operation: ccsyntax.OperationDelete})
+		deleteDAG := r.ceCtx.GetDAG(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
 		e := executor.New(&executor.Config{
+			Name:       req.Name,
+			Namespace:  req.Namespace,
 			RootVertex: deleteDAG.GetRootVertex(),
 			Data:       x,
 			Client:     r.client,
@@ -89,31 +99,37 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		})
 
 		// TODO should be per crName
-		e.Run(ctx, req)
+		e.Run(ctx)
 		e.GetOutput()
 		e.GetResult()
 
 		// remove finalizer
 
+		r.l.Info("reconcile delete finished...")
+
 		return reconcile.Result{}, nil
 	}
 	// apply branch -> used for create and update
-
-	applyDAG := r.ceCtx.GetDAG(ccsyntax.FOWFor, ccsyntax.GVKOperation{GVK: *gvk, Operation: ccsyntax.OperationApply})
+	r.l.Info("reconcile apply started...")
+	applyDAG := r.ceCtx.GetDAG(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
 	e := executor.New(&executor.Config{
+		Name:       req.Name,
+		Namespace:  req.Namespace,
 		RootVertex: applyDAG.GetRootVertex(),
 		Data:       x,
 		Client:     r.client,
 		GVK:        gvk,
-		DAG:        r.ceCtx.GetDAG(ccsyntax.FOWFor, ccsyntax.GVKOperation{GVK: *gvk, Operation: ccsyntax.OperationApply}),
+		DAG:        applyDAG,
 	})
 
 	// TODO should be per crName
-	e.Run(ctx, req)
+	e.Run(ctx)
 	e.GetOutput()
 	e.GetResult()
 
 	//time.Sleep(60 * time.Second)
+
+	r.l.Info("reconcile apply finsihed...")
 
 	return reconcile.Result{}, nil
 	//return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)

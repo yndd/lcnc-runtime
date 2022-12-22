@@ -13,12 +13,13 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/yaml"
 )
 
-func (r *fnmap) runImage(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runImage(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &image{
+		name:          r.name,
+		namespace:     r.namespace,
 		outputContext: vertexContext.OutputContext,
 		gvkToVarName:  vertexContext.GVKToVerName,
 	}
@@ -35,10 +36,12 @@ func (r *fnmap) runImage(ctx context.Context, req ctrl.Request, vertexContext *d
 		getResultFn:    rx.getResult,
 	}
 
-	return fec.run(ctx, req, vertexContext.Function, input)
+	return fec.run(ctx, vertexContext.Function, input)
 }
 
 type image struct {
+	name          string
+	namespace     string
 	m             sync.RWMutex
 	result        map[string]*Output
 	numItems      int
@@ -91,7 +94,7 @@ func (r *image) prepareInput(fnconfig *ctrlcfgv1.Function) any {
 	return fnconfig
 }
 
-func (r *image) runImage(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
+func (r *image) runImage(ctx context.Context, extraInput any, input map[string]any) (any, error) {
 	fnconfig, ok := extraInput.(*ctrlcfgv1.Function)
 	if !ok {
 		return nil, fmt.Errorf("expecting fnconfig input, got: %T", extraInput)
@@ -105,7 +108,7 @@ func (r *image) runImage(ctx context.Context, req ctrl.Request, extraInput any, 
 	if err != nil {
 		return nil, err
 	}
-	rctx, err := buildResourceContext(req, input)
+	rctx, err := buildResourceContext(r.name, r.namespace, input)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +119,7 @@ func (r *image) runImage(ctx context.Context, req ctrl.Request, extraInput any, 
 	return o, nil
 }
 
-func buildResourceContext(req ctrl.Request, input map[string]any) (*rctxv1.ResourceContext, error) {
+func buildResourceContext(name, namespace string, input map[string]any) (*rctxv1.ResourceContext, error) {
 	props, err := buildResourceContextProperties(input)
 	if err != nil {
 		return nil, err
@@ -128,8 +131,8 @@ func buildResourceContext(req ctrl.Request, input map[string]any) (*rctxv1.Resou
 			APIVersion: "lcnc.yndd.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
+			Name:      name,
+			Namespace: namespace,
 		},
 		Spec: rctxv1.ResourceContextSpec{
 			Properties: props,

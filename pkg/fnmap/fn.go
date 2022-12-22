@@ -9,21 +9,20 @@ import (
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *fnmap) RunFn(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) RunFn(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	switch vertexContext.Function.Type {
 	case ctrlcfgv1.ForInitType:
 		// does not run in a block
 		fmt.Printf("forInit: input %v\n", input)
-		return r.runForInit(ctx, req, vertexContext, input)
+		return r.runForInit(ctx, vertexContext, input)
 	case ctrlcfgv1.QueryType:
-		return r.runQuery(ctx, req, vertexContext, input)
+		return r.runQuery(ctx, vertexContext, input)
 	case ctrlcfgv1.MapType:
-		return r.runMap(ctx, req, vertexContext, input)
+		return r.runMap(ctx, vertexContext, input)
 	case ctrlcfgv1.SliceType:
-		return r.runSlice(ctx, req, vertexContext, input)
+		return r.runSlice(ctx, vertexContext, input)
 	case ctrlcfgv1.JQType:
 		// does not run in a block
 		x, err := runJQ(vertexContext.Function.Input.Expression, input)
@@ -40,10 +39,10 @@ func (r *fnmap) RunFn(ctx context.Context, req ctrl.Request, vertexContext *dag.
 		return res, nil
 	case ctrlcfgv1.GoTemplate:
 		fmt.Printf("runGT\n")
-		return r.runGT(ctx, req, vertexContext, input)
+		return r.runGT(ctx, vertexContext, input)
 	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
 		// image
-		return r.runImage(ctx, req, vertexContext, input)
+		return r.runImage(ctx, vertexContext, input)
 	default:
 		// should not happen
 	}
@@ -56,7 +55,7 @@ type recordResultFn func(any)
 type getResultFn func() map[string]*Output
 
 type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
-type runFn func(context.Context, ctrl.Request, any, map[string]any) (any, error)
+type runFn func(context.Context, any, map[string]any) (any, error)
 
 type fnExecConfig struct {
 	executeRange  bool
@@ -70,7 +69,7 @@ type fnExecConfig struct {
 	getResultFn    getResultFn
 }
 
-func (fec *fnExecConfig) run(ctx context.Context, req ctrl.Request, fnconfig *ctrlcfgv1.Function, input map[string]any) (map[string]*Output, error) {
+func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (map[string]*Output, error) {
 	var items []*item
 	var isRange bool
 	var ok bool
@@ -122,7 +121,7 @@ func (fec *fnExecConfig) run(ctx context.Context, req ctrl.Request, fnconfig *ct
 
 				if fec.executeRange {
 					extraInput := fec.prepareInputFn(fnconfig)
-					x, err := fec.runFn(ctx, req, extraInput, input)
+					x, err := fec.runFn(ctx, extraInput, input)
 					if err != nil {
 						return nil, err
 					}
@@ -138,7 +137,7 @@ func (fec *fnExecConfig) run(ctx context.Context, req ctrl.Request, fnconfig *ct
 			return nil, err
 		}
 		extraInput := fec.prepareInputFn(fnconfig)
-		x, err := fec.runFn(ctx, req, extraInput, input)
+		x, err := fec.runFn(ctx, extraInput, input)
 		if err != nil {
 			return nil, err
 		}

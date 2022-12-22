@@ -10,7 +10,6 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/fnmap"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type execContext struct {
@@ -70,7 +69,7 @@ func (r *execContext) isVisted() bool {
 	return !r.visited.IsZero()
 }
 
-func (r *execContext) run(ctx context.Context, req ctrl.Request) {
+func (r *execContext) run(ctx context.Context) {
 	r.m.Lock()
 	r.start = time.Now()
 	r.m.Unlock()
@@ -97,7 +96,7 @@ func (r *execContext) run(ctx context.Context, req ctrl.Request) {
 	// Run the execution context
 	success := true
 	reason := ""
-	o, err := r.fnMap.RunFn(ctx, req, r.vertexContext, input)
+	o, err := r.fnMap.RunFn(ctx, r.vertexContext, input)
 	if err != nil {
 		if !errors.Is(err, fnmap.ErrConditionFalse) {
 			success = false

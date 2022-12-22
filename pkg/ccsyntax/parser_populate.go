@@ -52,7 +52,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 	fmt.Printf("addGvk: gvk: %#v\n", *gvk)
 	fmt.Printf("addGvk: oc: %#v\n", oc)
 	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
-		if err := r.cec.GetDAG(oc.FOW, GVKOperation{GVK: *gvk, Operation: OperationApply}).AddVertex(oc.VertexName, &dag.VertexContext{
+		if err := r.cec.GetDAG(oc.FOW, oc.GVK, OperationApply).AddVertex(oc.VertexName, &dag.VertexContext{
 			Kind: dag.RootVertexKind,
 			Function: &ctrlcfgv1.Function{
 				Type: ctrlcfgv1.ForInitType,
@@ -75,7 +75,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 	}
 	// Own does not have a pipeline so there is no point in populating the DAG
 	if oc.FOW == FOWFor {
-		if err := r.cec.GetDAG(oc.FOW, GVKOperation{GVK: *gvk, Operation: OperationDelete}).AddVertex(oc.VertexName, &dag.VertexContext{
+		if err := r.cec.GetDAG(oc.FOW, oc.GVK, OperationDelete).AddVertex(oc.VertexName, &dag.VertexContext{
 			Kind: dag.RootVertexKind,
 			Function: &ctrlcfgv1.Function{
 				Type: ctrlcfgv1.ForInitType,
@@ -168,7 +168,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	}
 
 	// add the function vertex to the dag
-	if err := r.cec.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).AddVertex(oc.VertexName, &dag.VertexContext{
+	if err := r.cec.GetDAG(oc.FOW, oc.GVK, oc.Operation).AddVertex(oc.VertexName, &dag.VertexContext{
 		Kind:          dag.FunctionVertexKind,
 		OutputDAG:     outputDAG,
 		LocalVarDag:   localVarsDAG,

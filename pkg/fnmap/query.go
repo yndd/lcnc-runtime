@@ -7,12 +7,11 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
-func (r *fnmap) runQuery(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runQuery(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &query{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -29,7 +28,7 @@ func (r *fnmap) runQuery(ctx context.Context, req ctrl.Request, vertexContext *d
 		getResultFn:    rx.getResult,
 	}
 
-	return fec.run(ctx, req, vertexContext.Function, input)
+	return fec.run(ctx, vertexContext.Function, input)
 }
 
 type query struct {
@@ -55,7 +54,7 @@ func (r *query) getResult() map[string]*Output {
 
 func (r *query) prepareInput(fnconfig *ctrlcfgv1.Function) any { return fnconfig }
 
-func (r *fnmap) query(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
+func (r *fnmap) query(ctx context.Context, extraInput any, input map[string]any) (any, error) {
 	fnconfig, ok := extraInput.(*ctrlcfgv1.Function)
 	if !ok {
 		return nil, fmt.Errorf("expecting fnconfig input, got: %T", extraInput)

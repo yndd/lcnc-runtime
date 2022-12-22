@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
+	"github.com/yndd/lcnc-runtime/pkg/controllers/eventhandler"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -74,8 +75,8 @@ func (blder *builder) doWatch() error {
 
 	// hanlde Own
 	// Watches the managed types
-	for gvkop := range blder.ceCtx.GetFOW(ccsyntax.FOWOwn) {
-		obj := meta.GetUnstructuredFromGVK(&gvkop.GVK)
+	for gvk := range blder.ceCtx.GetFOW(ccsyntax.FOWOwn) {
+		obj := meta.GetUnstructuredFromGVK(&gvk)
 
 		src := &source.Kind{Type: obj}
 		hdler := &handler.EnqueueRequestForOwner{
@@ -90,9 +91,9 @@ func (blder *builder) doWatch() error {
 	}
 
 	// handle Watch
-	for gvkop := range blder.ceCtx.GetFOW(ccsyntax.FOWWatch) {
+	for gvk, od := range blder.ceCtx.GetFOW(ccsyntax.FOWWatch) {
 		//var obj client.Object
-		obj := meta.GetUnstructuredFromGVK(&gvkop.GVK)
+		obj := meta.GetUnstructuredFromGVK(&gvk)
 
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, []predicate.Predicate{}...)
@@ -100,15 +101,15 @@ func (blder *builder) doWatch() error {
 		// If the source of this watch is of type *source.Kind, project it.
 		src := &source.Kind{Type: obj}
 
-		// TODO replace nil with a real EventHandler where a fn is inserted
-		if err := blder.ctrl.Watch(src, nil, allPredicates...); err != nil {
+		eh := eventhandler.New(&eventhandler.EventHandlerInfo{
+			Client: blder.mgr.GetClient(),
+			GVK:    &gvk,
+			DAG:    od[ccsyntax.OperationApply],
+		})
+
+		if err := blder.ctrl.Watch(src, eh, allPredicates...); err != nil {
 			return err
 		}
-		/*
-			if err := blder.ctrl.Watch(src, w.Eventhandler, allPredicates...); err != nil {
-				return err
-			}
-		*/
 	}
 
 	return nil

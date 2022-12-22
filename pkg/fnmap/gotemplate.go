@@ -12,7 +12,6 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 /*
@@ -37,7 +36,7 @@ func convert(i any) any {
 }
 */
 
-func (r *fnmap) runGT(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runGT(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &gt{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -60,7 +59,7 @@ func (r *fnmap) runGT(ctx context.Context, req ctrl.Request, vertexContext *dag.
 		getResultFn:    rx.getResult,
 	}
 
-	return fec.run(ctx, req, vertexContext.Function, input)
+	return fec.run(ctx, vertexContext.Function, input)
 }
 
 type gt struct {
@@ -97,7 +96,7 @@ func (r *gt) prepareInput(fnconfig *ctrlcfgv1.Function) any {
 	return fnconfig.Input.Template
 }
 
-func (r *gt) runGT(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
+func (r *gt) runGT(ctx context.Context, extraInput any, input map[string]any) (any, error) {
 	tmpl, ok := extraInput.(string)
 	if !ok {
 		return nil, fmt.Errorf("expecting string input in gotemplate, got: %T", extraInput)

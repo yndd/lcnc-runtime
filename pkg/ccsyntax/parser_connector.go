@@ -46,9 +46,9 @@ func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schem
 			Error:         err.Error(),
 		})
 	}
-
+	oc.GVK = gvk
 	// TBD if this is the right approach, but the rootVertex is for the For only
-	r.rootVertexName = r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *gvk, Operation: OperationApply}).GetRootVertex()
+	r.rootVertexName = r.ceCtx.GetDAG(oc.FOW, oc.GVK, OperationApply).GetRootVertex()
 	return gvk
 }
 
@@ -75,7 +75,7 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 	if v.Input != nil {
 		if len(v.Input.Resource.Raw) != 0 {
-			r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Connect(r.rootVertexName, oc.VertexName)
+			r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).Connect(r.rootVertexName, oc.VertexName)
 		}
 		if v.Input.Key != "" {
 			r.connectRefs(oc, v.Input.Key)
@@ -124,7 +124,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
-			vc := r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).GetVertex(oc.VertexName)
+			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
 				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
@@ -136,7 +136,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			// this is a global reference
 			// we add this to the vertexContext references
 			vc.AddReference(ref.Value)
-			vertexName, err := r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).LookupRootVertex(strings.Split(ref.Value, "."))
+			vertexName, err := r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).LookupRootVertex(strings.Split(ref.Value, "."))
 			if err != nil {
 				r.recordResult(Result{
 					OriginContext: oc,
@@ -144,13 +144,13 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 				})
 				continue
 			}
-			r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Connect(vertexName, oc.VertexName)
+			r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).Connect(vertexName, oc.VertexName)
 		}
 	}
 }
 
 func (r *connector) connectDependsOn(oc *OriginContext, vertexNames []string) {
 	for _, vertexName := range vertexNames {
-		r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Connect(vertexName, oc.VertexName)
+		r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).Connect(vertexName, oc.VertexName)
 	}
 }

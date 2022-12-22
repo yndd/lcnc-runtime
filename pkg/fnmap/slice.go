@@ -9,11 +9,10 @@ import (
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	ctrl "sigs.k8s.io/controller-runtime"
 	// ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
-func (r *fnmap) runSlice(ctx context.Context, req ctrl.Request, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runSlice(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
 	rx := &slice{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -30,7 +29,7 @@ func (r *fnmap) runSlice(ctx context.Context, req ctrl.Request, vertexContext *d
 		getResultFn:    rx.getResult,
 	}
 
-	return fec.run(ctx, req, vertexContext.Function, input)
+	return fec.run(ctx, vertexContext.Function, input)
 }
 
 type slice struct {
@@ -64,7 +63,7 @@ func (r *slice) prepareInput(fnconfig *ctrlcfgv1.Function) any {
 	return fnconfig.Input.Value
 }
 
-func (r *slice) buildSliceItem(ctx context.Context, req ctrl.Request, extraInput any, input map[string]any) (any, error) {
+func (r *slice) buildSliceItem(ctx context.Context, extraInput any, input map[string]any) (any, error) {
 	value, ok := extraInput.(string)
 	if !ok {
 		return nil, fmt.Errorf("expecting string input, got: %T", extraInput)

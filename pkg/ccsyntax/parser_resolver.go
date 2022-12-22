@@ -103,7 +103,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
-			vc := r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).GetVertex(oc.VertexName)
+			vc := r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
 				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
@@ -113,7 +113,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 			}
 			// if the lookup in the root DAG does not succeed we record the result
 			// and fail eventually
-			if !r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).Lookup(strings.Split(ref.Value, ".")) {
+			if !r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).Lookup(strings.Split(ref.Value, ".")) {
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot resolve %s", ref.Value).Error(),
@@ -125,7 +125,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 
 func (r *resolver) resolveDependsOn(oc *OriginContext, vertexNames []string) {
 	for _, vertexName := range vertexNames {
-		if r.ceCtx.GetDAG(oc.FOW, GVKOperation{GVK: *oc.GVK, Operation: oc.Operation}).GetVertex(vertexName) == nil {
+		if r.ceCtx.GetDAG(oc.FOW, oc.GVK, oc.Operation).GetVertex(vertexName) == nil {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         fmt.Errorf("vertex in depndsOn does not exist %s", vertexName).Error(),

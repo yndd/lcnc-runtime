@@ -65,11 +65,16 @@ func (r *parser) Parse() (ConfigExecutionContext, []Result) {
 
 func (r *parser) transitivereduction(ceCtx ConfigExecutionContext) {
 	// transitive reduction for For dag
-	for _, d := range ceCtx.GetFOW(FOWFor) {
-		d.TransitiveReduction()
+	for _, od := range ceCtx.GetFOW(FOWFor) {
+		for _, d := range od {
+			d.TransitiveReduction()
+		}
+
 	}
 	// transitive reduction for Watch dags
-	for _, d := range ceCtx.GetFOW(FOWWatch) {
-		d.TransitiveReduction()
+	for _, od := range ceCtx.GetFOW(FOWWatch) {
+		for _, d := range od {
+			d.TransitiveReduction()
+		}
 	}
 }

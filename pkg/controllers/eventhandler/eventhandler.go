@@ -19,69 +19,105 @@ package eventhandler
 import (
 	"context"
 
-	"github.com/yndd/ndd-runtime/pkg/logging"
+	"github.com/go-logr/logr"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/executor"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/workqueue"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 type EventHandlerInfo struct {
 	Client client.Client
-	Log    logging.Logger
-	Gvk    schema.GroupVersionKind
-	Fn     string // to be updated
+	GVK    *schema.GroupVersionKind
+	DAG    dag.DAG
 }
 
-func New(ctx context.Context, e *EventHandlerInfo) handler.EventHandler {
+func New(e *EventHandlerInfo) handler.EventHandler {
+	opts := zap.Options{
+		Development: true,
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	return &eventhandler{
-		ctx:    ctx,
+		//ctx:    ctx,
 		client: e.Client,
-		gvk:    e.Gvk,
-		fn:     e.Fn,
-		log:    e.Log,
+		gvk:    e.GVK,
+		d:      e.DAG,
+		l:      ctrl.Log.WithName("lcnc eventhandler"),
 	}
 }
 
 type eventhandler struct {
 	client client.Client
-	log    logging.Logger
-	ctx    context.Context
-	gvk    schema.GroupVersionKind
-	fn     string // to be updated
+	//ctx    context.Context
+	gvk *schema.GroupVersionKind
+	d   dag.DAG
+
+	l logr.Logger
 }
 
 // Create enqueues a request for all infrastructures which pertains to the topology.
-func (e *eventhandler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	e.add(evt.Object, q)
+func (r *eventhandler) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+	r.add(evt.Object, q)
 }
 
 // Create enqueues a request for all infrastructures which pertains to the topology.
-func (e *eventhandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	e.add(evt.ObjectOld, q)
-	e.add(evt.ObjectNew, q)
+func (r *eventhandler) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	r.add(evt.ObjectOld, q)
+	r.add(evt.ObjectNew, q)
 }
 
 // Create enqueues a request for all infrastructures which pertains to the topology.
-func (e *eventhandler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	e.add(evt.Object, q)
+func (r *eventhandler) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+	r.add(evt.Object, q)
 }
 
 // Create enqueues a request for all infrastructures which pertains to the topology.
-func (e *eventhandler) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	e.add(evt.Object, q)
+func (r *eventhandler) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+	r.add(evt.Object, q)
 }
 
-func (e *eventhandler) add(obj runtime.Object, queue adder) {
+func (r *eventhandler) add(obj runtime.Object, queue adder) {
+	r.l.Info("watch event started...")
+
 	o, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return
 	}
-	log := e.log.WithValues("function", "watch topologies", "name", o.GetName())
-	log.Debug("topologynode handleEvent")
+	x, err := meta.MarshalData(o)
+	if err != nil {
+		r.l.Error(err, "cannot marshal data")
+		return
+	}
+
+	namespace := o.GetNamespace()
+	if o.GetNamespace() == "" {
+		namespace = "default"
+	}
+
+	e := executor.New(&executor.Config{
+		Name:       o.GetName(),
+		Namespace:  namespace,
+		RootVertex: r.d.GetRootVertex(),
+		Data:       x,
+		Client:     r.client,
+		GVK:        r.gvk,
+		DAG:        r.d,
+	})
+
+	e.Run(context.TODO())
+	e.GetOutput()
+	e.GetResult()
+
+	// for all the output add the queues
 
 	/*
 		queue.Add(reconcile.Request{NamespacedName: types.NamespacedName{
@@ -89,6 +125,8 @@ func (e *eventhandler) add(obj runtime.Object, queue adder) {
 			Name:      toponode.GetName()}},
 		)
 	*/
+
+	r.l.Info("watch event finsihed...")
 }
 
 type adder interface {
