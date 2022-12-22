@@ -18,12 +18,15 @@ import (
 )
 
 const (
+	// const
+	defaultFinalizerName = "lcnc.yndd.io/finalizer"
 	// errors
 	errGetCr        = "cannot get resource"
 	errUpdateStatus = "cannot update resource status"
 	errMarshalCr    = "cannot marshal resource"
 
 // reconcileFailed = "reconcile failed"
+
 )
 
 type ReconcileInfo struct {
@@ -45,6 +48,7 @@ func New(ri *ReconcileInfo) reconcile.Reconciler {
 		pollInterval: ri.PollInterval,
 		ceCtx:        ri.CeCtx,
 		l:            ctrl.Log.WithName("lcnc reconcile"),
+		f:            meta.NewAPIFinalizer(ri.Client, defaultFinalizerName),
 	}
 }
 
@@ -53,6 +57,7 @@ type reconciler struct {
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
 
+	f meta.Finalizer
 	l logr.Logger
 	//record event.Recorder
 }
@@ -75,13 +80,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return reconcile.Result{}, errors.Wrap(err, errMarshalCr)
 	}
 
-	/*
-		if err := meta.AddFinalizer(cr, "finalizer string"); err != nil {
-			log.Debug("Cannot add finalizer", "error", err)
-			//managed.SetConditions(nddv1.ReconcileError(err), nddv1.Unknown())
-			return reconcile.Result{Requeue: true}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
-		}
-	*/
+	if err := r.f.AddFinalizer(ctx, cr); err != nil {
+		r.l.Error(err, "cannot add finalizer")
+		//managed.SetConditions(nddv1.ReconcileError(err), nddv1.Unknown())
+		return reconcile.Result{Requeue: true}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+	}
 
 	// delete branch -> used for delete
 	if meta.WasDeleted(cr) {
@@ -103,7 +106,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		e.GetOutput()
 		e.GetResult()
 
-		// remove finalizer
+		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
+			r.l.Error(err, "cannot remove finalizer")
+			//managed.SetConditions(nddv1.ReconcileError(err), nddv1.Unknown())
+			return reconcile.Result{Requeue: true}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+		}
 
 		r.l.Info("reconcile delete finished...")
 
