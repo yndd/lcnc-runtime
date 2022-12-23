@@ -1,0 +1,72 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: topoController
+  namespace: default
+spec:
+  properties:
+    for: 
+      topo: {gvr: topo.yndd.io/v1alpha1/definitions}
+    vars: 
+      - targets:
+          slice: 
+            value: {query: target.yndd.io/v1/targets}
+        allTemplates:
+          slice: 
+            value: {query: topo.yndd.io/v1alpha1/templates}
+      - for:
+          range: $topo.spec.properties.templates
+        parentTemplateNames:
+          slice: 
+            value: {string: $VALUE.name}
+      - for:
+          range: $parentTemplateNames
+        parentTemplates:
+          map:
+            key: $VALUE
+            value: {query: $allTemplates, selector: { name: $VALUE}}
+      - for:
+          range: $parentTemplates
+        childTemplates:
+          map:
+            key: $VALUE.metadata.name
+            value: {query: $allTemplates, selector: { name: "$VALUE.spec.properties.fabric.pod[*].definitionRef"}}
+      - for:
+          range: $topo.spec.properties.discoveryRules
+        discoveryRuleNames:
+          slice: 
+            value: 
+              string: $VALUE.metatdata.name
+    functions:
+      - createTopology:
+          image: topology
+          input:
+            topology: $topo # can be implicit
+          output: 
+            Topologies: topo.yndd.io/v1alpha1/topologies
+      - for:
+          range: $parentTemplates
+        createFabric:
+          image: topologyBuilderFromTemplate
+          vars: 
+            localChildTemplates: 
+              slice: 
+                value: {query: $childTemplates, selector: { name: $KEY}}
+          input:
+            parentTemplate: $VALUE
+            localChildTemplates: $localChildTemplates
+          output: 
+            TemplateNodes: topo.yndd.io/v1alpha1/nodes  
+            Templatelinks: topo.yndd.io/v1alpha1/links
+      - for:
+          range: $discoveryRuleNames
+        createNode:
+          image: nodeBuilderFromDiscoveryRule
+          vars: 
+            targets:
+              slice:
+                value: {query: $targets, selector: { name: $KEY}}
+          input:
+            targets: $targets
+          output: 
+            DiscoveryNodes: topo.yndd.io/v1alpha1/nodes 

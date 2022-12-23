@@ -45,28 +45,28 @@ func (o *RunnerOptions) InitDefaults() {
 // and it's config.
 func NewRunner(
 	ctx context.Context,
-	fn *ctrlcfgv1.Function,
+	fnc *ctrlcfgv1.Function,
 	//fnResults *fnresultv1.ResultList,
 	opts RunnerOptions,
 	//runtime fn.FunctionRuntime,
 ) (*FunctionRunner, error) {
-	if fn.Image != "" {
+	if *fnc.Executor.Image != "" {
 		// resolve partial image
-		img, err := opts.ResolveToImage(ctx, fn.Image)
+		img, err := opts.ResolveToImage(ctx, *fnc.Executor.Image)
 		if err != nil {
 			return nil, err
 		}
-		fn.Image = img
+		fnc.Executor.Image = &img
 	}
 
 	fnResult := &fnresultv1.Result{
-		Image:    fn.Image,
-		ExecPath: fn.Exec,
+		Image:    *fnc.Executor.Image,
+		ExecPath: *fnc.Executor.Exec,
 	}
 
 	var run Run
 	switch {
-	case fn.Image != "":
+	case fnc.Executor.Image != nil:
 		// If allowWasm is true, we will use wasm runtime for image field.
 		/*
 			if opts.AllowWasm {
@@ -81,14 +81,14 @@ func NewRunner(
 			} else {
 		*/
 		cfn := &ContainerFn{
-			Image:           fn.Image,
+			Image:           *fnc.Executor.Image,
 			ImagePullPolicy: opts.ImagePullPolicy,
 			Ctx:             ctx,
 			FnResult:        fnResult,
 		}
 		run = cfn.Run
 		//}
-	case fn.Exec != "":
+	case fnc.Executor.Exec != nil:
 		// If AllowWasm is true, we will use wasm runtime for exec field.
 		/*
 			if opts.AllowWasm {
@@ -102,11 +102,11 @@ func NewRunner(
 		*/
 		var execArgs []string
 		// assuming exec here
-		s, err := shlex.Split(fn.Exec)
+		s, err := shlex.Split(*fnc.Executor.Exec)
 		if err != nil {
-			return nil, fmt.Errorf("exec command %q must be valid: %w", fn.Exec, err)
+			return nil, fmt.Errorf("exec command %q must be valid: %w", *fnc.Executor.Exec, err)
 		}
-		execPath := fn.Exec
+		execPath := *fnc.Executor.Exec
 		if len(s) > 0 {
 			execPath = s[0]
 		}
@@ -180,18 +180,18 @@ func (fr *FunctionRunner) Run(rctx *rctxv1.ResourceContext) (*rctxv1.ResourceCon
 		return nil, err
 	}
 
-	fmt.Printf("run rctx after printer: %v\n", in.String())
+	//fmt.Printf("run rctx after printer: %v\n", in.String())
 
-	// here we call the run
+	// call the specific implementation of run (container, exec or wasm)
 	ex := fr.run(in, out)
 	if ex != nil {
 		return nil, fmt.Errorf("fn run failed: %s", ex.Error())
 	}
+	fmt.Printf("run rctx after run:\n%v\n", out.String())
 
 	newRctx := &rctxv1.ResourceContext{}
 	if err := json.Unmarshal(out.Bytes(), newRctx); err != nil {
 		return nil, err
 	}
-	//fmt.Printf("!!! rcctx: %+v\n", newRctx)
 	return newRctx, nil
 }

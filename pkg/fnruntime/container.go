@@ -130,7 +130,7 @@ func (f *ContainerFn) runCLI(reader io.Reader, writer io.Writer, bin string, fil
 
 	//b, _ := io.ReadAll(reader)
 	//fmt.Printf("runCLI for container with data:\n%v\n", string(b))
-	fmt.Printf("container cmd: %v\n", cmd)
+	//fmt.Printf("container cmd: %v\n", cmd)
 
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError

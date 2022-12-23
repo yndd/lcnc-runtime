@@ -1,0 +1,112 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: topoController
+  namespace: default
+spec:
+  properties:
+    for: 
+      topoDef: 
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Definition
+        doApply: forApplyPipeline
+        doDelete: forDeletePipeline
+    pipelines:
+      - name: forDeletePipeline
+      - name: forApplyPipeline
+        vars:
+          targets:
+            type: query
+            input:
+              resource: 
+                apiVersion: target.yndd.io/v1
+                kind: Target 
+          allTemplates:
+            type: query
+            input: 
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Template
+          #parentTemplateNames:
+          #  kind: jq
+          #  input: 
+          #    expression: $topoDef | [.spec.properties.templates[].templateRef.name]
+          parentTemplateNames:
+            range:
+              value: $topoDef | .spec.properties.templates[]
+            type: slice # output is name of the function
+            input: 
+              value: $VALUE.templateRef.name
+          discoveryRuleNames:
+            range:
+              value: $topoDef | .spec.properties.discoveryRules[]
+            type: slice
+            input:
+              value: $VALUE.discoveryRuleRef
+          #    expression: $allTemplates | .[] | select(.metadata.name as $a | $VALUE | index($a)) | {(.metadata.name): .}
+          parentTemplates:
+            range:
+              value: $parentTemplateNames
+            type: map # output is name of the function
+            input: 
+              key: $VALUE
+              value: $allTemplates | .select(.metadata.name == $VALUE)
+          #    expression: $allTemplates | select(.metadata.name as $a | $VALUE | index($a)) | {(.metadata.name): .}
+          childTemplates:
+            range: 
+              value: '$parentTemplates[].spec.properties.fabric.pod[].TemplateRef | as $_a |  $allTemplates | .select(.metadata.name == $_a.metadata.name) | {($_a): .}'
+            type: map
+            input:
+              key: $VALUE.metadata.name
+              value: $allTemplates | .select(.metadata.name == $VALUE.metadata.name)
+        tasks:
+          createTopology:
+            type: gotemplate
+            vars:
+              topoDefX: $topoDef
+              ##gt: gt(.....)
+              ##jq: jq(.....)
+            input:  
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Topology
+                metadata:
+                  name: "{{ .topoDefX.metadata.name }}"
+          createFabric:
+            range:
+              value: $parentTemplates
+            image: docker.io/yndd/topologyBuilderFromTemplate
+            vars:
+              localChildTemplates:
+                range:
+                  value: $childTemplates
+                  condition:
+                    expression: xxx
+                kind: slice
+                input: 
+                  value: $KEY 
+            input:
+              parentTemplate: $VALUE
+              localChildTemplates: $localChildTemplates
+            output: 
+              nodes: 
+                resource:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  kind: Node  
+              links: 
+                resource:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  kind: Link
+          createNodeFromDiscovery:
+            range: 
+              value: $discoveryRuleNames
+            image: nodeBuilderFromDiscoveryRule
+            input:
+              targets: $targets | .select(.metadata.name == $VALUE)
+            output: 
+              nodes: 
+                resource:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  kind: Node 
+          

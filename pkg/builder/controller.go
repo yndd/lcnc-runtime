@@ -5,19 +5,17 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
+	"github.com/yndd/lcnc-runtime/pkg/controllers/eventhandler"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
 var newController = controller.New
@@ -26,27 +24,19 @@ type Builder interface {
 	Build(r reconcile.Reconciler) (controller.Controller, error)
 }
 
-/*
-type ControllerPipeline struct {
-	Gvr          *schema.GroupVersionResource
-	Fn           *Function
-	Predicates   []predicate.Predicate
-	Eventhandler handler.EventHandler
-}
-*/
-
 type builder struct {
-	cfg              ctrlcfgv1.ControllerConfig
+	ceCtx            ccsyntax.ConfigExecutionContext
 	mgr              manager.Manager
 	globalPredicates []predicate.Predicate
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
 }
 
-func New(mgr manager.Manager, cfg ctrlcfgv1.ControllerConfig) Builder {
+func New(mgr manager.Manager, ceCtx ccsyntax.ConfigExecutionContext, opts controller.Options) Builder {
 	b := &builder{
-		mgr: mgr,
-		cfg: cfg,
+		mgr:         mgr,
+		ceCtx:       ceCtx,
+		ctrlOptions: opts,
 	}
 	return b
 }
@@ -55,15 +45,8 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	if blder.mgr == nil {
 		return nil, fmt.Errorf("must provide a non-nil Manager")
 	}
-	if blder.cfg.For == nil {
-		return nil, fmt.Errorf("must provide a non-nil For")
-	}
-	// Checking the reconcile gvr exist or not
-	if blder.cfg.For.Gvr == nil {
-		return nil, fmt.Errorf("must provide a gvr for reconciliation")
-	}
-	//if blder.c.For.Fn == "" {
-	//	return nil, fmt.Errorf("must provide a function for reconciliation")
+	//if len(blder.ceCtx.GetFOW(ccsyntax.FOWFor)) != 1 {
+	//	return nil, fmt.Errorf("cannot have more than 1 for")
 	//}
 	// Set the ControllerManagedBy
 	if err := blder.doController(r); err != nil {
@@ -74,23 +57,15 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 	if err := blder.doWatch(); err != nil {
 		return nil, err
 	}
-
 	return blder.ctrl, nil
-
 }
 
 func (blder *builder) doWatch() error {
-	// Reconcile type
-	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-		Group:    blder.cfg.For.Gvr.Group,
-		Version:  blder.cfg.For.Gvr.Version,
-		Resource: blder.cfg.For.Gvr.Resource,
-	})
-	if err != nil {
-		return err
-	}
-	typeForSrc := getUnstructuredObj(gvk)
+	// handle For
+	// we validate that there is only 1 for so we are ok here
 
+	gvk := blder.ceCtx.GetForGVK()
+	typeForSrc := meta.GetUnstructuredFromGVK(gvk)
 	src := &source.Kind{Type: typeForSrc}
 	hdler := &handler.EnqueueRequestForObject{}
 	allPredicates := append(blder.globalPredicates, []predicate.Predicate{}...)
@@ -98,17 +73,10 @@ func (blder *builder) doWatch() error {
 		return err
 	}
 
+	// handle Own
 	// Watches the managed types
-	for _, own := range blder.cfg.Owns {
-		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-			Group:    own.Gvr.Group,
-			Version:  own.Gvr.Version,
-			Resource: own.Gvr.Resource,
-		})
-		if err != nil {
-			return err
-		}
-		obj := getUnstructuredObj(gvk)
+	for gvk := range blder.ceCtx.GetFOW(ccsyntax.FOWOwn) {
+		obj := meta.GetUnstructuredFromGVK(&gvk)
 
 		src := &source.Kind{Type: obj}
 		hdler := &handler.EnqueueRequestForOwner{
@@ -122,18 +90,10 @@ func (blder *builder) doWatch() error {
 		}
 	}
 
-	// Do the watch requests
-	for _, w := range blder.cfg.Watch {
-		gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-			Group:    w.Gvr.Group,
-			Version:  w.Gvr.Version,
-			Resource: w.Gvr.Resource,
-		})
-		if err != nil {
-			return err
-		}
+	// handle Watch
+	for gvk, od := range blder.ceCtx.GetFOW(ccsyntax.FOWWatch) {
 		//var obj client.Object
-		obj := getUnstructuredObj(gvk)
+		obj := meta.GetUnstructuredFromGVK(&gvk)
 
 		allPredicates := append([]predicate.Predicate(nil), blder.globalPredicates...)
 		allPredicates = append(allPredicates, []predicate.Predicate{}...)
@@ -141,16 +101,24 @@ func (blder *builder) doWatch() error {
 		// If the source of this watch is of type *source.Kind, project it.
 		src := &source.Kind{Type: obj}
 
-		if err := blder.ctrl.Watch(src, w.Eventhandler, allPredicates...); err != nil {
+		eh := eventhandler.New(&eventhandler.EventHandlerInfo{
+			Client: blder.mgr.GetClient(),
+			RootVertexName: od[ccsyntax.OperationApply].RootVertexName,
+			GVK:    &gvk,
+			DAG:    od[ccsyntax.OperationApply].DAG,
+		})
+
+		if err := blder.ctrl.Watch(src, eh, allPredicates...); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-func (blder *builder) getControllerName(gvk schema.GroupVersionKind) string {
-	if blder.cfg.Name != "" {
-		return blder.cfg.Name
+func (blder *builder) getControllerName(gvk *schema.GroupVersionKind) string {
+	if blder.ceCtx.GetName() != "" {
+		return blder.ceCtx.GetName()
 	}
 	return strings.ToLower(gvk.Kind)
 }
@@ -163,23 +131,17 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 		ctrlOptions.Reconciler = r
 	}
 
-	gvk, err := getGVKfromGVR(blder.mgr.GetConfig(), schema.GroupVersionResource{
-		Group:    blder.cfg.For.Gvr.Group,
-		Version:  blder.cfg.For.Gvr.Version,
-		Resource: blder.cfg.For.Gvr.Resource,
-	})
-	if err != nil {
-		return err
-	}
-
+	gvk := blder.ceCtx.GetForGVK()
 	// Setup concurrency.
-	if ctrlOptions.MaxConcurrentReconciles == 0 {
-		groupKind := gvk.GroupKind().String()
+	/*
+		if ctrlOptions.MaxConcurrentReconciles == 0 {
+			groupKind := gvk.GroupKind().String()
 
-		if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
-			ctrlOptions.MaxConcurrentReconciles = concurrency
+			if concurrency, ok := globalOpts.GroupKindConcurrency[groupKind]; ok && concurrency > 0 {
+				ctrlOptions.MaxConcurrentReconciles = concurrency
+			}
 		}
-	}
+	*/
 
 	// Setup cache sync timeout.
 	if ctrlOptions.CacheSyncTimeout == 0 && globalOpts.CacheSyncTimeout != nil {
@@ -207,28 +169,8 @@ func (blder *builder) doController(r reconcile.Reconciler) error {
 			return log
 		}
 	}
-
 	// Build the controller and return.
+	var err error
 	blder.ctrl, err = newController(controllerName, blder.mgr, ctrlOptions)
 	return err
-}
-
-func getGVKfromGVR(c *rest.Config, gvr schema.GroupVersionResource) (schema.GroupVersionKind, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(c)
-	if err != nil {
-		return schema.GroupVersionKind{}, err
-	}
-	gvk, err := mapper.KindFor(gvr)
-	if err != nil {
-		return schema.GroupVersionKind{}, err
-	}
-	return gvk, nil
-}
-
-func getUnstructuredObj(gvk schema.GroupVersionKind) *unstructured.Unstructured {
-	var u unstructured.Unstructured
-	u.SetAPIVersion(gvk.GroupVersion().String())
-	u.SetKind(gvk.Kind)
-	uCopy := u.DeepCopy()
-	return uCopy
 }

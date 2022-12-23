@@ -1,0 +1,68 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: vpcController1
+  namespace: default
+spec:
+  properties:
+    for: 
+      vpc: 
+        gvr: infra.yndd.io/v1alpha1/vpcs
+    vars:
+      - nodes:
+          slice:
+            value:
+              query: topo.yndd.io/v1alpha1/nodes
+              selector: {matchLabels: {yndd.io/topology: $vpc.spec.topology}}
+      - links:
+          slice:
+            value:
+              query: topo.yndd.io/v1alpha1/Link
+              selector: 
+                matchLabels: 
+                  yndd.io/topology: $vpc.spec.topology
+                  yndd.io/linktype: not infra}
+    functions:
+      - generateVpcConfig:
+          image: generateVpcConfig
+          input: 
+            nodes: $nodes
+            links: $links
+          output:
+            vpcConfigs: yndd.io/v1alpha1/networkconfigs
+            asAllocations: asAllocations ## uses conditions
+            niAllocations: niAllocations ## uses conditions
+            ipAllocations: ipAllocations ## uses conditions
+      - for: 
+          range: $vpcConfigs # -> this is the only option
+          #range: yndd.io/v1alpha1/networkconfigs -> not possible
+        injectIPNI:    
+          image: injectIPNI        
+          vars:
+            asAllicationPerNode: 
+              slice: 
+                value: {query: $asAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}} 
+            ipAllicationPerNode: 
+              slice:
+                value: {query: $ipAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}}
+            niAllicationPerNode: 
+              slice:
+                value: {query: $niAllocations, selector: {matchLabels: { yndd.io/nodeName: $VALUE.name}}}
+          input: 
+            config: $VALUE
+            asAllicationPerNode: $asAllicationPerNode
+            ipAllicationPerNode: $ipAllicationPerNode
+            niAllicationPerNode: $niAllicationPerNode
+          output:
+            expandedVpcConfigs: yndd.io/v1alpha1/networkconfigs
+        generateState:
+          image: state
+          config: stateInfo
+          input: 
+            config: $VALUE
+          output:
+            states: yndd.io/v1alpha1/networkstates
+    services:
+      - asInjection: {image: asInjection }
+      - ipInjection: {image: ipInjection }
+      - niInjection: {image: niInjection }

@@ -1,0 +1,108 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: topoController
+  namespace: default
+spec:
+  properties:
+    for: 
+      topoDef: 
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Definition
+        applyPipelineRef: forApplyPipeline
+        deletePipelineRef: forDeletePipeline
+    own:
+      x:
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Node
+    watch:
+      topeDef:
+        resource:
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Template
+        applyPipelineRef: watchTemplateApplyPipeline
+    pipelines:
+      - name: watchTemplateApplyPipeline
+        vars:
+          watchAllDefinitions:
+            type: query
+            input: 
+              resource:
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Definition
+      - name: forDeletePipeline
+      - name: forApplyPipeline
+        vars:
+          targets:
+            condition:
+              expression: $discoveryRuleNames | length != 0
+            type: query
+            input:
+              resource: 
+                apiVersion: target.yndd.io/v1
+                kind: Target
+          allTemplates:
+            condition:
+              expression: $parentTemplateNames | length != 0
+            type: query
+            input: 
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Template
+          #parentTemplateNames:
+          #  range:
+          #    value: $topoDef | .spec.properties.templates[]
+          #  type: slice # output is name of the function
+          #  input: 
+          #    value: $VALUE.templateRef.name
+          parentTemplateNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.templates | select((. | length) > 0) | .[].templateRef.name
+          #discoveryRuleNames:
+          #  range:
+          #    value: $topoDef | .spec.properties.discoveryRules[]
+          #  type: slice
+          #  input:
+          #    value: $VALUE.discoveryRuleRef.name
+          discoveryRuleNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
+          parentTemplates:
+            condition:
+              expression: $parentTemplateNames | length != 0
+              range:
+                value: $parentTemplateNames | .[]
+            type: map
+            input: 
+              key: $VALUE
+              value: $allTemplates | .[] | select(.metadata.name == $VALUE)
+          childTemplates:
+            condition:
+              expression: $parentTemplateNames | length != 0
+              range: 
+                value: $parentTemplates | .[].spec.properties.fabric.pod | .[].templateRef.name
+            type: map
+            input:
+              key: $VALUE
+              value: $allTemplates | .[] | select(.metadata.name == $VALUE)
+        tasks:
+          topology:
+            type: gotemplate
+            vars:
+              topoDef: $topoDef
+            input:  
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Topology
+                metadata:
+                  name: '{{ (index .topoDef 0).metadata.name }}'
+                  namespace: default
+                spec:
+                  properties:
+                    location:
+                      latitude: a
+                      longitude: b

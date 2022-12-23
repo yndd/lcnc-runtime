@@ -9,13 +9,22 @@ import (
 	"github.com/pkg/profile"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/builder"
+	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
-	"github.com/yndd/lcnc-runtime/pkg/manager"
-	"github.com/yndd/ndd-runtime/pkg/logging"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	//"github.com/yndd/lcnc-runtime/pkg/builder"
+	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
+	//"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
+	"github.com/yndd/lcnc-runtime/pkg/manager"
+
+	//"gopkg.in/yaml.v3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/yaml"
 )
+
+const yamlFile = "./examples/topo3.yaml"
 
 func main() {
 	var metricsAddr string
@@ -40,9 +49,12 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	zlog := zap.New(zap.UseDevMode(debug), zap.JSONEncoder())
-	ctrl.SetLogger(zlog)
-	logger := logging.NewLogrLogger(zlog.WithName("lcnc runtime"))
+	//zlog := zap.New(zap.UseDevMode(debug), zap.JSONEncoder())
+	//ctrl.SetLogger(zlog)
+	//logger := logging.NewLogrLogger(zlog.WithName("lcnc runtime"))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	l := ctrl.Log.WithName("lcnc runtime")
+
 	if profiler {
 		defer profile.Start().Stop()
 		go func() {
@@ -50,64 +62,76 @@ func main() {
 		}()
 	}
 
-	// Parse config map
-
 	mgr, err := manager.New(ctrl.GetConfigOrDie(), manager.Options{
 		Namespace: os.Getenv("POD_NAMESPACE"),
 	})
 	if err != nil {
-		logger.Debug("unable to create manager", "error", err)
+		l.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
-	ctrlcfg := ctrlcfgv1.ControllerConfig{
-		For: &ctrlcfgv1.ControllerPipeline{
-			Gvr: &ctrlcfgv1.ControllerGroupVersionResource{
-				Group:    "admin.yndd.io",
-				Version:  "v1alpha1",
-				Resource: "tenants",
-			},
-			Fn: &ctrlcfgv1.Function{
-				Image: "docker.io/henderiw/fn-test-image",
-			},
-		},
-	}
-
-	gvr := schema.GroupVersionResource{
-		Group:    ctrlcfg.For.Gvr.Group,
-		Version:  ctrlcfg.For.Gvr.Version,
-		Resource: ctrlcfg.For.Gvr.Resource,
-	}
-	//logger.Debug("gvr", "value", gvr)
-	gvk, err := mgr.GetRESTMapper().KindFor(gvr)
+	fb, err := os.ReadFile(yamlFile)
 	if err != nil {
-		logger.Debug("Cannot get gvk", "error", err)
+		l.Error(err, "cannot read file")
 		os.Exit(1)
 	}
-	//logger.Debug("gvk", "value", gvk)
+	l.Info("read file")
 
-	b := builder.New(mgr, ctrlcfg)
+	ctrlcfg := &ctrlcfgv1.ControllerConfig{}
+	if err := yaml.Unmarshal(fb, ctrlcfg); err != nil {
+		l.Error(err, "cannot unmarshal")
+		os.Exit(1)
+	}
+	l.Info("unmarshal succeeded")
 
+	p, result := ccsyntax.NewParser(ctrlcfg)
+	if len(result) > 0 {
+		l.Error(err, "ccsyntax validation failed", "result", result)
+		os.Exit(1)
+	}
+	l.Info("ccsyntax validation succeeded")
+
+	ceCtx, result := p.Parse()
+	if len(result) != 0 {
+		for _, res := range result {
+			l.Error(err, "ccsyntax parsing failed", "result", res)
+		}
+		os.Exit(1)
+	}
+	l.Info("ccsyntax parsing succeeded")
+
+	gvks, result := p.GetExternalResources()
+	if len(result) > 0 {
+		l.Error(err, "ccsyntax get external resources failed", "result", result)
+		os.Exit(1)
+	}
+
+	// validate if we can resolve the gvr to gvk in the system
+	for _, gvk := range gvks {
+		gvk, err := mgr.GetRESTMapper().RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
+		if err != nil {
+			l.Error(err, "ccsyntax get gvk mapping in api server", "result", result)
+			os.Exit(1)
+		}
+		l.Info("gvk", "value", gvk)
+	}
+
+	b := builder.New(mgr, ceCtx, controller.Options{
+		//MaxConcurrentReconciles: 10,
+	})
 	_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
 		Client:       mgr.GetClient(),
 		PollInterval: 1 * time.Minute,
-		Gvk:          gvk,
-		Fn:           ctrlcfg.For.Fn,
-		Log:          logger,
+		CeCtx:        ceCtx,
 	}))
 	if err != nil {
-		logger.Debug("Cannot build controller", "error", err)
+		l.Error(err, "cannot build controller")
 		os.Exit(1)
 	}
 
-	//if err := mgr.Add(ctrlr); err != nil {
-	//	logger.Debug("Cannot add controller to manager", "error", err)
-	//	os.Exit(1)
-	//}
-
-	logger.Debug("starting controller manager")
+	l.Info("starting controller manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.Debug("problem running manager", "error", err)
+		l.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }

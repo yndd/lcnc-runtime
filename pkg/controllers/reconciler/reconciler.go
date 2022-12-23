@@ -4,145 +4,144 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
-	"github.com/yndd/lcnc-runtime/pkg/fnruntime"
+	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
+	"github.com/yndd/lcnc-runtime/pkg/executor"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
+	"github.com/yndd/ndd-runtime/pkg/event"
 	"github.com/yndd/ndd-runtime/pkg/logging"
-	"github.com/yndd/ndd-runtime/pkg/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
+	// const
+	defaultFinalizerName = "lcnc.yndd.io/finalizer"
 	// errors
 	errGetCr        = "cannot get resource"
-	errUpdateStatus = "cannot update status"
+	errUpdateStatus = "cannot update resource status"
+	errMarshalCr    = "cannot marshal resource"
 
-	//reconcileFailed = "reconcile failed"
+// reconcileFailed = "reconcile failed"
+
 )
 
 type ReconcileInfo struct {
 	Client       client.Client
 	PollInterval time.Duration
-	Gvk          schema.GroupVersionKind
-	Fn           *ctrlcfgv1.Function
+	CeCtx        ccsyntax.ConfigExecutionContext
 
 	Log logging.Logger
 }
 
 func New(ri *ReconcileInfo) reconcile.Reconciler {
+	opts := zap.Options{
+		Development: true,
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	return &reconciler{
 		client:       ri.Client,
 		pollInterval: ri.PollInterval,
-		gvk:          ri.Gvk,
-		fn:           ri.Fn,
-		log:          ri.Log,
+		ceCtx:        ri.CeCtx,
+		l:            ctrl.Log.WithName("lcnc reconcile"),
+		f:            meta.NewAPIFinalizer(ri.Client, defaultFinalizerName),
+		record:       event.NewNopRecorder(),
 	}
 }
 
 type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
-	gvk          schema.GroupVersionKind
-	fn           *ctrlcfgv1.Function
+	ceCtx        ccsyntax.ConfigExecutionContext
 
-	log logging.Logger
-	//record event.Recorder
+	f      meta.Finalizer
+	l      logr.Logger
+	record event.Recorder
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.log.WithValues("request", req)
-	log.Debug("Reconciling")
 
-	cr := getUnstructuredObj(r.gvk)
+	r.l.Info("reconcile start...")
+
+	gvk := r.ceCtx.GetForGVK()
+	//o := getUnstructured(r.gvk)
+	cr := meta.GetUnstructuredFromGVK(gvk)
 	if err := r.client.Get(ctx, req.NamespacedName, cr); err != nil {
-		// There's no need to requeue if we no longer exist. Otherwise we'll be
-		// requeued implicitly because we return an error.
-		log.Debug("Cannot get resource", "error", err)
-		return reconcile.Result{}, errors.Wrap(resource.IgnoreNotFound(err), errGetCr)
-	}
-	//log.Debug("get resource", "cr", cr.UnstructuredContent())
-
-	// INJECT RUNNER
-	log.Debug("function", "fn name", r.fn)
-	if r.fn != nil {
-		runner, err := fnruntime.NewRunner(
-			ctx,
-			r.fn,
-			fnruntime.RunnerOptions{
-				ResolveToImage: fnruntime.ResolveToImageForCLI,
-			},
-		)
-		if err != nil {
-			log.Debug("cannot get runner", "error", err)
-			return reconcile.Result{}, errors.Wrap(err, "cannot get runner")
-		}
-
-		rctx, err := buildResourceContext(cr)
-		if err != nil {
-			log.Debug("Cannot build resource context", "error", err)
-			return reconcile.Result{RequeueAfter: 5 *time.Second}, errors.Wrap(err, "cannot build resource context")
-		}
-		newRctx, err := runner.Run(rctx)
-		if err != nil {
-			log.Debug("run failed", "error", err)
-			return reconcile.Result{RequeueAfter: 5 *time.Second}, errors.Wrap(err, "run failed")
-		}
-		log.Debug("cr after run", "cr", newRctx)
+		// if the CR no longer exist we are done
+		r.l.Info(errGetCr, "error", err)
+		return reconcile.Result{}, errors.Wrap(meta.IgnoreNotFound(err), errGetCr)
 	}
 
-	return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
-}
+	//record := r.record.WithAnnotations()
 
-func getUnstructuredObj(gvk schema.GroupVersionKind) *unstructured.Unstructured {
-	var u unstructured.Unstructured
-	u.SetAPIVersion(gvk.GroupVersion().String())
-	u.SetKind(gvk.Kind)
-	uCopy := u.DeepCopy()
-	return uCopy
-}
-
-func buildResourceContext(cr *unstructured.Unstructured) (*rctxv1.ResourceContext, error) {
-	inputCr, err := cr.MarshalJSON()
+	x, err := meta.MarshalData(cr)
 	if err != nil {
-		return nil, err
+		return reconcile.Result{}, errors.Wrap(err, errMarshalCr)
 	}
 
-	rctx :=  &rctxv1.ResourceContext{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ResourceContext",
-			APIVersion: "lcnc.yndd.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.GetName(),
-			Namespace: cr.GetNamespace(),
-		},
-		Spec: rctxv1.ResourceContextSpec{
-			Properties: &rctxv1.ResourceContextProperties{
-				Input: map[string]rctxv1.KRMResource{
-					cr.GroupVersionKind().String(): rctxv1.KRMResource(inputCr),
-				},
-			},
-		},
+	if err := r.f.AddFinalizer(ctx, cr); err != nil {
+		r.l.Error(err, "cannot add finalizer")
+		//managed.SetConditions(nddv1.ReconcileError(err), nddv1.Unknown())
+		return reconcile.Result{Requeue: true}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 	}
 
-	gvk := schema.GroupVersionKind{
-		Group : "lcnc.yndd.io",
-		Version: "v1",
-		Kind: "ResourceContext",
+	// delete branch -> used for delete
+	if meta.WasDeleted(cr) {
+		r.l.Info("reconcile delete started...")
+		// handle delete branch
+		deleteDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
+		e := executor.New(&executor.Config{
+			Name:       req.Name,
+			Namespace:  req.Namespace,
+			RootVertex: deleteDAGCtx.RootVertexName,
+			Data:       x,
+			Client:     r.client,
+			GVK:        gvk,
+			DAG:        deleteDAGCtx.DAG,
+		})
+
+		// TODO should be per crName
+		e.Run(ctx)
+		e.GetOutput()
+		e.GetResult()
+
+		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
+			r.l.Error(err, "cannot remove finalizer")
+			//managed.SetConditions(nddv1.ReconcileError(err), nddv1.Unknown())
+			return reconcile.Result{Requeue: true}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+		}
+
+		r.l.Info("reconcile delete finished...")
+
+		return reconcile.Result{}, nil
 	}
+	// apply branch -> used for create and update
+	r.l.Info("reconcile apply started...")
+	applyDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
+	e := executor.New(&executor.Config{
+		Name:       req.Name,
+		Namespace:  req.Namespace,
+		RootVertex: applyDAGCtx.RootVertexName,
+		Data:       x,
+		Client:     r.client,
+		GVK:        gvk,
+		DAG:        applyDAGCtx.DAG,
+	})
 
-	rctx.SetGroupVersionKind(gvk)
-	return rctx, nil
+	// TODO should be per crName
+	e.Run(ctx)
+	e.GetOutput()
+	e.GetResult()
 
-	//b := new(strings.Builder)
-	//p := printers.JSONPrinter{}
-	//p.PrintObj(rctx, b)
-	//return []byte(b.String()), nil
+	//time.Sleep(60 * time.Second)
+
+	r.l.Info("reconcile apply finsihed...")
+
+	return reconcile.Result{}, nil
+	//return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 }
