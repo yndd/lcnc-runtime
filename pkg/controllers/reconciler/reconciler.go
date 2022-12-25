@@ -12,7 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
-	"github.com/yndd/lcnc-runtime/pkg/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"github.com/yndd/ndd-runtime/pkg/event"
 	"github.com/yndd/ndd-runtime/pkg/logging"
@@ -95,20 +95,32 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.l.Info("reconcile delete started...")
 		// handle delete branch
 		deleteDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
-		e := executor.New(&executor.Config{
-			Name:       req.Name,
-			Namespace:  req.Namespace,
-			RootVertex: deleteDAGCtx.RootVertexName,
-			Data:       x,
-			Client:     r.client,
-			GVK:        gvk,
-			DAG:        deleteDAGCtx.DAG,
+		/*
+			e := executor.New(&executor.Config{
+				Name:       req.Name,
+				Namespace:  req.Namespace,
+				RootVertex: deleteDAGCtx.RootVertexName,
+				Data:       x,
+				Client:     r.client,
+				GVK:        gvk,
+				DAG:        deleteDAGCtx.DAG,
+			})
+		*/
+
+		e, outp := builder.New(&builder.Config{
+			Name:           req.Name,
+			Namespace:      req.Namespace,
+			RootVertexName: deleteDAGCtx.RootVertexName,
+			Data:           x,
+			Client:         r.client,
+			GVK:            gvk,
+			DAG:            deleteDAGCtx.DAG,
 		})
 
 		// TODO should be per crName
-		e.Run(ctx)
-		e.GetOutput()
-		e.GetResult()
+		result := e.Run(ctx)
+		outp.PrintOutput()
+		result.PrintResult()
 
 		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
 			r.l.Error(err, "cannot remove finalizer")
@@ -123,20 +135,32 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// apply branch -> used for create and update
 	r.l.Info("reconcile apply started...")
 	applyDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
-	e := executor.New(&executor.Config{
-		Name:       req.Name,
-		Namespace:  req.Namespace,
-		RootVertex: applyDAGCtx.RootVertexName,
-		Data:       x,
-		Client:     r.client,
-		GVK:        gvk,
-		DAG:        applyDAGCtx.DAG,
+	/*
+		e := executor.New(&executor.Config{
+			Name:       req.Name,
+			Namespace:  req.Namespace,
+			RootVertex: applyDAGCtx.RootVertexName,
+			Data:       x,
+			Client:     r.client,
+			GVK:        gvk,
+			DAG:        applyDAGCtx.DAG,
+		})
+	*/
+
+	e, outp := builder.New(&builder.Config{
+		Name:           req.Name,
+		Namespace:      req.Namespace,
+		RootVertexName: applyDAGCtx.RootVertexName,
+		Data:           x,
+		Client:         r.client,
+		GVK:            gvk,
+		DAG:            applyDAGCtx.DAG,
 	})
 
 	// TODO should be per crName
-	e.Run(ctx)
-	e.GetOutput()
-	e.GetResult()
+	result := e.Run(ctx)
+	outp.PrintOutput()
+	result.PrintResult()
 
 	//time.Sleep(60 * time.Second)
 

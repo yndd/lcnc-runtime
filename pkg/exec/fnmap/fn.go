@@ -9,9 +9,10 @@ import (
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
-func (r *fnmap) RunFn(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) RunFn(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	switch vertexContext.Function.Type {
 	case ctrlcfgv1.ForInitType:
 		// does not run in a block
@@ -29,30 +30,31 @@ func (r *fnmap) RunFn(ctx context.Context, vertexContext *dag.VertexContext, inp
 		if err != nil {
 			return nil, err
 		}
-		res := make(map[string]*Output, 1)
+		res := make(map[string]*output.OutputInfo, 1)
 		for varName, outputCtx := range vertexContext.OutputContext {
-			res[varName] = &Output{
+			res[varName] = &output.OutputInfo{
 				Internal: outputCtx.Internal,
 				Value:    x,
 			}
 		}
 		return res, nil
-	case ctrlcfgv1.GoTemplate:
+	case ctrlcfgv1.GoTemplateType:
 		fmt.Printf("runGT\n")
 		return r.runGT(ctx, vertexContext, input)
-	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
+	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
 		// image
 		return r.runImage(ctx, vertexContext, input)
+	case ctrlcfgv1.BlockType:
+		return r.runBlock(ctx, vertexContext, input)
 	default:
-		// should not happen
+		// we should never get here unless a function type is undefeined
 	}
-
 	return nil, nil
 }
 
 type initResultFn func(numItems int)
 type recordResultFn func(any)
-type getResultFn func() map[string]*Output
+type getResultFn func() map[string]*output.OutputInfo
 
 type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
 type runFn func(context.Context, any, map[string]any) (any, error)
@@ -69,7 +71,7 @@ type fnExecConfig struct {
 	getResultFn    getResultFn
 }
 
-func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (map[string]*Output, error) {
+func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (map[string]*output.OutputInfo, error) {
 	var items []*item
 	var isRange bool
 	var ok bool
@@ -103,6 +105,7 @@ func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, 
 	}
 	numItems := len(items)
 	if numItems == 0 && isRange {
+		fec.initResultFn(0)
 		return nil, nil // no entries in the range, so we are done
 	}
 	if numItems > 0 && isRange {

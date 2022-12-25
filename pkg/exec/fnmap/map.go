@@ -9,6 +9,7 @@ import (
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
 type mapInput struct {
@@ -21,7 +22,7 @@ type mapOutput struct {
 	value any
 }
 
-func (r *fnmap) runMap(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runMap(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &kv{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -61,10 +62,10 @@ func (r *kv) recordResult(o any) {
 	r.result[out.key] = out.value
 }
 
-func (r *kv) getResult() map[string]*Output {
-	res := make(map[string]*Output, 1)
+func (r *kv) getResult() map[string]*output.OutputInfo {
+	res := make(map[string]*output.OutputInfo, 1)
 	for varName, outputCtx := range r.outputContext {
-		res[varName] = &Output{
+		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,
 		}

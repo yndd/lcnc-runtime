@@ -6,12 +6,13 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
-func (r *fnmap) runQuery(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runQuery(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &query{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -41,10 +42,10 @@ func (r *query) initResult(numItems int) {}
 
 func (r *query) recordResult(o any) { r.result = o }
 
-func (r *query) getResult() map[string]*Output {
-	res := make(map[string]*Output, 1)
+func (r *query) getResult() map[string]*output.OutputInfo {
+	res := make(map[string]*output.OutputInfo, 1)
 	for varName, outputCtx := range r.outputContext {
-		res[varName] = &Output{
+		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,
 		}

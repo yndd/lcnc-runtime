@@ -7,24 +7,24 @@ import (
 	"time"
 
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	"github.com/yndd/lcnc-runtime/pkg/fnmap"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 )
 
 type Executor interface {
-	Run(ctx context.Context)
-	GetResult()
-	GetOutput()
+	Run(ctx context.Context) result.Result
+	//PrintResult()
 }
 
-type executor struct {
-	name      string
-	namespace string
-	d         dag.DAG
-	fnMap     fnmap.FnMap
-	req       ctrl.Request
+type exec struct {
+	//name      string
+	//namespace string
+	rootVertexName string
+	d              dag.DAG
+	fnMap          fnmap.FnMap
+	output         output.Output
+	result         result.Result
 
 	// cancelFn
 	cancelFn context.CancelFunc
@@ -34,62 +34,69 @@ type executor struct {
 	execMap   map[string]*execContext
 	fnDoneMap map[string]chan bool
 
-	mr         sync.RWMutex
-	execResult []*result
-
-	output Output
+	//mr         sync.RWMutex
+	//execResult []*result
 }
 
 type Config struct {
-	Name       string
-	Namespace  string
-	RootVertex string
-	Data       any
-	Client     client.Client
-	GVK        *schema.GroupVersionKind
-	DAG        dag.DAG
+	//Name       string
+	//Namespace  string
+	RootVertexName string
+	//Data       any
+	//Client     client.Client
+	//GVK        *schema.GroupVersionKind
+	DAG    dag.DAG
+	FnMap  fnmap.FnMap
+	Output output.Output
 }
 
 func New(cfg *Config) Executor {
-	s := &executor{
-		name:      cfg.Name,
-		namespace: cfg.Namespace,
-		d:         cfg.DAG,
+	s := &exec{
+		//	name:      cfg.Name,
+		//namespace: cfg.Namespace,
+		rootVertexName: cfg.RootVertexName,
+		d:              cfg.DAG,
+		fnMap:          cfg.FnMap,
+		output:         cfg.Output,
+		result:         result.New(),
 		// fnMap contains the internal functions
-		fnMap: fnmap.New(&fnmap.FnMapConfig{
-			Name:      cfg.Name,
-			Namespace: cfg.Namespace,
-			Client:    cfg.Client,
-			GVK:       cfg.GVK,
-		}),
-		mw:         sync.RWMutex{},
-		execMap:    map[string]*execContext{},
-		fnDoneMap:  map[string]chan bool{},
-		mr:         sync.RWMutex{},
-		execResult: []*result{},
-		output:     NewOutput(),
+		/*
+			fnMap: fnmap.New(&fnmap.Config{
+				Name:      cfg.Name,
+				Namespace: cfg.Namespace,
+				Client:    cfg.Client,
+				GVK:       cfg.GVK,
+			}),
+		*/
+		mw:        sync.RWMutex{},
+		execMap:   map[string]*execContext{},
+		fnDoneMap: map[string]chan bool{},
+		//mr:         sync.RWMutex{},
+		//execResult: []*result{},
+		//output:     NewOutput(),
 	}
 
 	// initialize the initial data in the executor
-	s.output.Update(cfg.RootVertex, cfg.RootVertex, &fnmap.Output{Internal: true, Value: cfg.Data})
+	//s.output.Update(cfg.RootVertex, cfg.RootVertex, &fnmap.Output{Internal: true, Value: cfg.Data})
 	s.init()
 	return s
 }
 
 // init initializes the executor with channels and cancel context
 // so it is prepaared to execute the dependency map
-func (r *executor) init() {
-	r.execResult = []*result{}
+func (r *exec) init() {
 	r.execMap = map[string]*execContext{}
 	for vertexName, dvc := range r.d.GetVertices() {
 		//fmt.Printf("init vertexName: %s\n", vertexName)
 		r.execMap[vertexName] = &execContext{
-			vertexName:    vertexName,
-			vertexContext: dvc,
-			doneChs:       make(map[string]chan bool), //snd
-			depChs:        make(map[string]chan bool), //rcv
+			vertexName:     vertexName,
+			rootVertexName: r.rootVertexName,
+			vertexContext:  dvc,
+			doneChs:        make(map[string]chan bool), //snd
+			depChs:         make(map[string]chan bool), //rcv
 			// callback to gather the result
-			recordResult: r.recordResult,
+			recordResult: r.result.RecordResult,
+			recordOutput: r.output.RecordOutput,
 			fnMap:        r.fnMap,
 			output:       r.output,
 		}
@@ -115,21 +122,29 @@ func (r *executor) init() {
 	}
 }
 
-func (r *executor) Run(ctx context.Context) {
+func (r *exec) Run(ctx context.Context) result.Result {
 	from := r.d.GetRootVertex()
 	start := time.Now()
 	ctx, cancelFn := context.WithCancel(ctx)
 	r.cancelFn = cancelFn
 	r.execute(ctx, from, true)
 	// add total as a last entry in the result
-	r.recordResult(&result{
-		vertexName: "total",
-		startTime:  start,
-		endTime:    time.Now(),
+	r.result.RecordResult(&result.ResultInfo{
+		VertexName: "total",
+		StartTime:  start,
+		EndTime:    time.Now(),
 	})
+	/*
+		r.recordResult(&result{
+			vertexName: "total",
+			startTime:  start,
+			endTime:    time.Now(),
+		})
+	*/
+	return r.result
 }
 
-func (r *executor) execute(ctx context.Context, from string, init bool) {
+func (r *exec) execute(ctx context.Context, from string, init bool) {
 	wCtx := r.getExecContext(from)
 	// avoid scheduling a vertex that is already visted
 	if !wCtx.isVisted() {
@@ -161,13 +176,13 @@ func (r *executor) execute(ctx context.Context, from string, init bool) {
 	}
 }
 
-func (r *executor) getExecContext(s string) *execContext {
+func (r *exec) getExecContext(s string) *execContext {
 	r.mw.RLock()
 	defer r.mw.RUnlock()
 	return r.execMap[s]
 }
 
-func (r *executor) dependenciesFinished(dep map[string]chan bool) bool {
+func (r *exec) dependenciesFinished(dep map[string]chan bool) bool {
 	for vertexName := range dep {
 		if !r.getExecContext(vertexName).isFinished() {
 			return false
@@ -176,7 +191,7 @@ func (r *executor) dependenciesFinished(dep map[string]chan bool) bool {
 	return true
 }
 
-func (r *executor) waitFunctionCompletion(ctx context.Context) {
+func (r *exec) waitFunctionCompletion(ctx context.Context) {
 	fmt.Printf("main walk wait waiting for function completion...\n")
 DepSatisfied:
 	for vertexName, doneFnCh := range r.fnDoneMap {

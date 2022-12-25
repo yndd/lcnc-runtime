@@ -9,6 +9,7 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/fnruntime"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func (r *fnmap) runImage(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runImage(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &image{
 		name:          r.name,
 		namespace:     r.namespace,
@@ -43,14 +44,14 @@ type image struct {
 	name          string
 	namespace     string
 	m             sync.RWMutex
-	result        map[string]*Output
+	result        map[string]*output.OutputInfo
 	numItems      int
 	outputContext map[string]*dag.OutputContext
 	gvkToVarName  map[string]string
 }
 
 func (r *image) initResult(numItems int) {
-	r.result = make(map[string]*Output, len(r.outputContext))
+	r.result = make(map[string]*output.OutputInfo, len(r.outputContext))
 	r.numItems = numItems
 }
 
@@ -66,7 +67,7 @@ func (r *image) recordResult(o any) {
 		varName := r.gvkToVarName[gvkString]
 		oc := r.outputContext[varName]
 		if _, ok := r.result[varName]; !ok {
-			r.result[varName] = &Output{
+			r.result[varName] = &output.OutputInfo{
 				Internal: oc.Internal,
 				Value:    make([]any, 0, r.numItems),
 			}
@@ -86,7 +87,7 @@ func (r *image) recordResult(o any) {
 	}
 }
 
-func (r *image) getResult() map[string]*Output {
+func (r *image) getResult() map[string]*output.OutputInfo {
 	return r.result
 }
 

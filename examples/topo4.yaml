@@ -1,0 +1,99 @@
+apiVersion: lcnc.yndd.io/v1
+kind: ControllerConfig
+metadata:
+  name: topoController
+  namespace: default
+spec:
+  properties:
+    for: 
+      topoDef: 
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Definition
+        applyPipelineRef: forApplyPipeline
+        deletePipelineRef: forDeletePipeline
+    own:
+      x:
+        resource: 
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Node
+    watch:
+      topeDef:
+        resource:
+          apiVersion: topo.yndd.io/v1alpha1
+          kind: Template
+        applyPipelineRef: watchTemplateApplyPipeline      
+    pipelines:
+      - name: watchTemplateApplyPipeline
+        vars:
+          watchAllDefinitions:
+            type: query
+            input: 
+              resource:
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Definition
+      - name: forDeletePipeline
+      - name: forApplyPipeline
+        vars:
+          parentTemplateNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.templates | select((. | length) > 0) | .[].templateRef.name
+          conditionedTemplateBlock:
+            type: block
+            condition:
+              expression: $parentTemplateNames | length != 0
+            block:
+              allTemplates:
+                type: query
+                input: 
+                  resource: 
+                    apiVersion: topo.yndd.io/v1alpha1
+                    kind: Template
+              parentTemplates:
+                type: jq
+                input:
+                  expression: '$parentTemplateNames | .[] as $_a | $allTemplates | .[] | select(.metadata.name == $_a)'
+              parentChildTemplateName:
+                type: jq
+                input:
+                  expression: '$parentTemplates | .[] as $_a | {"name": ($_a.metadata.name), "children": [.[].spec.properties.fabric.pod | .[].templateRef.name | select(. != null)]}'
+              childTemplates:
+                range:
+                  value: $parentChildTemplateName | .[]
+                type: map
+                input:
+                  key: $VALUE.name
+                  value: $allTemplates | .[] | select(.metadata.name == $VALUE.children.[] ) 
+          discoveryRuleNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
+          conditionedDiscoveryRuleBlock:
+            type: block
+            condition:
+              expression: $discoveryRuleNames | length != 0
+            block:
+              targets:
+                type: query
+                input:
+                  resource: 
+                    apiVersion: target.yndd.io/v1
+                    kind: Target
+        tasks:
+          topology:
+            type: gotemplate
+            vars:
+              topoDef: $topoDef
+            input:  
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Topology
+                metadata:
+                  name: '{{ (index .topoDef 0).metadata.name }}'
+                  namespace: default
+                spec:
+                  properties:
+                    location:
+                      latitude: a
+                      longitude: b

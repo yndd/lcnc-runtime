@@ -1,0 +1,77 @@
+package output
+
+import (
+	"encoding/json"
+	"fmt"
+	"sync"
+)
+
+type Output interface {
+	RecordOutput(varName string, oc *OutputInfo)
+	Get(string) any
+	GetFinalOutput() []any
+	PrintOutput()
+}
+
+type RecordOutputFn func(varName string, oc *OutputInfo)
+
+type OutputInfo struct {
+	Internal bool
+	Value    any
+}
+
+func New() Output {
+	return &output{
+		o: map[string]*OutputInfo{},
+	}
+}
+
+type output struct {
+	m sync.RWMutex
+	o map[string]*OutputInfo
+}
+
+func (r *output) RecordOutput(varName string, oc *OutputInfo) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.o[varName] = oc
+}
+
+func (r *output) Get(v string) any {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	oi, ok := r.o[v]
+	if !ok {
+		// not found -> should not happen
+		return nil
+	}
+	return oi.Value
+}
+
+func (r *output) GetFinalOutput() []any {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	fo := []any{}
+	for _, oi := range r.o {
+		if !oi.Internal {
+			fo = append(fo, oi.Value)
+		}
+	}
+	return fo
+}
+
+// used for debugging purposes
+func (r *output) PrintOutput() {
+	r.m.RLock()
+	defer r.m.RUnlock()
+
+	for name, oi := range r.o {
+		b, err := json.Marshal(oi.Value)
+		if err != nil {
+			fmt.Printf("output %s: marshal err %s\n", name, err.Error())
+		}
+		fmt.Printf("output %s: json %s\n", name, string(b))
+	}
+}

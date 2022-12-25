@@ -28,10 +28,12 @@ type DAG interface {
 	TransitiveReduction()
 	// used for the resolution
 	//Lookup(s []string) bool
-	Lookup(s []string) bool
 	// used for the edge connectivity
-	LookupRootVertex(s []string) (string, error)
-	lookupRootVertex(idx int, s []string) (int, string, error)
+	//LookupRootVertex(s []string) (string, error)
+	//lookupRootVertex(idx int, s []string) (int, string, error)
+	
+	// used for lookup
+	GetOutputVertexName(s string) (string, error)
 }
 
 // used for returning
@@ -61,17 +63,21 @@ type VertexKind string
 const (
 	RootVertexKind     VertexKind = "root"
 	FunctionVertexKind VertexKind = "function"
-	OutputVertexKind   VertexKind = "output"
-	LocalVarVertexKind VertexKind = "localvar"
+	//OutputVertexKind   VertexKind = "output"
+	//LocalVarVertexKind VertexKind = "localvar"
 )
 
 type VertexContext struct {
 	m sync.Mutex
 	// block indicates we have to execute the pipeline or not
-	Name          string
-	Kind          VertexKind
-	OutputDAG     DAG
-	LocalVarDag   DAG
+	Name string
+	Kind VertexKind
+	// used for parsing - resolving
+	//OutputDAG     DAG
+	OutputVertex string
+	LocalVarDag  DAG
+	// used for runtime operation
+	BlockDAG      DAG
 	Function      *ctrlcfgv1.Function
 	References    []string
 	OutputContext map[string]*OutputContext
@@ -313,6 +319,7 @@ func (r *dag) checkVertex(s string) bool {
 	return false
 }
 
+/*
 func (r *dag) Lookup(s []string) bool {
 	// we hit the root of the tree
 	if len(s) == 0 {
@@ -365,4 +372,15 @@ func (r *dag) lookupRootVertex(idx int, s []string) (int, string, error) {
 		return v.OutputDAG.lookupRootVertex(idx, s)
 	}
 	return idx, "", fmt.Errorf("lookup root vertex not found: %v", s)
+}
+*/
+
+func (r *dag) GetOutputVertexName(s string) (string, error) {
+	r.mv.RLock()
+	defer r.mv.RUnlock()
+	vc, ok := r.vertices[s]
+	if !ok {
+		return "", fmt.Errorf("cannot get outputeVertexName since vertex does not exists, got vertexName: %s", s)
+	}
+	return vc.OutputVertex, nil
 }

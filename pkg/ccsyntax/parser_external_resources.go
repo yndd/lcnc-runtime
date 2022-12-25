@@ -71,11 +71,11 @@ func (r *er) getGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVers
 }
 
 func (r *er) getFunctionGvk(oc *OriginContext, v *ctrlcfgv1.Function) {
-	if len(v.Input.Resource.Raw) != 0 {
+	if v.Input != nil && len(v.Input.Resource.Raw) != 0 {
 		gvk := r.getgvk(oc, v.Input.Resource)
 		r.addGvk(gvk)
 	}
-	if v.Type == ctrlcfgv1.GoTemplate {
+	if v.Type == ctrlcfgv1.GoTemplateType {
 		if len(v.Input.Resource.Raw) != 0 {
 			gvk := r.getgvk(oc, v.Input.Resource)
 			r.addGvk(gvk)

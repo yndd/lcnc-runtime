@@ -10,7 +10,9 @@ import (
 
 type ConfigExecutionContext interface {
 	GetName() string
-	Add(fow FOW, gvk *schema.GroupVersionKind, rootVertexName string) error
+	Add(oc *OriginContext) error
+	AddBlock(oc *OriginContext) error
+	GetDAG(oc *OriginContext) dag.DAG
 	GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *DAGCtx
 	GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx
 	GetForGVK() *schema.GroupVersionKind
@@ -29,6 +31,8 @@ type OperationCtx map[Operation]*DAGCtx
 type DAGCtx struct {
 	DAG            dag.DAG
 	RootVertexName string
+	m              sync.RWMutex
+	BlockDAGs      map[string]dag.DAG
 }
 
 func NewConfigExecutionContext(n string) ConfigExecutionContext {
@@ -44,24 +48,49 @@ func (r *cfgExecContext) GetName() string {
 	return r.name
 }
 
-func (r *cfgExecContext) Add(fow FOW, gvk *schema.GroupVersionKind, rootVertexName string) error {
+// func (r *cfgExecContext) Add(fow FOW, gvk *schema.GroupVersionKind, rootVertexName string) error {
+func (r *cfgExecContext) Add(oc *OriginContext) error {
 	r.m.Lock()
 	defer r.m.Unlock()
-	switch fow {
+	switch oc.FOW {
 	case FOWFor:
-		r.For[*gvk] = map[Operation]*DAGCtx{
-			OperationApply:  {DAG: dag.New(), RootVertexName: rootVertexName},
-			OperationDelete: {DAG: dag.New(), RootVertexName: rootVertexName},
+		// rootVertexName -> oc.VertexName
+		r.For[*oc.GVK] = map[Operation]*DAGCtx{
+			OperationApply: {
+				DAG:            dag.New(),
+				RootVertexName: oc.VertexName,
+				BlockDAGs:      map[string]dag.DAG{},
+			},
+			OperationDelete: {
+				DAG:            dag.New(),
+				RootVertexName: oc.VertexName,
+				BlockDAGs:      map[string]dag.DAG{},
+			},
 		}
 	case FOWOwn:
-		r.own[*gvk] = map[Operation]*DAGCtx{}
+		r.own[*oc.GVK] = map[Operation]*DAGCtx{}
 	case FOWWatch:
-		r.watch[*gvk] = map[Operation]*DAGCtx{
-			OperationApply: {DAG: dag.New(), RootVertexName: rootVertexName},
+		r.watch[*oc.GVK] = map[Operation]*DAGCtx{
+			OperationApply: {
+				DAG:            dag.New(),
+				RootVertexName: oc.VertexName,
+				BlockDAGs:      map[string]dag.DAG{},
+			},
 		}
 	default:
-		return fmt.Errorf("unknown FOW, got: %s", fow)
+		return fmt.Errorf("unknown FOW, got: %s", oc.FOW)
 	}
+	return nil
+}
+
+func (r *cfgExecContext) AddBlock(oc *OriginContext) error {
+	dctx := r.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation)
+	if dctx == nil {
+		return fmt.Errorf("dag context not found, got: %v", oc)
+	}
+	dctx.m.Lock()
+	defer dctx.m.Unlock()
+	dctx.BlockDAGs[oc.VertexName] = dag.New()
 	return nil
 }
 
@@ -101,6 +130,19 @@ func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Ope
 		return dctx
 	}
 	return nil
+}
+
+func (r *cfgExecContext) GetDAG(oc *OriginContext) dag.DAG {
+	dctx := r.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation)
+	if dctx == nil {
+		return nil
+	}
+	if oc.BlockIndex == 0 && oc.BlockVertexName == "" {
+		return dctx.DAG
+	}
+	dctx.m.RLock()
+	defer dctx.m.RUnlock()
+	return dctx.BlockDAGs[oc.BlockVertexName]
 }
 
 func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx {

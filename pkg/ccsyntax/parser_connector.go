@@ -1,16 +1,17 @@
 package ccsyntax
 
 import (
-	"strings"
+	"fmt"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) connect(ceCtx ConfigExecutionContext) []Result {
+func (r *parser) connect(ceCtx ConfigExecutionContext, outc OutputContext) []Result {
 	c := &connector{
 		ceCtx:  ceCtx,
+		outc:   outc,
 		result: []Result{},
 	}
 
@@ -26,10 +27,10 @@ func (r *parser) connect(ceCtx ConfigExecutionContext) []Result {
 }
 
 type connector struct {
-	ceCtx          ConfigExecutionContext
-	rootVertexName string
-	mr             sync.RWMutex
-	result         []Result
+	ceCtx  ConfigExecutionContext
+	outc   OutputContext
+	mr     sync.RWMutex
+	result []Result
 }
 
 func (r *connector) recordResult(result Result) {
@@ -45,10 +46,6 @@ func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schem
 			OriginContext: oc,
 			Error:         err.Error(),
 		})
-	}
-	oc.GVK = gvk
-	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
-		r.rootVertexName = r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).RootVertexName
 	}
 	return gvk
 }
@@ -67,16 +64,9 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		r.connectBlock(oc, v.Block)
 	}
 
-	if v.Input.Selector != nil {
-		for k, v := range v.Input.Selector.MatchLabels {
-			r.connectRefs(oc, k)
-			r.connectRefs(oc, v)
-		}
-	}
-
 	if v.Input != nil {
 		if len(v.Input.Resource.Raw) != 0 {
-			r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.Connect(r.rootVertexName, oc.VertexName)
+			r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.Connect(oc.RootVertexName, oc.VertexName)
 		}
 		if v.Input.Key != "" {
 			r.connectRefs(oc, v.Input.Key)
@@ -90,10 +80,24 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		for _, v := range v.Input.GenericInput {
 			r.connectRefs(oc, v)
 		}
+		if v.Input.Selector != nil {
+			for k, v := range v.Input.Selector.MatchLabels {
+				r.connectRefs(oc, k)
+				r.connectRefs(oc, v)
+			}
+		}
 	}
 
+	// A block needs an explicit dependency to the root Block Vertex
+	if oc.BlockIndex > 0 {
+		r.connectVertex(oc, oc.BlockVertexName)
+	}
+
+	// A depndsOn needs an explicit dependency to the vertces they depend upon
 	if len(v.DependsOn) != 0 {
-		r.connectDependsOn(oc, v.DependsOn)
+		for _, vertexName := range v.DependsOn {
+			r.connectVertex(oc, vertexName)
+		}
 	}
 }
 
@@ -125,19 +129,22 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
-			vc := r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.GetVertex(oc.VertexName)
+			fmt.Printf("oc: %#v\n", oc)
+			d := r.ceCtx.GetDAG(oc)
+			vc := d.GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
-				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
+				if vc.LocalVarDag.VertexExists(ref.Value) {
+					// the References are added to the runtime vertex context to ease processing
 					vc.AddReference(ref.Value)
 					// if the localVar lookup succeeds we are done -> continue
 					continue
 				}
 			}
 			// this is a global reference
-			// we add this to the vertexContext references
+			// the References are added to the runtime vertex context to ease processing
 			vc.AddReference(ref.Value)
-			vertexName, err := r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.LookupRootVertex(strings.Split(ref.Value, "."))
+			vertexName, err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).GetOutputVertexName(ref.Value)
 			if err != nil {
 				r.recordResult(Result{
 					OriginContext: oc,
@@ -150,8 +157,8 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 	}
 }
 
-func (r *connector) connectDependsOn(oc *OriginContext, vertexNames []string) {
-	for _, vertexName := range vertexNames {
-		r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.Connect(vertexName, oc.VertexName)
-	}
+func (r *connector) connectVertex(oc *OriginContext, vertexName string) {
+	d := r.ceCtx.GetDAG(oc)
+	d.Connect(vertexName, oc.VertexName)
+
 }

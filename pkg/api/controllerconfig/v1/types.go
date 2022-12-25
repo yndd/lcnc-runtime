@@ -65,9 +65,9 @@ type GvkObject struct {
 }
 
 type Pipeline struct {
-	Name  string               `json:"name" yaml:"name"`
-	Vars  map[string]*Function `json:"vars,omitempty" yaml:"vars,omitempty"`
-	Tasks map[string]*Function `json:"tasks,omitempty" yaml:"tasks,omitempty"`
+	Name  string                      `json:"name" yaml:"name"`
+	Vars  map[string]*FunctionElement `json:"vars,omitempty" yaml:"vars,omitempty"`
+	Tasks map[string]*FunctionElement `json:"tasks,omitempty" yaml:"tasks,omitempty"`
 }
 
 type Block struct {
@@ -78,29 +78,31 @@ type Block struct {
 type RangeValue struct {
 	Value string `json:"value" yaml:"value"`
 	Block `json:",inline" yaml:",inline"`
-	//Range     *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
-	//Condition *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
 type ConditionExpression struct {
 	Expression string `json:"expression" yaml:"expression"`
 	Block      `json:",inline" yaml:",inline"`
-	//Range      *RangeValue          `json:"range,omitempty" yaml:"range,omitempty"`
-	//Condition  *ConditionExpression `json:"condition,omitempty" yaml:"condition,omitempty"`
 }
 
 type FunctionType string
 
 const (
-	ForInitType FunctionType = "forInit"
-	QueryType   FunctionType = "query"
-	SliceType   FunctionType = "slice"
-	MapType     FunctionType = "map"
-	JQType      FunctionType = "jq"
-	Container   FunctionType = "container"
-	Wasm        FunctionType = "wasm"
-	GoTemplate  FunctionType = "gotemplate"
+	ForInitType    FunctionType = "forInit"
+	QueryType      FunctionType = "query"
+	SliceType      FunctionType = "slice"
+	MapType        FunctionType = "map"
+	JQType         FunctionType = "jq"
+	ContainerType  FunctionType = "container"
+	WasmType       FunctionType = "wasm"
+	GoTemplateType FunctionType = "gotemplate"
+	BlockType      FunctionType = "block"
 )
+
+type FunctionElement struct {
+	Function      `json:",inline" yaml:",inline"`
+	FunctionBlock map[string]*FunctionElement `json:"block,omitempty" yaml:"block,omitempty"`
+}
 
 type Function struct {
 	Block    `json:",inline" yaml:",inline"`

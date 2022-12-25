@@ -12,6 +12,7 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
 /*
@@ -36,7 +37,7 @@ func convert(i any) any {
 }
 */
 
-func (r *fnmap) runGT(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*Output, error) {
+func (r *fnmap) runGT(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &gt{
 		outputContext: vertexContext.OutputContext,
 	}
@@ -78,10 +79,10 @@ func (r *gt) recordResult(o any) {
 	r.result = append(r.result, o)
 }
 
-func (r *gt) getResult() map[string]*Output {
-	res := make(map[string]*Output, 1)
+func (r *gt) getResult() map[string]*output.OutputInfo {
+	res := make(map[string]*output.OutputInfo, 1)
 	for varName, outputCtx := range r.outputContext {
-		res[varName] = &Output{
+		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,
 		}

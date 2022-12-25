@@ -2,15 +2,15 @@ package ccsyntax
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
-func (r *parser) resolve(ceCtx ConfigExecutionContext) []Result {
+func (r *parser) resolve(ceCtx ConfigExecutionContext, outc OutputContext) []Result {
 	rs := &resolver{
 		ceCtx:  ceCtx,
+		outc:   outc,
 		result: []Result{},
 	}
 
@@ -27,6 +27,7 @@ func (r *parser) resolve(ceCtx ConfigExecutionContext) []Result {
 
 type resolver struct {
 	ceCtx  ConfigExecutionContext
+	outc   OutputContext
 	mr     sync.RWMutex
 	result []Result
 }
@@ -99,21 +100,21 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 
 	for _, ref := range refs {
 		// for regular values we resolve the variables
-		// for varibales that start with _ this is a special case and
+		// for variables that start with _ this is a special case and
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
+			d := r.ceCtx.GetDAG(oc)
 			// get the vertexContext from the function
-			vc := r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.GetVertex(oc.VertexName)
+			vc := d.GetVertex(oc.VertexName)
 			// lookup the localDAG first
 			if vc.LocalVarDag != nil {
-				if vc.LocalVarDag.Lookup(strings.Split(ref.Value, ".")) {
+				if vc.LocalVarDag.VertexExists(ref.Value) {
 					// if the lookup succeeds we are done
 					continue
 				}
 			}
-			// if the lookup in the root DAG does not succeed we record the result
-			// and fail eventually
-			if !r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.Lookup(strings.Split(ref.Value, ".")) {
+			// we lookup in the outputDAG
+			if !r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).VertexExists(ref.Value) {
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot resolve %s", ref.Value).Error(),

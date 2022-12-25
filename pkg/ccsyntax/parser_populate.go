@@ -1,7 +1,6 @@
 package ccsyntax
 
 import (
-	"fmt"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
@@ -10,9 +9,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) populate(cec ConfigExecutionContext) []Result {
+func (r *parser) populate(cec ConfigExecutionContext, outc OutputContext) []Result {
 	p := &populator{
 		cec:    cec,
+		outc:   outc,
 		result: []Result{},
 	}
 
@@ -30,6 +30,7 @@ func (r *parser) populate(cec ConfigExecutionContext) []Result {
 
 type populator struct {
 	cec    ConfigExecutionContext
+	outc   OutputContext
 	mr     sync.RWMutex
 	result []Result
 }
@@ -41,6 +42,7 @@ func (r *populator) recordResult(result Result) {
 }
 
 func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind {
+	// a gvk is needed for each rootVertex
 	gvk, err := ctrlcfgv1.GetGVK(v.Resource)
 	if err != nil {
 		r.recordResult(Result{
@@ -49,8 +51,30 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 		})
 	}
 	oc.GVK = gvk
-	fmt.Printf("addGvk: gvk: %#v\n", *gvk)
-	fmt.Printf("addGvk: oc: %#v\n", oc)
+
+	runtOutputCtx := map[string]*dag.OutputContext{
+		oc.VertexName: {
+			Internal: true,
+			GVK:      gvk,
+		},
+	}
+
+	// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
+	// and to resolve and connect the graph
+	r.outc.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName})
+	if err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVertex(oc.VertexName, &dag.VertexContext{
+		OutputVertex: oc.VertexName,
+	}); err != nil {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         err.Error(),
+		})
+	}
+
+	// add the vertexContext to the runtime DAG
+	// OWN does not have a runtime DAG
+	// FOR has both an apply and delete runtime DAG
+	// WATCH has only an apply runtime DAG
 	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
 		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).DAG.AddVertex(oc.VertexName, &dag.VertexContext{
 			Kind: dag.RootVertexKind,
@@ -60,12 +84,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 					Resource: v.Resource,
 				},
 			},
-			OutputContext: map[string]*dag.OutputContext{
-				oc.VertexName: {
-					Internal: true,
-					GVK:      gvk,
-				},
-			},
+			OutputContext: runtOutputCtx,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -73,7 +92,6 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 			})
 		}
 	}
-	// Own does not have a pipeline so there is no point in populating the DAG
 	if oc.FOW == FOWFor {
 		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationDelete).DAG.AddVertex(oc.VertexName, &dag.VertexContext{
 			Kind: dag.RootVertexKind,
@@ -83,12 +101,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 					Resource: v.Resource,
 				},
 			},
-			OutputContext: map[string]*dag.OutputContext{
-				oc.VertexName: {
-					Internal: true,
-					GVK:      gvk,
-				},
-			},
+			OutputContext: runtOutputCtx,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -100,20 +113,26 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 }
 
 func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
-	// prepare the output context
-	outputCtx := map[string]*dag.OutputContext{}
+
+	// prepare the output context such that the runtime processing is easier
+	runtOutputCtx := map[string]*dag.OutputContext{}
 	gvkToVarName := map[string]string{}
-	// add output in a seperate DAG
-	outputDAG := dag.New()
+	// add output in a seperate DAG -> used to reference output dependencies
+	// $vertexName.outputName
+	//outputDAG := dag.New()
 	for varName, outputCfg := range v.Output {
-		if err := outputDAG.AddVertex(varName, &dag.VertexContext{
-			Kind: dag.OutputVertexKind,
-		}); err != nil {
-			r.recordResult(Result{
-				OriginContext: oc,
-				Error:         err.Error(),
-			})
-		}
+		// add the varName to the outputDAG for resolution
+		/*
+			if err := outputDAG.AddVertex(varName, &dag.VertexContext{
+				Kind: dag.OutputVertexKind,
+			}); err != nil {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         err.Error(),
+				})
+			}
+		*/
+
 		// prepare output context
 		gvk, err := ctrlcfgv1.GetGVK(outputCfg.Resource)
 		if err != nil {
@@ -122,15 +141,26 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				Error:         err.Error(),
 			})
 		}
-		outputCtx[varName] = &dag.OutputContext{
+		runtOutputCtx[varName] = &dag.OutputContext{
 			Internal: outputCfg.Internal,
 			GVK:      gvk,
 		}
 		gvkToVarName[meta.GVKToString(gvk)] = varName
+
+		// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
+		// and to resolve and connect the graph
+		if err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVertex(varName, &dag.VertexContext{
+			OutputVertex: oc.VertexName,
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
 	}
 	// if no output, initialize the output Context variable with the vertexName
 	if v.Output == nil {
-		if v.Type == ctrlcfgv1.GoTemplate {
+		if v.Type == ctrlcfgv1.GoTemplateType {
 			if len(v.Input.Resource.Raw) != 0 {
 				gvk, err := ctrlcfgv1.GetGVK(v.Input.Resource)
 				if err != nil {
@@ -139,16 +169,26 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 						Error:         err.Error(),
 					})
 				}
-				outputCtx[oc.VertexName] = &dag.OutputContext{
+				runtOutputCtx[oc.VertexName] = &dag.OutputContext{
 					Internal: false,
 					GVK:      gvk,
 				}
 			}
 			// TODO what to do for a template ??? How do i get a GVK, is it also an external resource
 		} else {
-			outputCtx[oc.VertexName] = &dag.OutputContext{
+			runtOutputCtx[oc.VertexName] = &dag.OutputContext{
 				Internal: true,
 			}
+		}
+		// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
+		// and to resolve and connect the graph
+		if err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVertex(oc.VertexName, &dag.VertexContext{
+			OutputVertex: oc.VertexName,
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
 		}
 	}
 
@@ -157,7 +197,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	localVarsDAG := dag.New()
 	for localVarName := range v.Vars {
 		if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
-			Kind: dag.LocalVarVertexKind,
+			//Kind: dag.LocalVarVertexKind,
 			//Function: v,
 		}); err != nil {
 			r.recordResult(Result{
@@ -168,18 +208,84 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	}
 
 	// add the function vertex to the dag
-	if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.AddVertex(oc.VertexName, &dag.VertexContext{
-		Kind:          dag.FunctionVertexKind,
-		OutputDAG:     outputDAG,
-		LocalVarDag:   localVarsDAG,
-		Function:      v,
-		References:    []string{},   // initialize reference
-		OutputContext: outputCtx,    // provide the preparsed output context to the vertex
-		GVKToVerName:  gvkToVarName, // provide a preparsed mapping from gvk to varName
-	}); err != nil {
-		r.recordResult(Result{
-			OriginContext: oc,
-			Error:         err.Error(),
-		})
+	// if there is a functionblock we could have a different DAG -> select the right dag
+	// BlockDAG = nil -> no range -> process regularly and add everything to the main runtimeDAG
+	// BlockDAG NOT nil
+	// + oc.BlockIndex == 0 this is the initial block index and we need to add the vertex to both the main runtimeDAG
+	//   and the block runtime DAG -> in the main runtimeDAG add the blockDAG
+	// + oc.BlockIndex !=0 (1) this is a block DAG, so process regurlary in the block DAG
+	if !oc.Block {
+		// this is a regular entry in the main runtime DAG
+		if err := r.cec.GetDAG(oc).AddVertex(oc.VertexName, &dag.VertexContext{
+			Kind: dag.FunctionVertexKind,
+			//OutputDAG:     outputDAG,
+			LocalVarDag:   localVarsDAG,
+			Function:      v,
+			References:    []string{},    // initialize reference
+			OutputContext: runtOutputCtx, // provide the preparsed output context to the vertex
+			GVKToVerName:  gvkToVarName,  // provide a preparsed mapping from gvk to varName
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+		return
+	}
+	// This is a block
+
+	mainDAG := r.cec.GetDAG(oc)
+	if oc.BlockVertexName == "" {
+		oc.BlockVertexName = oc.VertexName
+	}
+	blockDAG := r.cec.GetDAG(oc)
+	if oc.BlockIndex == 0 {
+		// this is the initial block index and we need to add the vertex to both the main runtimeDAG
+		// and the block runtime DAG -> in the main runtimeDAG add the blockDAG
+		if err := mainDAG.AddVertex(oc.VertexName, &dag.VertexContext{
+			Kind:     dag.FunctionVertexKind,
+			BlockDAG: blockDAG,
+			//OutputDAG:     outputDAG,
+			LocalVarDag:   localVarsDAG,
+			Function:      v,
+			References:    []string{},    // initialize reference
+			OutputContext: runtOutputCtx, // provide the preparsed output context to the vertex
+			GVKToVerName:  gvkToVarName,  // provide a preparsed mapping from gvk to varName
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+		// add the vertex to the childDAG
+		if err := blockDAG.AddVertex(oc.VertexName, &dag.VertexContext{
+			Kind: dag.FunctionVertexKind,
+			//OutputDAG:     outputDAG,
+			LocalVarDag:   localVarsDAG,
+			Function:      v,
+			References:    []string{},    // initialize reference
+			OutputContext: runtOutputCtx, // provide the preparsed output context to the vertex
+			GVKToVerName:  gvkToVarName,  // provide a preparsed mapping from gvk to varName
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+	} else {
+		if err := blockDAG.AddVertex(oc.VertexName, &dag.VertexContext{
+			Kind: dag.FunctionVertexKind,
+			//OutputDAG:     outputDAG,
+			LocalVarDag:   localVarsDAG,
+			Function:      v,
+			References:    []string{},    // initialize reference
+			OutputContext: runtOutputCtx, // provide the preparsed output context to the vertex
+			GVKToVerName:  gvkToVarName,  // provide a preparsed mapping from gvk to varName
+		}); err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
 	}
 }

@@ -24,32 +24,31 @@ func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
 }
 
 type parser struct {
-	cCfg *ctrlcfgv1.ControllerConfig
-	//d              dag.DAG
+	cCfg           *ctrlcfgv1.ControllerConfig
 	rootVertexName string
 }
 
 func (r *parser) Parse() (ConfigExecutionContext, []Result) {
 	// initialize the config execution context
 	// for each for and watch a new dag is created
-	ceCtx, result := r.init()
+	ceCtx, outCtx, result := r.init()
 	if len(result) != 0 {
 		return nil, result
 	}
 	// resolves the dependencies in the dag
 	// step1. check if all dependencies resolve
 	// step2. add the dependencies in the dag
-	result = r.populate(ceCtx)
+	result = r.populate(ceCtx, outCtx)
 	if len(result) != 0 {
 		return nil, result
 	}
 	//fmt.Println("propulate succeded")
-	result = r.resolve(ceCtx)
+	result = r.resolve(ceCtx, outCtx)
 	if len(result) != 0 {
 		return nil, result
 	}
 	//fmt.Println("resolve succeded")
-	result = r.connect(ceCtx)
+	result = r.connect(ceCtx, outCtx)
 	if len(result) != 0 {
 		return nil, result
 	}

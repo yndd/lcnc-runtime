@@ -14,10 +14,12 @@ func (r *parser) ValidateSyntax() []Result {
 	}
 
 	fnc := &WalkConfig{
-		cfgPreHookFn:    vs.validatePreHook,
-		gvkObjectFn:     vs.validateGvk,
-		emptyPipelineFn: vs.validateEmptyPipeline,
-		functionFn:      vs.validateFunction,
+		cfgPreHookFn:           vs.validatePreHook,
+		gvkObjectFn:            vs.validateGvk,
+		emptyPipelineFn:        vs.validateEmptyPipeline,
+		empryFunctionElementFn: vs.validateEmptyFunctionElement,
+		functionBlockFn:        vs.validateFunctionBlock,
+		functionFn:             vs.validateFunction,
 		//lcncServiceFn:    vs.validateServiceFn,
 	}
 
@@ -86,6 +88,37 @@ func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.GvkObject) {
 	}
 }
 
+func (r *vs) validateEmptyFunctionElement(oc *OriginContext) {
+	r.recordResult(Result{
+		OriginContext: oc,
+		Error:         fmt.Errorf("a function cannot be empty %v", *oc).Error(),
+	})
+}
+
+// validateFunctionBlock validates the fucntion block
+// if recursion is happening
+// if there is a block
+// if the block has the right symentics
+func (r *vs) validateFunctionBlock(oc *OriginContext, v *ctrlcfgv1.FunctionElement) {
+	if oc.BlockIndex >= 1 {
+		// we can only have 1 block index -> only 1 recursion allowed
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("a pipeline van only have 1function block %v", *oc).Error(),
+		})
+	}
+	if !v.Function.HasBlock() {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("a function block must have a block %v", *oc).Error(),
+		})
+	}
+	if v.HasBlock() {
+		r.validateBlock(oc, v.Block)
+	}
+}
+
+// valdates the function
 func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	// validate block
 	if v.HasBlock() {
@@ -129,7 +162,7 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				})
 			}
 		}
-	case ctrlcfgv1.GoTemplate:
+	case ctrlcfgv1.GoTemplateType:
 		if len(v.Input.Resource.Raw) == 0 && v.Input.Template == "" {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -145,16 +178,27 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				})
 			}
 		}
+	case ctrlcfgv1.BlockType:
+		// nothing to do since this is already validated
+	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
+		if v.Executor.Exec == nil && v.Executor.Image == nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("external functions need an image or exec, got %v", v).Error(),
+			})
+		}
 	default:
 	}
 
 	// validate input references
 	// e.g. check if a VALUE, KEY, INDEX is not used when no block is present
 	if v.Input == nil {
-		r.recordResult(Result{
-			OriginContext: oc,
-			Error:         fmt.Errorf("input is needed in a function %s", v.Type).Error(),
-		})
+		if v.Type != ctrlcfgv1.BlockType {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("input is needed in a function %s", v.Type).Error(),
+			})
+		}
 	} else {
 		if v.Input.Key != "" {
 			r.validateContext(oc, v, v.Input.Key)
@@ -168,6 +212,7 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	}
 
 	// validate Ouput
+	// for external output a GVK needs to be present + validate the GVK syntax
 	if v.Output != nil {
 		for _, v := range v.Output {
 			if len(v.Resource.Raw) == 0 {
@@ -202,7 +247,6 @@ func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	if v.Range != nil {
 		if v.Range.Value != "" {
 			r.validateContext(oc, &ctrlcfgv1.Function{Block: v}, v.Range.Value)
-			//r.validateBlock(oc, v.Range.Block)
 		} else {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -216,7 +260,6 @@ func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {
 	if v.Condition != nil {
 		if v.Condition.Expression != "" {
 			r.validateContext(oc, &ctrlcfgv1.Function{Block: v}, v.Condition.Expression)
-			//r.validateBlock(oc, v.Condition.Block)
 		} else {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -240,12 +283,21 @@ func (r *vs) validateContext(oc *OriginContext, v *ctrlcfgv1.Function, s string)
 		switch ref.Kind {
 		case RangeReferenceKind:
 			if !v.HasBlock() || !v.Block.HasRange() {
-				fmt.Printf("validate ctx: vertex %s, ref: %s, string: %s, function value: %v\n", oc.VertexName, ref, s, v.Block)
+				//fmt.Printf("validate ctx: vertex %s, ref: %s, string: %s, function value: %v\n", oc.VertexName, ref, s, v.Block)
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot use Key variables without a range statement").Error(),
 				})
 			}
+			/*
+				TOO RESTRICTIVE FOR NOW -> Need a more extensive validation policy
+				if v.HasBlock() {
+					r.recordResult(Result{
+						OriginContext: oc,
+						Error:         fmt.Errorf("cannot use Key variables in a block").Error(),
+					})
+				}
+			*/
 		case RegularReferenceKind:
 			// this is ok
 		default:

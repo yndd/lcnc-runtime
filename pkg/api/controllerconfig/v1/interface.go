@@ -108,9 +108,10 @@ func (v *Block) HasRange() bool {
 	if v.Range != nil {
 		return true
 	}
+	if v.Condition == nil {
+		return false
+	}
 	return v.Condition.Block.HasRange()
-
-	//return v.Condition.Block.HasRange()
 }
 
 func (r *ControllerConfig) GetPipeline(s string) *Pipeline {

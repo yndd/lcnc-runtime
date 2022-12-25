@@ -1,5 +1,7 @@
 package executor
 
+/*
+
 import (
 	"encoding/json"
 	"fmt"
@@ -127,3 +129,4 @@ func (r *output) GetOutput() {
 func (r *executor) GetOutput() {
 	r.output.GetOutput()
 }
+*/

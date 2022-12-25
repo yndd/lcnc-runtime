@@ -21,7 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	"github.com/yndd/lcnc-runtime/pkg/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -106,19 +106,31 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 		namespace = "default"
 	}
 
-	e := executor.New(&executor.Config{
-		Name:       o.GetName(),
-		Namespace:  namespace,
-		RootVertex: r.rootVertexName,
-		Data:       x,
-		Client:     r.client,
-		GVK:        r.gvk,
-		DAG:        r.d,
+	e, outp := builder.New(&builder.Config{
+		Name:           o.GetName(),
+		Namespace:      namespace,
+		RootVertexName: r.rootVertexName,
+		Data:           x,
+		Client:         r.client,
+		GVK:            r.gvk,
+		DAG:            r.d,
 	})
 
-	e.Run(context.TODO())
-	e.GetOutput()
-	e.GetResult()
+	/*
+		e := executor.New(&executor.Config{
+			Name:       o.GetName(),
+			Namespace:  namespace,
+			RootVertex: r.rootVertexName,
+			Data:       x,
+			Client:     r.client,
+			GVK:        r.gvk,
+			DAG:        r.d,
+		})
+	*/
+
+	result := e.Run(context.TODO())
+	outp.PrintOutput()
+	result.PrintResult()
 
 	// for all the output add the queues
 

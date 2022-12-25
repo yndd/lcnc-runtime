@@ -9,7 +9,9 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	"github.com/yndd/lcnc-runtime/pkg/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 )
 
 type execContext struct {
@@ -40,9 +42,10 @@ type execContext struct {
 	vertexContext *dag.VertexContext
 
 	// callback
-	recordResult ResultFunc
+	recordResult result.RecordResultFn
+	recordOutput output.RecordOutputFn
 	// output
-	output Output
+	output output.Output
 }
 
 func (r *execContext) AddDoneCh(n string, c chan bool) {
@@ -78,7 +81,7 @@ func (r *execContext) run(ctx context.Context) {
 	// Determine if this is an internal fn runner or not
 	input := map[string]any{}
 	switch r.vertexContext.Function.Type {
-	case ctrlcfgv1.Container, ctrlcfgv1.Wasm:
+	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
 		input[r.rootVertexName] = r.output.Get(r.rootVertexName)
 		for _, ref := range r.vertexContext.References {
 			input[ref] = r.output.Get(ref)
@@ -113,14 +116,19 @@ func (r *execContext) run(ctx context.Context) {
 	r.finished = time.Now()
 	r.m.Unlock()
 
+	for varName, outputInfo := range o {
+		r.recordOutput(varName, outputInfo)
+	}
+
 	// callback function to capture the result
-	r.recordResult(&result{
-		vertexName: r.vertexName,
-		startTime:  r.start,
-		endTime:    r.finished,
-		output:     o,
-		success:    success,
-		reason:     reason,
+	r.recordResult(&result.ResultInfo{
+		VertexName: r.vertexName,
+		StartTime:  r.start,
+		EndTime:    r.finished,
+		Input:      input,
+		Output:     o,
+		Success:    success,
+		Reason:     reason,
 	})
 
 	// signal to the dependent function the result of the vertex fn execution
