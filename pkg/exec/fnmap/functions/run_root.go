@@ -7,6 +7,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,6 +36,8 @@ func (r *root) Init(opts ...fnmap.FunctionOption) {
 }
 
 func (r *root) WithOutput(output output.Output) {}
+
+func (r *root) WithResult(result result.Result) {}
 
 func (r *root) WithNameAndNamespace(name, namespace string) {}
 

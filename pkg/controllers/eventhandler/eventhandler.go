@@ -24,6 +24,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -112,6 +113,7 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	}
 
 	o := output.New()
+	result := result.New()
 	e := builder.New(&builder.Config{
 		Name:           u.GetName(),
 		Namespace:      namespace,
@@ -121,9 +123,10 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 		GVK:            r.gvk,
 		DAG:            r.d,
 		Output:         o,
+		Result:         result,
 	})
 
-	result := e.Run(context.TODO())
+	e.Run(context.TODO())
 	o.PrintOutput()
 	result.PrintResult()
 

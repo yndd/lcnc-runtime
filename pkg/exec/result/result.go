@@ -16,7 +16,16 @@ type Result interface {
 
 type RecordResultFn func(*ResultInfo)
 
+type ExecType string
+
+const (
+	ExecRootType  ExecType = "root"
+	ExecBlockType ExecType = "block"
+)
+
 type ResultInfo struct {
+	Type        ExecType
+	ExecName    string
 	VertexName  string
 	StartTime   time.Time
 	EndTime     time.Time
@@ -56,7 +65,7 @@ func (r *result) PrintResult() {
 	totalSuccess := true
 	var totalDuration time.Duration
 	for i, ri := range r.r {
-		if ri.VertexName == "total" {
+		if ri.Type == ExecRootType && ri.VertexName == "total" {
 			totalDuration = ri.EndTime.Sub(ri.StartTime)
 		} else {
 			s := "OK"
@@ -64,8 +73,9 @@ func (r *result) PrintResult() {
 				totalSuccess = false
 				s = "NOK"
 			}
-			fmt.Printf("  result order: %d vertex: %s, duration %s, success: %s, reason: %s\n",
+			fmt.Printf("  result order: %d exec: %s vertex: %s, duration %s, success: %s, reason: %s\n",
 				i,
+				ri.ExecName,
 				ri.VertexName,
 				ri.EndTime.Sub(ri.StartTime),
 				s,

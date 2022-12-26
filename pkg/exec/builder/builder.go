@@ -6,6 +6,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap/functions"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -19,6 +20,7 @@ type Config struct {
 	GVK            *schema.GroupVersionKind
 	DAG            dag.DAG
 	Output         output.Output
+	Result         result.Result
 }
 
 func New(c *Config) executor.Executor {
@@ -30,6 +32,7 @@ func New(c *Config) executor.Executor {
 		Namespace: c.Namespace,
 		Client:    c.Client,
 		Output:    c.Output,
+		Result:    c.Result,
 	})
 
 	// Initialize the initial data
@@ -39,10 +42,12 @@ func New(c *Config) executor.Executor {
 	})
 
 	return executor.New(&executor.Config{
+		Type:           result.ExecRootType,
 		Name:           c.DAG.GetRootVertex(),
 		RootVertexName: c.RootVertexName,
 		DAG:            c.DAG,
 		FnMap:          fnmap,
 		Output:         c.Output,
+		Result:         c.Result,
 	})
 }

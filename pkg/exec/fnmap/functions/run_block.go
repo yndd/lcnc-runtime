@@ -9,6 +9,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -33,6 +34,7 @@ type block struct {
 	fec *fnExecConfig
 	// init config
 	curOutputs output.Output // this is the current output list
+	curResults result.Result
 	fnMap      fnmap.FuncMap
 	// runtime config
 	d dag.DAG
@@ -49,6 +51,10 @@ func (r *block) Init(opts ...fnmap.FunctionOption) {
 
 func (r *block) WithOutput(output output.Output) {
 	r.curOutputs = output
+}
+
+func (r *block) WithResult(result result.Result) {
+	r.curResults = result
 }
 
 func (r *block) WithNameAndNamespace(name, namespace string) {}
@@ -91,18 +97,21 @@ func (r *block) run(ctx context.Context, input map[string]any) (any, error) {
 		return nil, fmt.Errorf("expecting an initialized dag, got: %T", r.d)
 	}
 
+	// debug
 	r.d.PrintVertices()
-
 	fmt.Printf("block root Vertex: %s\n", r.d.GetRootVertex())
 
 	e := executor.New(&executor.Config{
+		Type:           result.ExecBlockType,
 		Name:           r.d.GetRootVertex(),
 		RootVertexName: r.d.GetRootVertex(),
 		DAG:            r.d,
 		FnMap:          r.fnMap,
 		Output:         r.curOutputs,
+		Result:         r.curResults,
 	})
+	e.Run(ctx)
 
-	return e.Run(ctx), nil
+	return nil, nil
 
 }

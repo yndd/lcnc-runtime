@@ -5,6 +5,7 @@ import (
 
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -12,6 +13,7 @@ type Function interface {
 	// Init initializes the device
 	Init(...FunctionOption)
 	WithOutput(output output.Output)
+	WithResult(result result.Result)
 	WithNameAndNamespace(name, namespace string)
 	WithClient(client client.Client)
 	WithFnMap(fnMap FuncMap)
@@ -23,6 +25,12 @@ type FunctionOption func(Function)
 func WithOutput(output output.Output) FunctionOption {
 	return func(r Function) {
 		r.WithOutput(output)
+	}
+}
+
+func WithResult(result result.Result) FunctionOption {
+	return func(r Function) {
+		r.WithResult(result)
 	}
 }
 

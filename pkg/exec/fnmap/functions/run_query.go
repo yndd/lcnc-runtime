@@ -8,6 +8,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,6 +53,8 @@ func (r *query) Init(opts ...fnmap.FunctionOption) {
 }
 
 func (r *query) WithOutput(output output.Output) {}
+
+func (r *query) WithResult(result result.Result) {}
 
 func (r *query) WithNameAndNamespace(name, namespace string) {}
 

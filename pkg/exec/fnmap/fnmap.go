@@ -8,6 +8,7 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,25 +24,20 @@ type Config struct {
 	Namespace string
 	Client    client.Client
 	Output    output.Output
+	Result    result.Result
 }
 
 func New(c *Config) FuncMap {
 	return &fnMap{
-		name:      c.Name,
-		namespace: c.Namespace,
-		client:    c.Client,
-		output:    c.Output,
-		funcs:     map[ctrlcfgv1.FunctionType]Initializer{},
+		cfg:   c,
+		funcs: map[ctrlcfgv1.FunctionType]Initializer{},
 	}
 }
 
 type fnMap struct {
-	client    client.Client
-	output    output.Output
-	name      string
-	namespace string
-	m         sync.RWMutex
-	funcs     map[ctrlcfgv1.FunctionType]Initializer
+	cfg   *Config
+	m     sync.RWMutex
+	funcs map[ctrlcfgv1.FunctionType]Initializer
 }
 
 func (r *fnMap) Register(fnType ctrlcfgv1.FunctionType, initFn Initializer) {
@@ -63,12 +59,13 @@ func (r *fnMap) Run(ctx context.Context, vertexContext *dag.VertexContext, input
 	// initialize the runtime info
 	switch vertexContext.Function.Type {
 	case ctrlcfgv1.BlockType:
-		fn.WithOutput(r.output)
+		fn.WithOutput(r.cfg.Output)
+		fn.WithResult(r.cfg.Result)
 		fn.WithFnMap(r)
 	case ctrlcfgv1.QueryType:
-		fn.WithClient(r.client)
+		fn.WithClient(r.cfg.Client)
 	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
-		fn.WithNameAndNamespace(r.name, r.namespace)
+		fn.WithNameAndNamespace(r.cfg.Name, r.cfg.Namespace)
 	}
 	// run the function
 	return fn.Run(ctx, vertexContext, input)

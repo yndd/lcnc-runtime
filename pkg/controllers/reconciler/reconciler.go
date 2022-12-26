@@ -15,6 +15,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"github.com/yndd/ndd-runtime/pkg/event"
 	"github.com/yndd/ndd-runtime/pkg/logging"
@@ -112,6 +113,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		*/
 
 		o := output.New()
+		result := result.New()
 		e := builder.New(&builder.Config{
 			Name:           req.Name,
 			Namespace:      req.Namespace,
@@ -120,10 +122,12 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			Client:         r.client,
 			GVK:            gvk,
 			DAG:            deleteDAGCtx.DAG,
+			Output:         o,
+			Result:         result,
 		})
 
 		// TODO should be per crName
-		result := e.Run(ctx)
+		e.Run(ctx)
 		o.PrintOutput()
 		result.PrintResult()
 
@@ -153,6 +157,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	*/
 
 	o := output.New()
+	result := result.New()
 	e := builder.New(&builder.Config{
 		Name:           req.Name,
 		Namespace:      req.Namespace,
@@ -162,10 +167,11 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		GVK:            gvk,
 		DAG:            applyDAGCtx.DAG,
 		Output:         o,
+		Result:         result,
 	})
 
 	// TODO should be per crName
-	result := e.Run(ctx)
+	e.Run(ctx)
 	o.PrintOutput()
 	result.PrintResult()
 

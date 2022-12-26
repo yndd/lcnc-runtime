@@ -12,6 +12,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -61,6 +62,8 @@ func (r *image) Init(opts ...fnmap.FunctionOption) {
 }
 
 func (r *image) WithOutput(output output.Output) {}
+
+func (r *image) WithResult(result result.Result) {}
 
 func (r *image) WithNameAndNamespace(name, namespace string) {
 	r.name = name
