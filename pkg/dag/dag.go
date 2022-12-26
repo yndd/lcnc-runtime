@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
 type DAG interface {
@@ -23,6 +23,7 @@ type DAG interface {
 	GetUpVertexes(from string) []string
 
 	GetDependencyMap(from string)
+	PrintVertices()
 	// Walk(ctx context.Context, from string)
 	// GetWalkResult()
 	TransitiveReduction()
@@ -31,9 +32,9 @@ type DAG interface {
 	// used for the edge connectivity
 	//LookupRootVertex(s []string) (string, error)
 	//lookupRootVertex(idx int, s []string) (int, string, error)
-	
-	// used for lookup
-	GetOutputVertexName(s string) (string, error)
+
+	// used for lookup -> validation and connection handling
+	GetOutputInfo(s string) (string, int, error)
 }
 
 // used for returning
@@ -74,19 +75,15 @@ type VertexContext struct {
 	Kind VertexKind
 	// used for parsing - resolving
 	//OutputDAG     DAG
-	OutputVertex string
+	OutputVertex string // used for validation
+	BlockIndex   int    // used for validation and connectivity
 	LocalVarDag  DAG
 	// used for runtime operation
-	BlockDAG      DAG
-	Function      *ctrlcfgv1.Function
-	References    []string
-	OutputContext map[string]*OutputContext
-	GVKToVerName  map[string]string
-}
-
-type OutputContext struct {
-	Internal bool
-	GVK      *schema.GroupVersionKind
+	BlockDAG     DAG
+	Function     *ctrlcfgv1.Function
+	References   []string
+	Outputs      output.Output
+	GVKToVerName map[string]string
 }
 
 func (r *VertexContext) AddReference(s string) {
@@ -170,6 +167,7 @@ func (r *dag) GetRootVertex() string {
 }
 
 func (r *dag) Connect(from, to string) {
+	fmt.Printf("connect dag: %s -> %s\n", to, from)
 	r.AddDownEdge(from, to)
 	r.AddUpEdge(to, from)
 }
@@ -375,12 +373,23 @@ func (r *dag) lookupRootVertex(idx int, s []string) (int, string, error) {
 }
 */
 
-func (r *dag) GetOutputVertexName(s string) (string, error) {
+func (r *dag) GetOutputInfo(s string) (string, int, error) {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	vc, ok := r.vertices[s]
 	if !ok {
-		return "", fmt.Errorf("cannot get outputeVertexName since vertex does not exists, got vertexName: %s", s)
+		return "", 0, fmt.Errorf("cannot get outputeVertexName since vertex does not exists, got vertexName: %s", s)
 	}
-	return vc.OutputVertex, nil
+	return vc.OutputVertex, vc.BlockIndex, nil
+}
+
+func (r *dag) PrintVertices() {
+	r.mv.RLock()
+	defer r.mv.RUnlock()
+	fmt.Printf("###### DAG output start #######\n")
+	for vertexName, vc := range r.vertices {
+		fmt.Printf("vertexname: %s upVertices: %v, downVertices: %v\n", vertexName, r.GetUpVertexes(vertexName), r.GetDownVertexes(vertexName))
+		vc.Outputs.PrintOutput()
+	}
+	fmt.Printf("###### DAG output stop #######\n")
 }

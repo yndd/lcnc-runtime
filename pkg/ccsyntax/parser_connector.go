@@ -51,13 +51,10 @@ func (r *connector) connectGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schem
 }
 
 func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
-	if v.HasVars() {
-		oc := oc.DeepCopy()
-		for localVarName, v := range v.Vars {
-			oc.LocalVarName = localVarName
-			r.connectRefs(oc, v)
-			//r.connectFunction(oc, v)
-		}
+
+	for localVarName, v := range v.Vars {
+		oc.LocalVarName = localVarName
+		r.connectRefs(oc, v)
 	}
 
 	if v.HasBlock() {
@@ -66,7 +63,14 @@ func (r *connector) connectFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 	if v.Input != nil {
 		if len(v.Input.Resource.Raw) != 0 {
-			r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.Connect(oc.RootVertexName, oc.VertexName)
+			d := r.ceCtx.GetDAG(oc)
+			// if the vertexName is within the block we need to connect to the root block vertex
+			// otherwise we need to connect to the root Vertex
+			if oc.BlockIndex > 0 {
+				d.Connect(oc.BlockVertexName, oc.VertexName)
+			} else {
+				d.Connect(oc.RootVertexName, oc.VertexName)
+			}
 		}
 		if v.Input.Key != "" {
 			r.connectRefs(oc, v.Input.Key)
@@ -129,22 +133,20 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
-			fmt.Printf("oc: %#v\n", oc)
+			fmt.Printf("oc: %#v, ref: %#v\n", oc, ref)
 			d := r.ceCtx.GetDAG(oc)
 			vc := d.GetVertex(oc.VertexName)
 			// lookup the localDAG first
-			if vc.LocalVarDag != nil {
-				if vc.LocalVarDag.VertexExists(ref.Value) {
-					// the References are added to the runtime vertex context to ease processing
-					vc.AddReference(ref.Value)
-					// if the localVar lookup succeeds we are done -> continue
-					continue
-				}
+			if vc.LocalVarDag != nil && vc.LocalVarDag.VertexExists(ref.Value) {
+				// the References are added to the runtime vertex context to ease processing
+				vc.AddReference(ref.Value)
+				// if the localVar lookup succeeds we are done -> continue
+				continue
 			}
 			// this is a global reference
 			// the References are added to the runtime vertex context to ease processing
 			vc.AddReference(ref.Value)
-			vertexName, err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).GetOutputVertexName(ref.Value)
+			vertexName, blockIndex, err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).GetOutputInfo(ref.Value)
 			if err != nil {
 				r.recordResult(Result{
 					OriginContext: oc,
@@ -152,7 +154,16 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 				})
 				continue
 			}
-			r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.Connect(vertexName, oc.VertexName)
+			
+			if blockIndex < oc.BlockIndex {
+				fmt.Printf("connect: %s -> %s, oc: %#v, ref: %#v\n", oc.VertexName, vertexName, oc, ref)
+				d.Connect(oc.BlockVertexName, oc.VertexName)
+				// TBD do we need to connect the oc.BlockVertexName to the vertexName
+				// We need to get the rootDAG for this
+			} else {
+				d.Connect(vertexName, oc.VertexName)
+			}
+			
 		}
 	}
 }

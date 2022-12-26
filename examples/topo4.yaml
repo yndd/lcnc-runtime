@@ -11,18 +11,7 @@ spec:
           apiVersion: topo.yndd.io/v1alpha1
           kind: Definition
         applyPipelineRef: forApplyPipeline
-        deletePipelineRef: forDeletePipeline
-    own:
-      x:
-        resource: 
-          apiVersion: topo.yndd.io/v1alpha1
-          kind: Node
-    watch:
-      topeDef:
-        resource:
-          apiVersion: topo.yndd.io/v1alpha1
-          kind: Template
-        applyPipelineRef: watchTemplateApplyPipeline      
+        deletePipelineRef: forDeletePipeline      
     pipelines:
       - name: watchTemplateApplyPipeline
         vars:
@@ -65,32 +54,32 @@ spec:
                 input:
                   key: $VALUE.name
                   value: $allTemplates | .[] | select(.metadata.name == $VALUE.children.[] ) 
-          discoveryRuleNames:
-            type: jq
-            input: 
-              expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
-          conditionedDiscoveryRuleBlock:
-            type: block
-            condition:
-              expression: $discoveryRuleNames | length != 0
-            block:
-              targets:
-                type: query
-                input:
-                  resource: 
-                    apiVersion: target.yndd.io/v1
-                    kind: Target
+          # discoveryRuleNames:
+          #   type: jq
+          #   input: 
+          #     expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
+          # conditionedDiscoveryRuleBlock:
+          #   type: block
+          #   condition:
+          #     expression: $discoveryRuleNames | length != 0
+          #   block:
+          #     targets:
+          #       type: query
+          #       input:
+          #         resource: 
+          #           apiVersion: target.yndd.io/v1
+          #           kind: Target
         tasks:
           topology:
             type: gotemplate
             vars:
-              topoDef: $topoDef
+              localTopoDef: $topoDef
             input:  
               resource: 
                 apiVersion: topo.yndd.io/v1alpha1
                 kind: Topology
                 metadata:
-                  name: '{{ (index .topoDef 0).metadata.name }}'
+                  name: '{{ (index .localTopoDef 0).metadata.name }}'
                   namespace: default
                 spec:
                   properties:

@@ -22,6 +22,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,14 +36,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-type EventHandlerInfo struct {
+type Config struct {
 	Client         client.Client
 	RootVertexName string
 	GVK            *schema.GroupVersionKind
 	DAG            dag.DAG
+	FnMap          fnmap.FuncMap
 }
 
-func New(e *EventHandlerInfo) handler.EventHandler {
+func New(c *Config) handler.EventHandler {
 	opts := zap.Options{
 		Development: true,
 	}
@@ -49,10 +52,11 @@ func New(e *EventHandlerInfo) handler.EventHandler {
 
 	return &eventhandler{
 		//ctx:    ctx,
-		client:         e.Client,
-		gvk:            e.GVK,
-		d:              e.DAG,
-		rootVertexName: e.RootVertexName,
+		client:         c.Client,
+		rootVertexName: c.RootVertexName,
+		gvk:            c.GVK,
+		d:              c.DAG,
+		fnMap:          c.FnMap,
 		l:              ctrl.Log.WithName("lcnc eventhandler"),
 	}
 }
@@ -60,9 +64,10 @@ func New(e *EventHandlerInfo) handler.EventHandler {
 type eventhandler struct {
 	client client.Client
 	//ctx    context.Context
+	rootVertexName string
 	gvk            *schema.GroupVersionKind
 	d              dag.DAG
-	rootVertexName string
+	fnMap          fnmap.FuncMap
 
 	l logr.Logger
 }
@@ -91,45 +96,35 @@ func (r *eventhandler) Generic(evt event.GenericEvent, q workqueue.RateLimitingI
 func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	r.l.Info("watch event started...")
 
-	o, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return
 	}
-	x, err := meta.MarshalData(o)
+	x, err := meta.MarshalData(u)
 	if err != nil {
 		r.l.Error(err, "cannot marshal data")
 		return
 	}
 
-	namespace := o.GetNamespace()
-	if o.GetNamespace() == "" {
+	namespace := u.GetNamespace()
+	if u.GetNamespace() == "" {
 		namespace = "default"
 	}
 
-	e, outp := builder.New(&builder.Config{
-		Name:           o.GetName(),
+	o := output.New()
+	e := builder.New(&builder.Config{
+		Name:           u.GetName(),
 		Namespace:      namespace,
 		RootVertexName: r.rootVertexName,
 		Data:           x,
 		Client:         r.client,
 		GVK:            r.gvk,
 		DAG:            r.d,
+		Output:         o,
 	})
 
-	/*
-		e := executor.New(&executor.Config{
-			Name:       o.GetName(),
-			Namespace:  namespace,
-			RootVertex: r.rootVertexName,
-			Data:       x,
-			Client:     r.client,
-			GVK:        r.gvk,
-			DAG:        r.d,
-		})
-	*/
-
 	result := e.Run(context.TODO())
-	outp.PrintOutput()
+	o.PrintOutput()
 	result.PrintResult()
 
 	// for all the output add the queues

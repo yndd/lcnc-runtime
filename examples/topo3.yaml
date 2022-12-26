@@ -12,11 +12,11 @@ spec:
           kind: Definition
         applyPipelineRef: forApplyPipeline
         deletePipelineRef: forDeletePipeline
-    own:
-      x:
-        resource: 
-          apiVersion: topo.yndd.io/v1alpha1
-          kind: Node
+    # own:
+    #   x:
+    #     resource: 
+    #       apiVersion: topo.yndd.io/v1alpha1
+    #       kind: Node
     watch:
       topeDef:
         resource:
@@ -35,22 +35,6 @@ spec:
       - name: forDeletePipeline
       - name: forApplyPipeline
         vars:
-          targets:
-            condition:
-              expression: $discoveryRuleNames | length != 0
-            type: query
-            input:
-              resource: 
-                apiVersion: target.yndd.io/v1
-                kind: Target
-          allTemplates:
-            condition:
-              expression: $parentTemplateNames | length != 0
-            type: query
-            input: 
-              resource: 
-                apiVersion: topo.yndd.io/v1alpha1
-                kind: Template
           #parentTemplateNames:
           #  range:
           #    value: $topoDef | .spec.properties.templates[]
@@ -71,6 +55,22 @@ spec:
             type: jq
             input: 
               expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
+          targets:
+            condition:
+              expression: $discoveryRuleNames | length != 0
+            type: query
+            input:
+              resource: 
+                apiVersion: target.yndd.io/v1
+                kind: Target
+          allTemplates:
+            condition:
+              expression: $parentTemplateNames | length != 0
+            type: query
+            input: 
+              resource: 
+                apiVersion: topo.yndd.io/v1alpha1
+                kind: Template
           parentTemplates:
             condition:
               expression: $parentTemplateNames | length != 0

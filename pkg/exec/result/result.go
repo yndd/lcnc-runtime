@@ -21,7 +21,7 @@ type ResultInfo struct {
 	StartTime   time.Time
 	EndTime     time.Time
 	Input       map[string]any
-	Output      map[string]*output.OutputInfo
+	Output      output.Output
 	Success     bool
 	Reason      string
 	BlockResult Result

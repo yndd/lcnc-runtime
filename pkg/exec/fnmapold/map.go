@@ -24,7 +24,7 @@ type mapOutput struct {
 
 func (r *fnmap) runMap(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &kv{
-		outputContext: vertexContext.OutputContext,
+		outputContext: vertexContext.Outputs,
 	}
 
 	fec := &fnExecConfig{
@@ -45,7 +45,7 @@ func (r *fnmap) runMap(ctx context.Context, vertexContext *dag.VertexContext, in
 type kv struct {
 	m             sync.RWMutex
 	result        map[string]any
-	outputContext map[string]*dag.OutputContext
+	outputContext output.Output
 }
 
 func (r *kv) initResult(numItems int) {
@@ -64,7 +64,7 @@ func (r *kv) recordResult(o any) {
 
 func (r *kv) getResult() map[string]*output.OutputInfo {
 	res := make(map[string]*output.OutputInfo, 1)
-	for varName, outputCtx := range r.outputContext {
+	for varName, outputCtx := range r.outputContext.GetOutputInfo() {
 		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,

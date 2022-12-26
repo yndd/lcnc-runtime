@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type Output interface {
 	RecordOutput(varName string, oc *OutputInfo)
-	Get(string) any
+	GetOutputInfo() map[string]*OutputInfo
+	GetValue(string) any
 	GetFinalOutput() []any
 	PrintOutput()
 }
@@ -17,6 +20,7 @@ type RecordOutputFn func(varName string, oc *OutputInfo)
 
 type OutputInfo struct {
 	Internal bool
+	GVK      *schema.GroupVersionKind
 	Value    any
 }
 
@@ -34,10 +38,19 @@ type output struct {
 func (r *output) RecordOutput(varName string, oc *OutputInfo) {
 	r.m.Lock()
 	defer r.m.Unlock()
+
 	r.o[varName] = oc
 }
 
-func (r *output) Get(v string) any {
+func (r *output) GetOutputInfo() map[string]*OutputInfo {
+	o := make(map[string]*OutputInfo, len(r.o))
+	for k, v := range r.o {
+		o[k] = v
+	}
+	return o
+}
+
+func (r *output) GetValue(v string) any {
 	r.m.RLock()
 	defer r.m.RUnlock()
 
@@ -67,11 +80,11 @@ func (r *output) PrintOutput() {
 	r.m.RLock()
 	defer r.m.RUnlock()
 
-	for name, oi := range r.o {
+	for varName, oi := range r.o {
 		b, err := json.Marshal(oi.Value)
 		if err != nil {
-			fmt.Printf("output %s: marshal err %s\n", name, err.Error())
+			fmt.Printf("output %s: marshal err %s\n", varName, err.Error())
 		}
-		fmt.Printf("output %s: json %s\n", name, string(b))
+		fmt.Printf("  json output varName: %s internal: %t gvk: %v value:%s\n", varName, oi.Internal, oi.GVK, string(b))
 	}
 }

@@ -1,0 +1,130 @@
+package functions
+
+import (
+	"context"
+	"fmt"
+
+	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
+)
+
+func NewQueryFn() fnmap.Function {
+	r := &query{}
+
+	r.fec = &fnExecConfig{
+		executeRange:  false,
+		executeSingle: true,
+		// execution functions
+		runFn: r.run,
+		// result functions
+		initOutputFn:     r.initOutput,
+		recordOutputFn:   r.recordOutput,
+		getFinalResultFn: r.getFinalResult,
+	}
+
+	return r
+}
+
+type query struct {
+	// fec exec config
+	fec *fnExecConfig
+	// init config
+	client client.Client
+	// runtime config
+	outputs  output.Output
+	resource runtime.RawExtension
+	selector *metav1.LabelSelector
+	// output, output
+	output any
+}
+
+func (r *query) Init(opts ...fnmap.FunctionOption) {
+	for _, o := range opts {
+		o(r)
+	}
+}
+
+func (r *query) WithOutput(output output.Output) {}
+
+func (r *query) WithNameAndNamespace(name, namespace string) {}
+
+func (r *query) WithClient(client client.Client) {
+	r.client = client
+}
+
+func (r *query) WithFnMap(fnMap fnmap.FuncMap) {}
+
+func (r *query) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+	// Here we prepare the input we get from the runtime
+	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
+	r.outputs = vertexContext.Outputs
+	r.resource = vertexContext.Function.Input.Resource
+	//r.selector = vertexContext.Function.Input.Selector
+
+	// execute to function
+	return r.fec.exec(ctx, vertexContext.Function, input)
+}
+
+func (r *query) initOutput(numItems int) {}
+
+func (r *query) recordOutput(o any) {
+	r.output = o
+}
+
+func (r *query) getFinalResult() (output.Output, error) {
+	o := output.New()
+	for varName, outputInfo := range r.outputs.GetOutputInfo() {
+		fmt.Printf("query getFinalResult varName: %s, outputInfo %#v\n", varName, *outputInfo)
+		fmt.Printf("query getFinalResult value: %#v\n", r.output)
+		o.RecordOutput(varName, &output.OutputInfo{
+			Internal: outputInfo.Internal,
+			GVK:      outputInfo.GVK,
+			Value:    r.output,
+		})
+	}
+	o.PrintOutput()
+	return o, nil
+}
+
+func (r *query) run(ctx context.Context, input map[string]any) (any, error) {
+	gvk, err := ctrlcfgv1.GetGVK(r.resource)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("Query: gvk: %v\n", *gvk)
+
+	opts := []client.ListOption{}
+	if r.selector != nil {
+		// TODO namespace
+		//opts = append(opts, client.InNamespace("x"))
+		opts = append(opts, client.MatchingLabels(r.selector.MatchLabels))
+	}
+
+	o := meta.GetUnstructuredListFromGVK(gvk)
+	if err := r.client.List(ctx, o, opts...); err != nil {
+		return nil, err
+	}
+
+	rj := make([]interface{}, 0, len(o.Items))
+	for _, v := range o.Items {
+		b, err := yaml.Marshal(v.UnstructuredContent())
+		if err != nil {
+			return nil, err
+		}
+
+		vrj := map[string]interface{}{}
+		if err := yaml.Unmarshal(b, &vrj); err != nil {
+			return nil, err
+		}
+		rj = append(rj, vrj)
+	}
+
+	return rj, nil
+}

@@ -14,7 +14,7 @@ const (
 
 func (r *fnmap) runForInit(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &forQuery{
-		outputContext: vertexContext.OutputContext,
+		outputContext: vertexContext.Outputs,
 	}
 
 	fec := &fnExecConfig{
@@ -34,7 +34,7 @@ func (r *fnmap) runForInit(ctx context.Context, vertexContext *dag.VertexContext
 
 type forQuery struct {
 	result        any
-	outputContext map[string]*dag.OutputContext
+	outputContext output.Output
 }
 
 func (r *forQuery) initResult(numItems int) {}
@@ -43,7 +43,7 @@ func (r *forQuery) recordResult(o any) { r.result = o }
 
 func (r *forQuery) getResult() map[string]*output.OutputInfo {
 	res := make(map[string]*output.OutputInfo, 1)
-	for varName, outputCtx := range r.outputContext {
+	for varName, outputCtx := range r.outputContext.GetOutputInfo() {
 		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,

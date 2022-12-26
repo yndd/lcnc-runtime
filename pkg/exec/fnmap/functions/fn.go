@@ -1,4 +1,4 @@
-package fnmap
+package functions
 
 import (
 	"context"
@@ -8,70 +8,30 @@ import (
 
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
-func (r *fnmap) RunFn(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
-	switch vertexContext.Function.Type {
-	case ctrlcfgv1.ForInitType:
-		// does not run in a block
-		fmt.Printf("forInit: input %v\n", input)
-		return r.runForInit(ctx, vertexContext, input)
-	case ctrlcfgv1.QueryType:
-		return r.runQuery(ctx, vertexContext, input)
-	case ctrlcfgv1.MapType:
-		return r.runMap(ctx, vertexContext, input)
-	case ctrlcfgv1.SliceType:
-		return r.runSlice(ctx, vertexContext, input)
-	case ctrlcfgv1.JQType:
-		// does not run in a block
-		x, err := runJQ(vertexContext.Function.Input.Expression, input)
-		if err != nil {
-			return nil, err
-		}
-		res := make(map[string]*output.OutputInfo, 1)
-		for varName, outputCtx := range vertexContext.OutputContext {
-			res[varName] = &output.OutputInfo{
-				Internal: outputCtx.Internal,
-				Value:    x,
-			}
-		}
-		return res, nil
-	case ctrlcfgv1.GoTemplateType:
-		fmt.Printf("runGT\n")
-		return r.runGT(ctx, vertexContext, input)
-	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
-		// image
-		return r.runImage(ctx, vertexContext, input)
-	case ctrlcfgv1.BlockType:
-		return r.runBlock(ctx, vertexContext, input)
-	default:
-		// we should never get here unless a function type is undefeined
-	}
-	return nil, nil
-}
+type initOutputFn func(numItems int)
+type recordOutputFn func(any)
+type getFinalResultFn func() (output.Output, error)
 
-type initResultFn func(numItems int)
-type recordResultFn func(any)
-type getResultFn func() map[string]*output.OutputInfo
-
-type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
-type runFn func(context.Context, any, map[string]any) (any, error)
+// type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
+type runFn func(context.Context, map[string]any) (any, error)
 
 type fnExecConfig struct {
 	executeRange  bool
 	executeSingle bool
 	// execution functions
-	prepareInputFn prepareInputFn
-	runFn          runFn
+	//prepareInputFn prepareInputFn
+	runFn runFn
 	// result functions
-	initResultFn   initResultFn
-	recordResultFn recordResultFn
-	getResultFn    getResultFn
+	initOutputFn     initOutputFn
+	recordOutputFn   recordOutputFn
+	getFinalResultFn getFinalResultFn
 }
 
-func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (map[string]*output.OutputInfo, error) {
+func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (output.Output, error) {
 	var items []*item
 	var isRange bool
 	var ok bool
@@ -91,7 +51,7 @@ func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, 
 					return nil, err
 				}
 				if !ok {
-					return nil, ErrConditionFalse // error to be ignored, condition false, so we dont have to run
+					return output.New(), executor.ErrConditionFalse // error to be ignored, condition false, so we dont have to run
 				}
 			}
 			if fnconfig.Block.Condition.Block.Range != nil {
@@ -105,11 +65,11 @@ func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, 
 	}
 	numItems := len(items)
 	if numItems == 0 && isRange {
-		fec.initResultFn(0)
+		fec.initOutputFn(0)
 		return nil, nil // no entries in the range, so we are done
 	}
 	if numItems > 0 && isRange {
-		fec.initResultFn(numItems)
+		fec.initOutputFn(numItems)
 		for i, item := range items {
 			// this is a protection to ensure we dont use the nil result in a range
 			if item.val != nil {
@@ -123,30 +83,30 @@ func (fec *fnExecConfig) run(ctx context.Context, fnconfig *ctrlcfgv1.Function, 
 				}
 
 				if fec.executeRange {
-					extraInput := fec.prepareInputFn(fnconfig)
-					x, err := fec.runFn(ctx, extraInput, input)
+					//extraInput := fec.prepareInputFn(fnconfig)
+					x, err := fec.runFn(ctx, input)
 					if err != nil {
 						return nil, err
 					}
-					fec.recordResultFn(x)
+					fec.recordOutputFn(x)
 				}
 			}
 		}
 	}
 	if fec.executeSingle {
-		fec.initResultFn(1)
+		fec.initOutputFn(1)
 		// resolve the local vars using jq and add them to the input
 		if err := resolveLocalVars(fnconfig, input); err != nil {
 			return nil, err
 		}
-		extraInput := fec.prepareInputFn(fnconfig)
-		x, err := fec.runFn(ctx, extraInput, input)
+		//extraInput := fec.prepareInputFn(fnconfig)
+		x, err := fec.runFn(ctx, input)
 		if err != nil {
 			return nil, err
 		}
-		fec.recordResultFn(x)
+		fec.recordOutputFn(x)
 	}
-	return fec.getResultFn(), nil
+	return fec.getFinalResultFn()
 }
 
 type item struct {

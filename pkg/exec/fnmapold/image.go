@@ -2,15 +2,14 @@ package fnmap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
-	"github.com/yndd/lcnc-runtime/pkg/fnruntime"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -21,7 +20,7 @@ func (r *fnmap) runImage(ctx context.Context, vertexContext *dag.VertexContext, 
 	rx := &image{
 		name:          r.name,
 		namespace:     r.namespace,
-		outputContext: vertexContext.OutputContext,
+		outputContext: vertexContext.Outputs,
 		gvkToVarName:  vertexContext.GVKToVerName,
 	}
 
@@ -46,45 +45,47 @@ type image struct {
 	m             sync.RWMutex
 	result        map[string]*output.OutputInfo
 	numItems      int
-	outputContext map[string]*dag.OutputContext
+	outputContext output.Output
 	gvkToVarName  map[string]string
 }
 
 func (r *image) initResult(numItems int) {
-	r.result = make(map[string]*output.OutputInfo, len(r.outputContext))
-	r.numItems = numItems
+	//r.result = make(map[string]*output.OutputInfo, len(r.outputContext))
+	//r.numItems = numItems
 }
 
 func (r *image) recordResult(o any) {
-	r.m.Lock()
-	defer r.m.Unlock()
+	/*
+		r.m.Lock()
+		defer r.m.Unlock()
 
-	rctx, ok := o.(*rctxv1.ResourceContext)
-	if !ok {
-		fmt.Println("unexpetec result object")
-	}
-	for gvkString, krmslice := range rctx.Spec.Properties.Output {
-		varName := r.gvkToVarName[gvkString]
-		oc := r.outputContext[varName]
-		if _, ok := r.result[varName]; !ok {
-			r.result[varName] = &output.OutputInfo{
-				Internal: oc.Internal,
-				Value:    make([]any, 0, r.numItems),
+		rctx, ok := o.(*rctxv1.ResourceContext)
+		if !ok {
+			fmt.Println("unexpetec result object")
+		}
+		for gvkString, krmslice := range rctx.Spec.Properties.Output {
+			varName := r.gvkToVarName[gvkString]
+			oc := r.outputContext[varName]
+			if _, ok := r.result[varName]; !ok {
+				r.result[varName] = &output.OutputInfo{
+					Internal: oc.Internal,
+					Value:    make([]any, 0, r.numItems),
+				}
+			}
+
+			for _, krm := range krmslice {
+				x := map[string]any{}
+				if err := json.Unmarshal([]byte(krm), &x); err != nil {
+					fmt.Printf("error unmarshaling the data, err: %s\n", err.Error())
+				}
+
+				switch r.result[varName].Value.(type) {
+				case []any:
+					r.result[varName].Value = append(r.result[varName].Value.([]any), x)
+				}
 			}
 		}
-
-		for _, krm := range krmslice {
-			x := map[string]any{}
-			if err := json.Unmarshal([]byte(krm), &x); err != nil {
-				fmt.Printf("error unmarshaling the data, err: %s\n", err.Error())
-			}
-
-			switch r.result[varName].Value.(type) {
-			case []any:
-				r.result[varName].Value = append(r.result[varName].Value.([]any), x)
-			}
-		}
-	}
+	*/
 }
 
 func (r *image) getResult() map[string]*output.OutputInfo {

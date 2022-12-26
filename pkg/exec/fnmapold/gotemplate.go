@@ -39,7 +39,7 @@ func convert(i any) any {
 
 func (r *fnmap) runGT(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &gt{
-		outputContext: vertexContext.OutputContext,
+		outputContext: vertexContext.Outputs,
 	}
 	/*
 		in := convert(input)
@@ -66,7 +66,7 @@ func (r *fnmap) runGT(ctx context.Context, vertexContext *dag.VertexContext, inp
 type gt struct {
 	m             sync.RWMutex
 	result        []any
-	outputContext map[string]*dag.OutputContext
+	outputContext output.Output
 }
 
 func (r *gt) initResult(numItems int) {
@@ -81,7 +81,7 @@ func (r *gt) recordResult(o any) {
 
 func (r *gt) getResult() map[string]*output.OutputInfo {
 	res := make(map[string]*output.OutputInfo, 1)
-	for varName, outputCtx := range r.outputContext {
+	for varName, outputCtx := range r.outputContext.GetOutputInfo() {
 		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,

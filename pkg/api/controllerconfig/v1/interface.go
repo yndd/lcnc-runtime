@@ -96,10 +96,6 @@ func GetGVK(gvr runtime.RawExtension) (*schema.GroupVersionKind, error) {
 	}, nil
 }
 
-func (v *Function) HasVars() bool {
-	return v.Vars != nil
-}
-
 func (v *Function) HasBlock() bool {
 	return v.Block.Range != nil || v.Block.Condition != nil
 }

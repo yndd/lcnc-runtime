@@ -14,7 +14,7 @@ import (
 
 func (r *fnmap) runQuery(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &query{
-		outputContext: vertexContext.OutputContext,
+		outputContext: vertexContext.Outputs,
 	}
 
 	fec := &fnExecConfig{
@@ -35,7 +35,7 @@ func (r *fnmap) runQuery(ctx context.Context, vertexContext *dag.VertexContext, 
 type query struct {
 	//m      sync.RWMutex
 	result        any
-	outputContext map[string]*dag.OutputContext
+	outputContext output.Output
 }
 
 func (r *query) initResult(numItems int) {}
@@ -44,7 +44,7 @@ func (r *query) recordResult(o any) { r.result = o }
 
 func (r *query) getResult() map[string]*output.OutputInfo {
 	res := make(map[string]*output.OutputInfo, 1)
-	for varName, outputCtx := range r.outputContext {
+	for varName, outputCtx := range r.outputContext.GetOutputInfo() {
 		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,

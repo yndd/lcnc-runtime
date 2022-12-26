@@ -18,11 +18,10 @@ type Executor interface {
 }
 
 type exec struct {
-	//name      string
-	//namespace string
+	name           string
 	rootVertexName string
 	d              dag.DAG
-	fnMap          fnmap.FnMap
+	fnMap          fnmap.FuncMap
 	output         output.Output
 	result         result.Result
 
@@ -39,41 +38,27 @@ type exec struct {
 }
 
 type Config struct {
-	//Name       string
-	//Namespace  string
+	Name           string
 	RootVertexName string
 	//Data       any
 	//Client     client.Client
 	//GVK        *schema.GroupVersionKind
 	DAG    dag.DAG
-	FnMap  fnmap.FnMap
+	FnMap  fnmap.FuncMap
 	Output output.Output
 }
 
 func New(cfg *Config) Executor {
 	s := &exec{
-		//	name:      cfg.Name,
-		//namespace: cfg.Namespace,
+		name:           cfg.Name,
 		rootVertexName: cfg.RootVertexName,
 		d:              cfg.DAG,
 		fnMap:          cfg.FnMap,
 		output:         cfg.Output,
 		result:         result.New(),
-		// fnMap contains the internal functions
-		/*
-			fnMap: fnmap.New(&fnmap.Config{
-				Name:      cfg.Name,
-				Namespace: cfg.Namespace,
-				Client:    cfg.Client,
-				GVK:       cfg.GVK,
-			}),
-		*/
-		mw:        sync.RWMutex{},
-		execMap:   map[string]*execContext{},
-		fnDoneMap: map[string]chan bool{},
-		//mr:         sync.RWMutex{},
-		//execResult: []*result{},
-		//output:     NewOutput(),
+		mw:             sync.RWMutex{},
+		execMap:        map[string]*execContext{},
+		fnDoneMap:      map[string]chan bool{},
 	}
 
 	// initialize the initial data in the executor
@@ -87,8 +72,9 @@ func New(cfg *Config) Executor {
 func (r *exec) init() {
 	r.execMap = map[string]*execContext{}
 	for vertexName, dvc := range r.d.GetVertices() {
-		//fmt.Printf("init vertexName: %s\n", vertexName)
+		fmt.Printf("executor init vertexName: %s\n", vertexName)
 		r.execMap[vertexName] = &execContext{
+			execName:       r.name,
 			vertexName:     vertexName,
 			rootVertexName: r.rootVertexName,
 			vertexContext:  dvc,
@@ -134,25 +120,21 @@ func (r *exec) Run(ctx context.Context) result.Result {
 		StartTime:  start,
 		EndTime:    time.Now(),
 	})
-	/*
-		r.recordResult(&result{
-			vertexName: "total",
-			startTime:  start,
-			endTime:    time.Now(),
-		})
-	*/
+
 	return r.result
 }
 
 func (r *exec) execute(ctx context.Context, from string, init bool) {
+	fmt.Printf("execute from: %s init: %t\n", from, init)
 	wCtx := r.getExecContext(from)
+	fmt.Printf("execute getExecContext from: %s init: %t, wCtx: %#v\n", from, init, wCtx)
 	// avoid scheduling a vertex that is already visted
 	if !wCtx.isVisted() {
 		wCtx.m.Lock()
 		wCtx.visited = time.Now()
 		wCtx.m.Unlock()
 		// execute the vertex function
-		fmt.Printf("%s scheduled\n", wCtx.vertexName)
+		fmt.Printf("execute scheduled vertex: %s\n", wCtx.vertexName)
 		go func() {
 			if !r.dependenciesFinished(wCtx.depChs) {
 				fmt.Printf("%s not finished\n", from)

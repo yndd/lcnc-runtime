@@ -16,6 +16,7 @@ type ConfigExecutionContext interface {
 	GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *DAGCtx
 	GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx
 	GetForGVK() *schema.GroupVersionKind
+	Print()
 }
 
 type cfgExecContext struct {
@@ -181,4 +182,23 @@ func (r *cfgExecContext) GetForGVK() *schema.GroupVersionKind {
 		return &gvk
 	}
 	return &schema.GroupVersionKind{}
+}
+
+func (r *cfgExecContext) Print() {
+	r.m.RLock()
+	defer r.m.RUnlock()
+	fmt.Printf("###### CEC #######\n")
+	for gvk, oc := range r.For {
+		fmt.Printf("gvk: %v\n", gvk)
+
+		for op, dctx := range oc {
+			fmt.Printf("  op: %s, RootVertexName: %s, blockDAGs: %d\n", op, dctx.RootVertexName, len(dctx.BlockDAGs))
+			dctx.DAG.PrintVertices()
+			for rootVertexName, d := range dctx.BlockDAGs {
+				fmt.Printf("!!!!!!! block dag start: vertexName: %s, %s !!!!!!!!!!\n", rootVertexName, d.GetRootVertex())
+				d.PrintVertices()
+				fmt.Printf("!!!!!!! block dag stop : vertexName: %s, %s !!!!!!!!!!\n", rootVertexName, d.GetRootVertex())
+			}
+		}
+	}
 }

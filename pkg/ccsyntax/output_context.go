@@ -1,19 +1,21 @@
 package ccsyntax
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/yndd/lcnc-runtime/pkg/dag"
 )
 
 // OutputContext stores the output context in a global DAG for validating
-// that the outputs are globally unique. This is only used by the parser 
+// that the outputs are globally unique. This is only used by the parser
 // for resolving and connecting the runtime graph
 // We also store the output conetxt in the runtime DAG for runtime operation
 type OutputContext interface {
 	GetName() string
 	Add(fe FOWEntry)
 	GetDAG(fe FOWEntry) dag.DAG
+	Print()
 }
 
 type outputContext struct {
@@ -50,4 +52,12 @@ func (r *outputContext) GetDAG(fe FOWEntry) dag.DAG {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	return r.o[fe]
+}
+
+func (r *outputContext) Print() {
+	fmt.Printf("Name: %s\n", r.name)
+	for fe, d := range r.o {
+		fmt.Printf("FOW: %s, RootVertexname: %s\n", fe.FOW, fe.RootVertexName)
+		d.PrintVertices()
+	}
 }

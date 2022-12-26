@@ -15,7 +15,7 @@ import (
 
 func (r *fnmap) runSlice(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (map[string]*output.OutputInfo, error) {
 	rx := &slice{
-		outputContext: vertexContext.OutputContext,
+		outputContext: vertexContext.Outputs,
 	}
 
 	fec := &fnExecConfig{
@@ -36,7 +36,7 @@ func (r *fnmap) runSlice(ctx context.Context, vertexContext *dag.VertexContext, 
 type slice struct {
 	m             sync.RWMutex
 	result        []any
-	outputContext map[string]*dag.OutputContext
+	outputContext output.Output
 }
 
 func (r *slice) initResult(numItems int) {
@@ -51,7 +51,7 @@ func (r *slice) recordResult(o any) {
 
 func (r *slice) getResult() map[string]*output.OutputInfo {
 	res := make(map[string]*output.OutputInfo, 1)
-	for varName, outputCtx := range r.outputContext {
+	for varName, outputCtx := range r.outputContext.GetOutputInfo() {
 		res[varName] = &output.OutputInfo{
 			Internal: outputCtx.Internal,
 			Value:    r.result,

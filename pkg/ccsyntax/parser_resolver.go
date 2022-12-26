@@ -39,12 +39,9 @@ func (r *resolver) recordResult(result Result) {
 }
 
 func (r *resolver) resolveFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
-	if v.HasVars() {
-		oc := oc.DeepCopy()
-		for localVarName, v := range v.Vars {
-			oc.LocalVarName = localVarName
-			r.resolveRefs(oc, v)
-		}
+	for localVarName, v := range v.Vars {
+		oc.LocalVarName = localVarName
+		r.resolveRefs(oc, v)
 	}
 
 	if v.HasBlock() {

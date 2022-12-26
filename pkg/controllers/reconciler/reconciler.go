@@ -13,6 +13,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"github.com/yndd/ndd-runtime/pkg/event"
 	"github.com/yndd/ndd-runtime/pkg/logging"
@@ -30,26 +32,28 @@ const (
 
 )
 
-type ReconcileInfo struct {
+type Config struct {
 	Client       client.Client
 	PollInterval time.Duration
 	CeCtx        ccsyntax.ConfigExecutionContext
+	FnMap        fnmap.FuncMap
 
 	Log logging.Logger
 }
 
-func New(ri *ReconcileInfo) reconcile.Reconciler {
+func New(c *Config) reconcile.Reconciler {
 	opts := zap.Options{
 		Development: true,
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	return &reconciler{
-		client:       ri.Client,
-		pollInterval: ri.PollInterval,
-		ceCtx:        ri.CeCtx,
+		client:       c.Client,
+		pollInterval: c.PollInterval,
+		ceCtx:        c.CeCtx,
+		fnMap:        c.FnMap,
 		l:            ctrl.Log.WithName("lcnc reconcile"),
-		f:            meta.NewAPIFinalizer(ri.Client, defaultFinalizerName),
+		f:            meta.NewAPIFinalizer(c.Client, defaultFinalizerName),
 		record:       event.NewNopRecorder(),
 	}
 }
@@ -58,10 +62,10 @@ type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
-
-	f      meta.Finalizer
-	l      logr.Logger
-	record event.Recorder
+	fnMap        fnmap.FuncMap
+	f            meta.Finalizer
+	l            logr.Logger
+	record       event.Recorder
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -107,7 +111,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			})
 		*/
 
-		e, outp := builder.New(&builder.Config{
+		o := output.New()
+		e := builder.New(&builder.Config{
 			Name:           req.Name,
 			Namespace:      req.Namespace,
 			RootVertexName: deleteDAGCtx.RootVertexName,
@@ -119,7 +124,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 		// TODO should be per crName
 		result := e.Run(ctx)
-		outp.PrintOutput()
+		o.PrintOutput()
 		result.PrintResult()
 
 		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
@@ -147,7 +152,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		})
 	*/
 
-	e, outp := builder.New(&builder.Config{
+	o := output.New()
+	e := builder.New(&builder.Config{
 		Name:           req.Name,
 		Namespace:      req.Namespace,
 		RootVertexName: applyDAGCtx.RootVertexName,
@@ -155,11 +161,12 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		Client:         r.client,
 		GVK:            gvk,
 		DAG:            applyDAGCtx.DAG,
+		Output:         o,
 	})
 
 	// TODO should be per crName
 	result := e.Run(ctx)
-	outp.PrintOutput()
+	o.PrintOutput()
 	result.PrintResult()
 
 	//time.Sleep(60 * time.Second)

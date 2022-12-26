@@ -88,7 +88,7 @@ type ConditionExpression struct {
 type FunctionType string
 
 const (
-	ForInitType    FunctionType = "forInit"
+	RootType       FunctionType = "root"
 	QueryType      FunctionType = "query"
 	SliceType      FunctionType = "slice"
 	MapType        FunctionType = "map"

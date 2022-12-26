@@ -52,13 +52,11 @@ func (r *parser) Parse() (ConfigExecutionContext, []Result) {
 	if len(result) != 0 {
 		return nil, result
 	}
-	//fmt.Println("connect succeded")
-	//d.GetDependencyMap(r.rootVertexName)
 	// optimizes the dependncy graph based on transit reduction
 	// techniques
 	r.transitivereduction(ceCtx)
 
-	//d.GetDependencyMap(r.rootVertexName)
+	ceCtx.Print()
 	return ceCtx, nil
 }
 
@@ -67,6 +65,9 @@ func (r *parser) transitivereduction(ceCtx ConfigExecutionContext) {
 	for _, od := range ceCtx.GetFOW(FOWFor) {
 		for _, dctx := range od {
 			dctx.DAG.TransitiveReduction()
+			for _, d := range dctx.BlockDAGs {
+				d.TransitiveReduction()
+			}
 		}
 
 	}
@@ -74,6 +75,9 @@ func (r *parser) transitivereduction(ceCtx ConfigExecutionContext) {
 	for _, od := range ceCtx.GetFOW(FOWWatch) {
 		for _, dctx := range od {
 			dctx.DAG.TransitiveReduction()
+			for _, d := range dctx.BlockDAGs {
+				d.TransitiveReduction()
+			}
 		}
 	}
 }

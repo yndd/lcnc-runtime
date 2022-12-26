@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const yamlFile = "./examples/topo3.yaml"
+const yamlFile = "./examples/topo4.yaml"
 
 func main() {
 	var metricsAddr string
@@ -116,10 +116,13 @@ func main() {
 		l.Info("gvk", "value", gvk)
 	}
 
-	b := builder.New(mgr, ceCtx, controller.Options{
+	b := builder.New(&builder.Config{
+		Mgr:   mgr,
+		CeCtx: ceCtx,
+	}, controller.Options{
 		//MaxConcurrentReconciles: 10,
 	})
-	_, err = b.Build(reconciler.New(&reconciler.ReconcileInfo{
+	_, err = b.Build(reconciler.New(&reconciler.Config{
 		Client:       mgr.GetClient(),
 		PollInterval: 1 * time.Minute,
 		CeCtx:        ceCtx,
