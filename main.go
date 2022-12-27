@@ -13,18 +13,15 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	//"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
-	//"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 
-	//"gopkg.in/yaml.v3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 )
 
-const yamlFile = "./examples/topo3.yaml"
+const yamlFile = "./examples/topo4.yaml"
 
 func main() {
 	var metricsAddr string

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -12,8 +12,8 @@ type ConfigExecutionContext interface {
 	GetName() string
 	Add(oc *OriginContext) error
 	AddBlock(oc *OriginContext) error
-	GetDAG(oc *OriginContext) dag.DAG
-	GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *DAGCtx
+	GetDAG(oc *OriginContext) rtdag.RuntimeDAG
+	GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *RTDAGCtx
 	GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx
 	GetForGVK() *schema.GroupVersionKind
 	Print()
@@ -27,13 +27,13 @@ type cfgExecContext struct {
 	watch map[schema.GroupVersionKind]OperationCtx
 }
 
-type OperationCtx map[Operation]*DAGCtx
+type OperationCtx map[Operation]*RTDAGCtx
 
-type DAGCtx struct {
-	DAG            dag.DAG
+type RTDAGCtx struct {
+	DAG            rtdag.RuntimeDAG
 	RootVertexName string
 	m              sync.RWMutex
-	BlockDAGs      map[string]dag.DAG
+	BlockDAGs      map[string]rtdag.RuntimeDAG
 }
 
 func NewConfigExecutionContext(n string) ConfigExecutionContext {
@@ -56,26 +56,26 @@ func (r *cfgExecContext) Add(oc *OriginContext) error {
 	switch oc.FOW {
 	case FOWFor:
 		// rootVertexName -> oc.VertexName
-		r.For[*oc.GVK] = map[Operation]*DAGCtx{
+		r.For[*oc.GVK] = map[Operation]*RTDAGCtx{
 			OperationApply: {
-				DAG:            dag.New(),
+				DAG:            rtdag.New(),
 				RootVertexName: oc.VertexName,
-				BlockDAGs:      map[string]dag.DAG{},
+				BlockDAGs:      map[string]rtdag.RuntimeDAG{},
 			},
 			OperationDelete: {
-				DAG:            dag.New(),
+				DAG:            rtdag.New(),
 				RootVertexName: oc.VertexName,
-				BlockDAGs:      map[string]dag.DAG{},
+				BlockDAGs:      map[string]rtdag.RuntimeDAG{},
 			},
 		}
 	case FOWOwn:
-		r.own[*oc.GVK] = map[Operation]*DAGCtx{}
+		r.own[*oc.GVK] = map[Operation]*RTDAGCtx{}
 	case FOWWatch:
-		r.watch[*oc.GVK] = map[Operation]*DAGCtx{
+		r.watch[*oc.GVK] = map[Operation]*RTDAGCtx{
 			OperationApply: {
-				DAG:            dag.New(),
+				DAG:            rtdag.New(),
 				RootVertexName: oc.VertexName,
-				BlockDAGs:      map[string]dag.DAG{},
+				BlockDAGs:      map[string]rtdag.RuntimeDAG{},
 			},
 		}
 	default:
@@ -91,11 +91,11 @@ func (r *cfgExecContext) AddBlock(oc *OriginContext) error {
 	}
 	dctx.m.Lock()
 	defer dctx.m.Unlock()
-	dctx.BlockDAGs[oc.VertexName] = dag.New()
+	dctx.BlockDAGs[oc.VertexName] = rtdag.New()
 	return nil
 }
 
-func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *DAGCtx {
+func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *RTDAGCtx {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	switch fow {
@@ -133,7 +133,7 @@ func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Ope
 	return nil
 }
 
-func (r *cfgExecContext) GetDAG(oc *OriginContext) dag.DAG {
+func (r *cfgExecContext) GetDAG(oc *OriginContext) rtdag.RuntimeDAG {
 	dctx := r.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation)
 	if dctx == nil {
 		return nil
@@ -154,21 +154,21 @@ func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCt
 	switch fow {
 	case FOWFor:
 		for gvk, od := range r.For {
-			gvkDAGMap[gvk] = map[Operation]*DAGCtx{}
+			gvkDAGMap[gvk] = map[Operation]*RTDAGCtx{}
 			for op, d := range od {
 				gvkDAGMap[gvk][op] = d
 			}
 		}
 	case FOWOwn:
 		for gvk, od := range r.own {
-			gvkDAGMap[gvk] = map[Operation]*DAGCtx{}
+			gvkDAGMap[gvk] = map[Operation]*RTDAGCtx{}
 			for op, d := range od {
 				gvkDAGMap[gvk][op] = d
 			}
 		}
 	case FOWWatch:
 		for gvk, od := range r.watch {
-			gvkDAGMap[gvk] = map[Operation]*DAGCtx{}
+			gvkDAGMap[gvk] = map[Operation]*RTDAGCtx{}
 			for op, d := range od {
 				gvkDAGMap[gvk][op] = d
 			}

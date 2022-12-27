@@ -128,6 +128,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 			Pipeline:       pipelineName,
 			Origin:         OriginVariable,
 			VertexName:     vertexName,
+			LocalVars:      v.Vars,
 		}
 		fnc.walkFunctionElement(oc, v)
 	}
@@ -141,6 +142,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 			Pipeline:       pipelineName,
 			Origin:         OriginFunction,
 			VertexName:     vertexName,
+			LocalVars:      v.Vars,
 		}
 		fnc.walkFunctionElement(oc, v)
 	}
@@ -194,6 +196,7 @@ func (fnc *WalkConfig) walkFunctionElement(oc *OriginContext, v *ctrlcfgv1.Funct
 				BlockIndex:      oc.BlockIndex + 1,
 				BlockVertexName: oc.VertexName,
 				VertexName:      vertexName,
+				LocalVars:       oc.LocalVars,
 			}
 			fnc.walkFunctionElement(oc, v)
 		}

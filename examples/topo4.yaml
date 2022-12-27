@@ -54,21 +54,21 @@ spec:
                 input:
                   key: $VALUE.name
                   value: $allTemplates | .[] | select(.metadata.name == $VALUE.children.[] ) 
-          # discoveryRuleNames:
-          #   type: jq
-          #   input: 
-          #     expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
-          # conditionedDiscoveryRuleBlock:
-          #   type: block
-          #   condition:
-          #     expression: $discoveryRuleNames | length != 0
-          #   block:
-          #     targets:
-          #       type: query
-          #       input:
-          #         resource: 
-          #           apiVersion: target.yndd.io/v1
-          #           kind: Target
+          discoveryRuleNames:
+            type: jq
+            input: 
+              expression: $topoDef | .spec.properties.discoveryRules | select((. | length) > 0)  | .[].discoveryRuleRef.name
+          conditionedDiscoveryRuleBlock:
+            type: block
+            condition:
+              expression: $discoveryRuleNames | length != 0
+            block:
+              targets:
+                type: query
+                input:
+                  resource: 
+                    apiVersion: target.yndd.io/v1
+                    kind: Target
         tasks:
           topology:
             type: gotemplate

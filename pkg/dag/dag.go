@@ -2,39 +2,28 @@ package dag
 
 import (
 	"fmt"
-	"os"
 	"sync"
-
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
 type DAG interface {
-	//GetParentDag() DAG
-	AddVertex(s string, v *VertexContext) error
+	AddVertex(s string, v any) error
 	Connect(from, to string)
 	AddDownEdge(from, to string)
 	AddUpEdge(from, to string)
 	VertexExists(s string) bool
-	GetRootVertex() string
-	GetVertex(s string) *VertexContext
-	GetVertices() map[string]*VertexContext
+	//GetRootVertex() string
+	GetVertex(s string) any
+	GetVertices() map[string]any
 	GetDownVertexes(from string) []string
 	GetUpVertexes(from string) []string
 
-	GetDependencyMap(from string)
-	PrintVertices()
-	// Walk(ctx context.Context, from string)
-	// GetWalkResult()
 	TransitiveReduction()
-	// used for the resolution
-	//Lookup(s []string) bool
-	// used for the edge connectivity
-	//LookupRootVertex(s []string) (string, error)
-	//lookupRootVertex(idx int, s []string) (int, string, error)
 
 	// used for lookup -> validation and connection handling
-	GetOutputInfo(s string) (string, int, error)
+	//GetReferenceInfo(s string) (string, int, string, error)
+
+	//GetDependencyMap(from string)
+	//PrintVertices()
 }
 
 // used for returning
@@ -47,7 +36,7 @@ type dag struct {
 	//dagCtx *DagContext
 	// vertices first key is the vertexName
 	mv       sync.RWMutex
-	vertices map[string]*VertexContext
+	vertices map[string]any
 	// downEdges/upEdges
 	// 1st key is from, 2nd key is to
 	mde       sync.RWMutex
@@ -59,6 +48,7 @@ type dag struct {
 	vertexDepth map[string]int
 }
 
+/*
 type VertexKind string
 
 const (
@@ -75,9 +65,10 @@ type VertexContext struct {
 	Kind VertexKind
 	// used for parsing - resolving
 	//OutputDAG     DAG
-	OutputVertex string // used for validation
-	BlockIndex   int    // used for validation and connectivity
-	LocalVarDag  DAG
+	//OutputVertex    string // used for validation
+	//BlockIndex      int    // used for validation and connectivity
+	//BlockVertexName string // used for validation and connectivity
+	//LocalVarDag     DAG
 	// used for runtime operation
 	BlockDAG     DAG
 	Function     *ctrlcfgv1.Function
@@ -99,7 +90,7 @@ func (r *VertexContext) AddReference(s string) {
 		r.References = append(r.References, s)
 	}
 }
-
+*/
 /*
 func (r *VertexContext) AddOuputContext(varName string, oc *OutputContext) {
 	r.m.Lock()
@@ -111,23 +102,15 @@ func (r *VertexContext) AddOuputContext(varName string, oc *OutputContext) {
 func New() DAG {
 	return &dag{
 		//dagCtx:    dagCtx,
-		vertices:  make(map[string]*VertexContext),
+		vertices:  make(map[string]any),
 		downEdges: make(map[string]map[string]struct{}),
 		upEdges:   make(map[string]map[string]struct{}),
 	}
 }
 
-/*
-func (r *dag) GetParentDag() DAG {
-	return r.dagCtx.ParentDag
-}
-*/
-
-func (r *dag) AddVertex(s string, v *VertexContext) error {
+func (r *dag) AddVertex(s string, v any) error {
 	r.mv.Lock()
 	defer r.mv.Unlock()
-
-	//fmt.Printf("add vertex: %s\n", s)
 
 	// validate duplicate entry
 	if _, ok := r.vertices[s]; ok {
@@ -138,7 +121,7 @@ func (r *dag) AddVertex(s string, v *VertexContext) error {
 	return nil
 }
 
-func (r *dag) GetVertices() map[string]*VertexContext {
+func (r *dag) GetVertices() map[string]any {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	return r.vertices
@@ -151,12 +134,13 @@ func (r *dag) VertexExists(s string) bool {
 	return ok
 }
 
-func (r *dag) GetVertex(s string) *VertexContext {
+func (r *dag) GetVertex(s string) any {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	return r.vertices[s]
 }
 
+/*
 func (r *dag) GetRootVertex() string {
 	for vertexName, v := range r.GetVertices() {
 		if v.Kind == RootVertexKind {
@@ -165,6 +149,7 @@ func (r *dag) GetRootVertex() string {
 	}
 	return ""
 }
+*/
 
 func (r *dag) Connect(from, to string) {
 	fmt.Printf("connect dag: %s -> %s\n", to, from)
@@ -276,6 +261,7 @@ func (r *dag) GetUpVertexes(from string) []string {
 	return upVerteces
 }
 
+/*
 func (r *dag) GetDependencyMap(from string) {
 	fmt.Println("######### dependency map verteces start ###########")
 	for vertexName := range r.GetVertices() {
@@ -316,6 +302,7 @@ func (r *dag) checkVertex(s string) bool {
 	}
 	return false
 }
+*/
 
 /*
 func (r *dag) Lookup(s []string) bool {
@@ -373,14 +360,15 @@ func (r *dag) lookupRootVertex(idx int, s []string) (int, string, error) {
 }
 */
 
-func (r *dag) GetOutputInfo(s string) (string, int, error) {
+/*
+func (r *dag) GetReferenceInfo(s string) (string, int, string, error) {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
 	vc, ok := r.vertices[s]
 	if !ok {
-		return "", 0, fmt.Errorf("cannot get outputeVertexName since vertex does not exists, got vertexName: %s", s)
+		return "", 0, "", fmt.Errorf("cannot get outputeVertexName since vertex does not exists, got vertexName: %s", s)
 	}
-	return vc.OutputVertex, vc.BlockIndex, nil
+	return vc.OutputVertex, vc.BlockIndex, vc.BlockVertexName, nil
 }
 
 func (r *dag) PrintVertices() {
@@ -393,3 +381,4 @@ func (r *dag) PrintVertices() {
 	}
 	fmt.Printf("###### DAG output stop #######\n")
 }
+*/

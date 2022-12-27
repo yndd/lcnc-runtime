@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 )
 
 type Executor interface {
@@ -32,7 +32,7 @@ type Config struct {
 	Type           result.ExecType
 	Name           string
 	RootVertexName string
-	DAG            dag.DAG
+	DAG            rtdag.RuntimeDAG
 	FnMap          fnmap.FuncMap
 	Output         output.Output
 	Result         result.Result

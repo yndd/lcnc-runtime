@@ -4,16 +4,17 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/ccsyntax/vardag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) populate(cec ConfigExecutionContext, outc OutputContext) []Result {
+func (r *parser) populate(cec ConfigExecutionContext, gvar GlobalVariable) []Result {
 	p := &populator{
 		cec:    cec,
-		outc:   outc,
+		gvar:   gvar,
 		result: []Result{},
 	}
 
@@ -31,7 +32,7 @@ func (r *parser) populate(cec ConfigExecutionContext, outc OutputContext) []Resu
 
 type populator struct {
 	cec    ConfigExecutionContext
-	outc   OutputContext
+	gvar   GlobalVariable
 	mr     sync.RWMutex
 	result []Result
 }
@@ -61,10 +62,11 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 
 	// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
 	// and to resolve and connect the graph
-	r.outc.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName})
-	if err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVertex(oc.VertexName, &dag.VertexContext{
-		OutputVertex: oc.VertexName,
-		BlockIndex:   oc.BlockIndex,
+	r.gvar.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName})
+	if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVariable(oc.VertexName, &vardag.VariableContext{
+		OutputVertex:    oc.VertexName,
+		BlockIndex:      oc.BlockIndex,
+		BlockVertexName: oc.BlockVertexName,
 	}); err != nil {
 		r.recordResult(Result{
 			OriginContext: oc,
@@ -77,9 +79,9 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 	// FOR has both an apply and delete runtime DAG
 	// WATCH has only an apply runtime DAG
 	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
-		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).DAG.AddVertex(oc.VertexName, &dag.VertexContext{
-			Name: oc.VertexName,
-			Kind: dag.RootVertexKind,
+		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).DAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			VertexName: oc.VertexName,
+			Kind:       rtdag.RootVertexKind,
 			Function: &ctrlcfgv1.Function{
 				Type: ctrlcfgv1.RootType,
 				Input: &ctrlcfgv1.Input{
@@ -95,9 +97,9 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 		}
 	}
 	if oc.FOW == FOWFor {
-		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationDelete).DAG.AddVertex(oc.VertexName, &dag.VertexContext{
-			Name: oc.VertexName,
-			Kind: dag.RootVertexKind,
+		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationDelete).DAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			VertexName: oc.VertexName,
+			Kind:       rtdag.RootVertexKind,
 			Function: &ctrlcfgv1.Function{
 				Type: ctrlcfgv1.RootType,
 				Input: &ctrlcfgv1.Input{
@@ -137,9 +139,10 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 		// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
 		// and to resolve and connect the graph
-		if err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVertex(varName, &dag.VertexContext{
-			OutputVertex: oc.VertexName,
-			BlockIndex:   oc.BlockIndex,
+		if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVariable(varName, &vardag.VariableContext{
+			OutputVertex:    oc.VertexName,
+			BlockIndex:      oc.BlockIndex,
+			BlockVertexName: oc.BlockVertexName,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -185,9 +188,10 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 		// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
 		// and to resolve and connect the graph
-		if err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVertex(oc.VertexName, &dag.VertexContext{
-			OutputVertex: oc.VertexName,
-			BlockIndex:   oc.BlockIndex,
+		if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVariable(oc.VertexName, &vardag.VariableContext{
+			OutputVertex:    oc.VertexName,
+			BlockIndex:      oc.BlockIndex,
+			BlockVertexName: oc.BlockVertexName,
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -198,18 +202,20 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 	// add localVars in a seperate DAG
 	// only used for resolution and dependencies
-	localVarsDAG := dag.New()
-	for localVarName := range v.Vars {
-		if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
-			//Kind: dag.LocalVarVertexKind,
-			//Function: v,
-		}); err != nil {
-			r.recordResult(Result{
-				OriginContext: oc,
-				Error:         err.Error(),
-			})
+	/*
+		localVarsDAG := dag.New()
+		for localVarName := range v.Vars {
+			if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
+				//Kind: dag.LocalVarVertexKind,
+				//Function: v,
+			}); err != nil {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         err.Error(),
+				})
+			}
 		}
-	}
+	*/
 
 	// add the function vertex to the dag
 	// if there is a functionblock we could have a different DAG -> select the right dag
@@ -220,14 +226,13 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	// + oc.BlockIndex !=0 (1) this is a block DAG, so process regurlary in the block DAG
 	if !oc.Block {
 		// this is a regular entry in the main runtime DAG
-		if err := r.cec.GetDAG(oc).AddVertex(oc.VertexName, &dag.VertexContext{
-			Kind: dag.FunctionVertexKind,
-			//OutputDAG:     outputDAG,
-			LocalVarDag:  localVarsDAG,
+		if err := r.cec.GetDAG(oc).AddVertex(oc.VertexName, &rtdag.VertexContext{
+			VertexName:   oc.VertexName,
+			Kind:         rtdag.FunctionVertexKind,
 			Function:     v,
 			References:   []string{},   // initialize reference
 			Outputs:      outputs,      // provide the preparsed output context to the vertex
-			GVKToVerName: gvkToVarName, // provide a preparsed mapping from gvk to varName
+			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -237,7 +242,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		return
 	}
 	// This is a block
-	mainDAG := r.cec.GetDAG(oc)
+	rootDAG := r.cec.GetDAG(oc)
 	if oc.BlockVertexName == "" {
 		oc.BlockVertexName = oc.VertexName
 	}
@@ -245,15 +250,13 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	if oc.BlockIndex == 0 {
 		// this is the initial block index and we need to add the vertex to both the main runtimeDAG
 		// and the block runtime DAG -> in the main runtimeDAG add the blockDAG
-		if err := mainDAG.AddVertex(oc.VertexName, &dag.VertexContext{
-			Kind:     dag.FunctionVertexKind,
-			BlockDAG: blockDAG,
-			//OutputDAG:     outputDAG,
-			LocalVarDag:  localVarsDAG,
+		if err := rootDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			Kind:         rtdag.FunctionVertexKind,
+			BlockDAG:     blockDAG,
 			Function:     v,
 			References:   []string{},   // initialize reference
 			Outputs:      outputs,      // provide the preparsed output context to the vertex
-			GVKToVerName: gvkToVarName, // provide a preparsed mapping from gvk to varName
+			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -261,17 +264,15 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			})
 		}
 		// add the vertex to the blockDAG
-		if err := blockDAG.AddVertex(oc.VertexName, &dag.VertexContext{
-			Name: oc.VertexName,
-			Kind: dag.RootVertexKind, // this is the rootVertex in the blockDAG
-			//OutputDAG:     outputDAG,
-			//LocalVarDag: localVarsDAG,
+		if err := blockDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			VertexName: oc.VertexName,
+			Kind:       rtdag.RootVertexKind, // this is the rootVertex in the blockDAG
 			Function: &ctrlcfgv1.Function{
 				Type: ctrlcfgv1.RootType,
 			},
-			//References:   []string{},   // initialize reference
-			Outputs: outputs, // provide the preparsed output context to the vertex
-			//GVKToVerName: gvkToVarName, // provide a preparsed mapping from gvk to varName
+			References:   []string{},   // initialize reference
+			Outputs:      outputs,      // provide the preparsed output context to the vertex
+			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,
@@ -279,14 +280,12 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			})
 		}
 	} else {
-		if err := blockDAG.AddVertex(oc.VertexName, &dag.VertexContext{
-			Kind: dag.FunctionVertexKind,
-			//OutputDAG:     outputDAG,
-			LocalVarDag:  localVarsDAG,
+		if err := blockDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			Kind:         rtdag.FunctionVertexKind,
 			Function:     v,
 			References:   []string{},   // initialize reference
 			Outputs:      outputs,      // provide the preparsed output context to the vertex
-			GVKToVerName: gvkToVarName, // provide a preparsed mapping from gvk to varName
+			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
 		}); err != nil {
 			r.recordResult(Result{
 				OriginContext: oc,

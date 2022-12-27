@@ -24,6 +24,7 @@ type OriginContext struct {
 	BlockVertexName string                   `json:"blockVertexName,omitempty" yaml:"blockVertexName,omitempty"`
 	VertexName      string                   `json:"vertexname,omitempty" yaml:"vertexname,omitempty"`
 	LocalVarName    string                   `json:"localvarName,omitempty" yaml:"localvarName,omitempty"`
+	LocalVars       map[string]string        `json:"localVars,omitempty" yaml:"localvarName,omitempty"`
 }
 
 func (in *OriginContext) DeepCopy() *OriginContext {

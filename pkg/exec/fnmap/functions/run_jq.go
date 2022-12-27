@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,7 +54,7 @@ func (r *jq) WithClient(client client.Client) {}
 
 func (r *jq) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *jq) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *jq) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs

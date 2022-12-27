@@ -3,9 +3,9 @@ package fnmap
 import (
 	"context"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -17,7 +17,7 @@ type Function interface {
 	WithNameAndNamespace(name, namespace string)
 	WithClient(client client.Client)
 	WithFnMap(fnMap FuncMap)
-	Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error)
+	Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error)
 }
 
 type FunctionOption func(Function)

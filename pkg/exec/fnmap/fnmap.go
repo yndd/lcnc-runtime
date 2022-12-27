@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -16,7 +16,7 @@ type Initializer func() Function
 
 type FuncMap interface {
 	Register(fnType ctrlcfgv1.FunctionType, initFn Initializer)
-	Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error)
+	Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error)
 }
 
 type Config struct {
@@ -46,11 +46,11 @@ func (r *fnMap) Register(fnType ctrlcfgv1.FunctionType, initFn Initializer) {
 	r.funcs[fnType] = initFn
 }
 
-func (r *fnMap) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
 	r.m.RLock()
 	initializer, ok := r.funcs[vertexContext.Function.Type]
 	r.m.RUnlock()
-	fmt.Printf("fnmap run %s, type: %s\n", vertexContext.Name, string(vertexContext.Function.Type))
+	fmt.Printf("fnmap run %s, type: %s\n", vertexContext.VertexName, string(vertexContext.Function.Type))
 	if !ok {
 		return nil, fmt.Errorf("function not registered, got: %s", string(vertexContext.Function.Type))
 	}

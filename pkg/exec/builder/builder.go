@@ -1,12 +1,12 @@
 package builder
 
 import (
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap/functions"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -18,7 +18,7 @@ type Config struct {
 	Data           any
 	Client         client.Client
 	GVK            *schema.GroupVersionKind
-	DAG            dag.DAG
+	DAG            rtdag.RuntimeDAG
 	Output         output.Output
 	Result         result.Result
 }

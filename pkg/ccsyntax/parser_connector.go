@@ -8,10 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) connect(ceCtx ConfigExecutionContext, outc OutputContext) []Result {
+func (r *parser) connect(ceCtx ConfigExecutionContext, gvar GlobalVariable) []Result {
 	c := &connector{
 		ceCtx:  ceCtx,
-		outc:   outc,
+		gvar:   gvar,
 		result: []Result{},
 	}
 
@@ -28,7 +28,7 @@ func (r *parser) connect(ceCtx ConfigExecutionContext, outc OutputContext) []Res
 
 type connector struct {
 	ceCtx  ConfigExecutionContext
-	outc   OutputContext
+	gvar   GlobalVariable
 	mr     sync.RWMutex
 	result []Result
 }
@@ -137,33 +137,52 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			d := r.ceCtx.GetDAG(oc)
 			vc := d.GetVertex(oc.VertexName)
 			// lookup the localDAG first
-			if vc.LocalVarDag != nil && vc.LocalVarDag.VertexExists(ref.Value) {
-				// the References are added to the runtime vertex context to ease processing
-				vc.AddReference(ref.Value)
-				// if the localVar lookup succeeds we are done -> continue
-				continue
+			/*
+				if vc.LocalVarDag != nil && vc.LocalVarDag.VertexExists(ref.Value) {
+					// the References are added to the runtime vertex context to ease processing
+					vc.AddReference(ref.Value)
+					// if the localVar lookup succeeds we are done -> continue
+					continue
+				}
+			*/
+			if oc.LocalVars != nil {
+				if _, ok := oc.LocalVars[ref.Value]; ok {
+					// add the lcoal Variable to the reference list
+					vc.AddReference(ref.Value)
+					// if the lookup succeeds we are done
+					continue
+				}
 			}
 			// this is a global reference
 			// the References are added to the runtime vertex context to ease processing
 			vc.AddReference(ref.Value)
-			vertexName, blockIndex, err := r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).GetOutputInfo(ref.Value)
-			if err != nil {
+			varInfo := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).GetVarInfo(ref.Value)
+			if varInfo == nil {
 				r.recordResult(Result{
 					OriginContext: oc,
-					Error:         err.Error(),
+					Error:         fmt.Errorf("variable not found in gvar dag, varName: %s", ref.Value).Error(),
 				})
 				continue
 			}
-			
-			if blockIndex < oc.BlockIndex {
-				fmt.Printf("connect: %s -> %s, oc: %#v, ref: %#v\n", oc.VertexName, vertexName, oc, ref)
+
+			switch {
+			case varInfo.BlockIndex < oc.BlockIndex:
+				//the reference points to the root DAG, so we need to wire it to the root of the block instead
+				fmt.Printf("connect: %s -> %s, oc: %#v, ref: %#v\n", oc.VertexName, varInfo.VertexName, oc, ref)
 				d.Connect(oc.BlockVertexName, oc.VertexName)
-				// TBD do we need to connect the oc.BlockVertexName to the vertexName
-				// We need to get the rootDAG for this
-			} else {
-				d.Connect(vertexName, oc.VertexName)
+				// connect the block vertex to the original vertex in the root DAG
+				oc := oc.DeepCopy()
+				oc.BlockIndex = 0
+				oc.BlockVertexName = ""
+				rootDAG := r.ceCtx.GetDAG(oc)
+				rootDAG.Connect(varInfo.VertexName, oc.BlockVertexName)
+			case varInfo.BlockIndex > oc.BlockIndex:
+				// the reference points to an element in the block DAG, so we point to the root of the block
+				d.Connect(varInfo.BlockVertexName, oc.VertexName)
+			case varInfo.BlockIndex == oc.BlockIndex:
+				d.Connect(varInfo.OutputVertex, oc.VertexName)
 			}
-			
+
 		}
 	}
 }

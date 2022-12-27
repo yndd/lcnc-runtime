@@ -8,9 +8,9 @@ import (
 	"time"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 )
 
 type execContext struct {
@@ -35,7 +35,7 @@ type execContext struct {
 	// identifies the time the vertex fn finished
 	finished time.Time
 
-	vertexContext *dag.VertexContext
+	vertexContext *rtdag.VertexContext
 
 	// callback
 	recordResult result.RecordResultFn

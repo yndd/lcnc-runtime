@@ -7,10 +7,10 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 )
 
-func (r *parser) resolve(ceCtx ConfigExecutionContext, outc OutputContext) []Result {
+func (r *parser) resolve(ceCtx ConfigExecutionContext, gvar GlobalVariable) []Result {
 	rs := &resolver{
 		ceCtx:  ceCtx,
-		outc:   outc,
+		gvar:   gvar,
 		result: []Result{},
 	}
 
@@ -27,7 +27,7 @@ func (r *parser) resolve(ceCtx ConfigExecutionContext, outc OutputContext) []Res
 
 type resolver struct {
 	ceCtx  ConfigExecutionContext
-	outc   OutputContext
+	gvar   GlobalVariable
 	mr     sync.RWMutex
 	result []Result
 }
@@ -100,18 +100,18 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 		// for variables that start with _ this is a special case and
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
-			d := r.ceCtx.GetDAG(oc)
+			//d := r.ceCtx.GetDAG(oc)
 			// get the vertexContext from the function
-			vc := d.GetVertex(oc.VertexName)
+			//vc := d.GetVertex(oc.VertexName)
 			// lookup the localDAG first
-			if vc.LocalVarDag != nil {
-				if vc.LocalVarDag.VertexExists(ref.Value) {
+			if oc.LocalVars != nil {
+				if _, ok := oc.LocalVars[ref.Value]; ok {
 					// if the lookup succeeds we are done
 					continue
 				}
 			}
 			// we lookup in the outputDAG
-			if !r.outc.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).VertexExists(ref.Value) {
+			if !r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).VarExists(ref.Value) {
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot resolve %s", ref.Value).Error(),

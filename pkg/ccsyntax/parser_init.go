@@ -8,10 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (r *parser) init() (ConfigExecutionContext, OutputContext, []Result) {
+func (r *parser) init() (ConfigExecutionContext, GlobalVariable, []Result) {
 	i := initializer{
 		cec:  NewConfigExecutionContext(r.cCfg.GetName()),
-		outc: NewOutputContext(r.cCfg.GetName()),
+		gvar: NewGlobalVariable(r.cCfg.GetName()),
 	}
 
 	fnc := &WalkConfig{
@@ -21,13 +21,13 @@ func (r *parser) init() (ConfigExecutionContext, OutputContext, []Result) {
 	// walk the config initialaizes the config execution context
 	r.walkLcncConfig(fnc)
 
-	return i.cec, i.outc, i.result
+	return i.cec, i.gvar, i.result
 
 }
 
 type initializer struct {
 	cec    ConfigExecutionContext
-	outc   OutputContext
+	gvar   GlobalVariable
 	mr     sync.RWMutex
 	result []Result
 }
@@ -58,7 +58,7 @@ func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema
 		}
 	}
 	// initialize the output context
-	r.outc.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.VertexName})
+	r.gvar.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.VertexName})
 	return gvk
 }
 

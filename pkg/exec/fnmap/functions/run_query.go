@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -64,7 +64,7 @@ func (r *query) WithClient(client client.Client) {
 
 func (r *query) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *query) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *query) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs

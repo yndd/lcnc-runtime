@@ -31,24 +31,24 @@ type parser struct {
 func (r *parser) Parse() (ConfigExecutionContext, []Result) {
 	// initialize the config execution context
 	// for each for and watch a new dag is created
-	ceCtx, outCtx, result := r.init()
+	ceCtx, gvar, result := r.init()
 	if len(result) != 0 {
 		return nil, result
 	}
 	// resolves the dependencies in the dag
 	// step1. check if all dependencies resolve
 	// step2. add the dependencies in the dag
-	result = r.populate(ceCtx, outCtx)
+	result = r.populate(ceCtx, gvar)
 	if len(result) != 0 {
 		return nil, result
 	}
 	//fmt.Println("propulate succeded")
-	result = r.resolve(ceCtx, outCtx)
+	result = r.resolve(ceCtx, gvar)
 	if len(result) != 0 {
 		return nil, result
 	}
 	//fmt.Println("resolve succeded")
-	result = r.connect(ceCtx, outCtx)
+	result = r.connect(ceCtx, gvar)
 	if len(result) != 0 {
 		return nil, result
 	}

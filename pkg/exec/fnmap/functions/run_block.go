@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,7 +37,7 @@ type block struct {
 	curResults result.Result
 	fnMap      fnmap.FuncMap
 	// runtime config
-	d dag.DAG
+	d rtdag.RuntimeDAG
 	// result, output
 	m      sync.RWMutex
 	output []any
@@ -65,7 +65,7 @@ func (r *block) WithFnMap(fnMap fnmap.FuncMap) {
 	r.fnMap = fnMap
 }
 
-func (r *block) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *block) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.d = vertexContext.BlockDAG

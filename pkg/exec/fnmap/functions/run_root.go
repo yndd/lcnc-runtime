@@ -2,12 +2,11 @@ package functions
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,10 +44,9 @@ func (r *root) WithClient(client client.Client) {}
 
 func (r *root) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *root) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *root) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
-	fmt.Printf("run root kind: %s\n", vertexContext.Name)
 	// execute the function
 	return r.fec.exec(ctx, vertexContext.Function, input)
 }

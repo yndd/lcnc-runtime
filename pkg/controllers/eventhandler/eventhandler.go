@@ -20,11 +20,11 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,7 +41,7 @@ type Config struct {
 	Client         client.Client
 	RootVertexName string
 	GVK            *schema.GroupVersionKind
-	DAG            dag.DAG
+	DAG            rtdag.RuntimeDAG
 	FnMap          fnmap.FuncMap
 }
 
@@ -67,7 +67,7 @@ type eventhandler struct {
 	//ctx    context.Context
 	rootVertexName string
 	gvk            *schema.GroupVersionKind
-	d              dag.DAG
+	d              rtdag.RuntimeDAG
 	fnMap          fnmap.FuncMap
 
 	l logr.Logger

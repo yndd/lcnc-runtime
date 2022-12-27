@@ -8,11 +8,11 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -74,12 +74,12 @@ func (r *image) WithClient(client client.Client) {}
 
 func (r *image) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *image) Run(ctx context.Context, vertexContext *dag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.fnconfig = vertexContext.Function
 	r.outputs = vertexContext.Outputs
-	r.gvkToVarName = vertexContext.GVKToVerName
+	r.gvkToVarName = vertexContext.GVKToVarName
 
 	// execute the function
 	return r.fec.exec(ctx, vertexContext.Function, input)
