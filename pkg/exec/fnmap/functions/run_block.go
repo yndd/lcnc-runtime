@@ -102,11 +102,10 @@ func (r *block) run(ctx context.Context, i input.Input) (any, error) {
 	r.d.PrintVertices()
 	fmt.Printf("block root Vertex: %s\n", r.d.GetRootVertex())
 
-	e := executor.New(&executor.Config{
+	e := executor.New(r.d, &executor.Config{
 		Type:           result.ExecBlockType,
 		Name:           r.d.GetRootVertex(),
 		RootVertexName: r.d.GetRootVertex(),
-		DAG:            r.d,
 		FnMap:          r.fnMap,
 		Output:         r.curOutputs,
 		Result:         r.curResults,

@@ -41,13 +41,13 @@ func New(c *Config) executor.Executor {
 		Value:    c.Data,
 	})
 
-	return executor.New(&executor.Config{
+	return executor.New(c.DAG, &executor.Config{
 		Type:           result.ExecRootType,
 		Name:           c.DAG.GetRootVertex(),
 		RootVertexName: c.RootVertexName,
-		DAG:            c.DAG,
-		FnMap:          fnmap,
-		Output:         c.Output,
-		Result:         c.Result,
+		//DAG:            c.DAG,
+		FnMap:  fnmap,
+		Output: c.Output,
+		Result: c.Result,
 	})
 }

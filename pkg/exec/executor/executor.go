@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yndd/lcnc-runtime/pkg/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
@@ -20,15 +21,16 @@ type Config struct {
 	Type           result.ExecType
 	Name           string
 	RootVertexName string
-	DAG            rtdag.RuntimeDAG
-	FnMap          fnmap.FuncMap
-	Output         output.Output
-	Result         result.Result
+	//DAG            dag.DAG
+	FnMap  fnmap.FuncMap
+	Output output.Output
+	Result result.Result
 }
 
-func New(cfg *Config) Executor {
+func New(d dag.DAG, cfg *Config) Executor {
 	s := &exec{
 		cfg:       cfg,
+		d:         d,
 		m:         sync.RWMutex{},
 		execMap:   map[string]*execContext{},
 		fnDoneMap: map[string]chan bool{},
@@ -40,6 +42,7 @@ func New(cfg *Config) Executor {
 }
 
 type exec struct {
+	d   dag.DAG
 	cfg *Config
 
 	// cancelFn
@@ -55,7 +58,7 @@ type exec struct {
 // so it is prepaared to execute the dependency map
 func (r *exec) init() {
 	r.execMap = map[string]*execContext{}
-	for vertexName, v := range r.cfg.DAG.GetVertices() {
+	for vertexName, v := range r.d.GetVertices() {
 		fmt.Printf("executor init vertexName: %s\n", vertexName)
 		vc, ok := v.(*rtdag.VertexContext)
 		if !ok {
@@ -81,7 +84,7 @@ func (r *exec) init() {
 	// used to wait for the upstream vertex to signal the fn/job is done
 	for vertexName, wCtx := range r.execMap {
 		// only run these channels when we want to add dependency validation
-		for _, depVertexName := range r.cfg.DAG.GetUpVertexes(vertexName) {
+		for _, depVertexName := range r.d.GetUpVertexes(vertexName) {
 			//fmt.Printf("vertexName: %s, depBVertexName: %s\n", vertexName, depVertexName)
 			depCh := make(chan bool)
 			r.execMap[depVertexName].AddDoneCh(vertexName, depCh) // send when done
@@ -94,7 +97,7 @@ func (r *exec) init() {
 }
 
 func (r *exec) Run(ctx context.Context) {
-	from := r.cfg.DAG.GetRootVertex()
+	from := r.cfg.RootVertexName
 	start := time.Now()
 	ctx, cancelFn := context.WithCancel(ctx)
 	r.cancelFn = cancelFn
@@ -134,7 +137,7 @@ func (r *exec) execute(ctx context.Context, from string, init bool) bool {
 		}()
 	}
 	// continue walking the graph
-	for _, downEdge := range r.cfg.DAG.GetDownVertexes(from) {
+	for _, downEdge := range r.d.GetDownVertexes(from) {
 		go func(downEdge string) {
 			r.execute(ctx, downEdge, false)
 		}(downEdge)
