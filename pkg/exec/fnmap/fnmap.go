@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -16,7 +17,7 @@ type Initializer func() Function
 
 type FuncMap interface {
 	Register(fnType ctrlcfgv1.FunctionType, initFn Initializer)
-	Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error)
+	Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error)
 }
 
 type Config struct {
@@ -46,7 +47,7 @@ func (r *fnMap) Register(fnType ctrlcfgv1.FunctionType, initFn Initializer) {
 	r.funcs[fnType] = initFn
 }
 
-func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	r.m.RLock()
 	initializer, ok := r.funcs[vertexContext.Function.Type]
 	r.m.RUnlock()
@@ -68,5 +69,5 @@ func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, inp
 		fn.WithNameAndNamespace(r.cfg.Name, r.cfg.Namespace)
 	}
 	// run the function
-	return fn.Run(ctx, vertexContext, input)
+	return fn.Run(ctx, vertexContext, i)
 }

@@ -10,6 +10,7 @@ import (
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -74,7 +75,7 @@ func (r *image) WithClient(client client.Client) {}
 
 func (r *image) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.fnconfig = vertexContext.Function
@@ -82,7 +83,7 @@ func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, inp
 	r.gvkToVarName = vertexContext.GVKToVarName
 
 	// execute the function
-	return r.fec.exec(ctx, vertexContext.Function, input)
+	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
 func (r *image) initOutput(numItems int) {
@@ -135,7 +136,7 @@ func (r *image) getFinalResult() (output.Output, error) {
 	return r.output, nil
 }
 
-func (r *image) run(ctx context.Context, input map[string]any) (any, error) {
+func (r *image) run(ctx context.Context, i input.Input) (any, error) {
 	runner, err := fnruntime.NewRunner(ctx, r.fnconfig,
 		fnruntime.RunnerOptions{
 			ResolveToImage: fnruntime.ResolveToImageForCLI,
@@ -144,7 +145,7 @@ func (r *image) run(ctx context.Context, input map[string]any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rctx, err := buildResourceContext(r.name, r.namespace, input)
+	rctx, err := buildResourceContext(r.name, r.namespace, i)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +156,8 @@ func (r *image) run(ctx context.Context, input map[string]any) (any, error) {
 	return o, nil
 }
 
-func buildResourceContext(name, namespace string, input map[string]any) (*rctxv1.ResourceContext, error) {
-	props, err := buildResourceContextProperties(input)
+func buildResourceContext(name, namespace string, i input.Input) (*rctxv1.ResourceContext, error) {
+	props, err := buildResourceContextProperties(i)
 	if err != nil {
 		return nil, err
 	}
@@ -185,13 +186,13 @@ func buildResourceContext(name, namespace string, input map[string]any) (*rctxv1
 	return rctx, nil
 }
 
-func buildResourceContextProperties(input map[string]any) (*rctxv1.ResourceContextProperties, error) {
+func buildResourceContextProperties(i input.Input) (*rctxv1.ResourceContextProperties, error) {
 	props := &rctxv1.ResourceContextProperties{
 		Origin: map[string]rctxv1.KRMResource{},
 		Input:  map[string][]rctxv1.KRMResource{},
 		Output: map[string][]rctxv1.KRMResource{},
 	}
-	for _, v := range input {
+	for _, v := range i.Get() {
 		switch x := v.(type) {
 		case map[string]any:
 			// we should only have 1 resource with this type which is the origin

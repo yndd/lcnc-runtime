@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -44,11 +45,11 @@ func (r *root) WithClient(client client.Client) {}
 
 func (r *root) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *root) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *root) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	// execute the function
-	return r.fec.exec(ctx, vertexContext.Function, input)
+	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
 func (r *root) getFinalResult() (output.Output, error) {

@@ -9,6 +9,7 @@ import (
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
@@ -17,7 +18,7 @@ type recordOutputFn func(any)
 type getFinalResultFn func() (output.Output, error)
 
 // type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
-type runFn func(context.Context, map[string]any) (any, error)
+type runFn func(context.Context, input.Input) (any, error)
 
 type fnExecConfig struct {
 	executeRange  bool
@@ -31,14 +32,14 @@ type fnExecConfig struct {
 	getFinalResultFn getFinalResultFn
 }
 
-func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, input map[string]any) (output.Output, error) {
+func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, i input.Input) (output.Output, error) {
 	var items []*item
 	var isRange bool
 	var ok bool
 	var err error
 	if fnconfig.HasBlock() {
 		if fnconfig.Block.Range != nil {
-			items, err = runRange(fnconfig.Block.Range.Value, input)
+			items, err = runRange(fnconfig.Block.Range.Value, i)
 			if err != nil {
 				return nil, err
 			}
@@ -46,7 +47,7 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 		}
 		if fnconfig.Block.Condition != nil {
 			if exp := fnconfig.Block.Condition.Expression; exp != "" {
-				ok, err = runCondition(exp, input)
+				ok, err = runCondition(exp, i)
 				if err != nil {
 					return nil, err
 				}
@@ -55,7 +56,7 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 				}
 			}
 			if fnconfig.Block.Condition.Block.Range != nil {
-				items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, input)
+				items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, i)
 				if err != nil {
 					return nil, err
 				}
@@ -70,21 +71,21 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 	}
 	if numItems > 0 && isRange {
 		fec.initOutputFn(numItems)
-		for i, item := range items {
+		for n, item := range items {
 			// this is a protection to ensure we dont use the nil result in a range
 			if item.val != nil {
-				input["VALUE"] = item.val
-				input["KEY"] = fmt.Sprint(i)
-				input["INDEX"] = i
+				i.Add("VALUE", item.val)
+				i.Add("KEY", fmt.Sprint(n))
+				i.Add("INDEX", n)
 
 				// resolve the local vars using jq and add them to the input
-				if err := resolveLocalVars(fnconfig, input); err != nil {
+				if err := resolveLocalVars(fnconfig, i); err != nil {
 					return nil, err
 				}
 
 				if fec.executeRange {
 					//extraInput := fec.prepareInputFn(fnconfig)
-					x, err := fec.runFn(ctx, input)
+					x, err := fec.runFn(ctx, i)
 					if err != nil {
 						return nil, err
 					}
@@ -96,11 +97,11 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 	if fec.executeSingle {
 		fec.initOutputFn(1)
 		// resolve the local vars using jq and add them to the input
-		if err := resolveLocalVars(fnconfig, input); err != nil {
+		if err := resolveLocalVars(fnconfig, i); err != nil {
 			return nil, err
 		}
 		//extraInput := fec.prepareInputFn(fnconfig)
-		x, err := fec.runFn(ctx, input)
+		x, err := fec.runFn(ctx, i)
 		if err != nil {
 			return nil, err
 		}
@@ -114,10 +115,10 @@ type item struct {
 	val any
 }
 
-func runRange(exp string, input map[string]any) ([]*item, error) {
-	varNames := make([]string, 0, len(input))
-	varValues := make([]any, 0, len(input))
-	for name, v := range input {
+func runRange(exp string, i input.Input) ([]*item, error) {
+	varNames := make([]string, 0, i.Length())
+	varValues := make([]any, 0, i.Length())
+	for name, v := range i.Get() {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
@@ -158,10 +159,10 @@ func runRange(exp string, input map[string]any) ([]*item, error) {
 	return result, nil
 }
 
-func runCondition(exp string, input map[string]any) (bool, error) {
-	varNames := make([]string, 0, len(input))
-	varValues := make([]any, 0, len(input))
-	for name, v := range input {
+func runCondition(exp string, i input.Input) (bool, error) {
+	varNames := make([]string, 0, i.Length())
+	varValues := make([]any, 0, i.Length())
+	for name, v := range i.Get() {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
@@ -199,9 +200,9 @@ func runCondition(exp string, input map[string]any) (bool, error) {
 	return false, fmt.Errorf("unexpected result type, want bool got %T", v)
 }
 
-func resolveLocalVars(fnconfig *ctrlcfgv1.Function, input map[string]any) error {
+func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 	if fnconfig.Vars != nil {
-		fmt.Printf("resolveLocalVars: input: %v\n", input)
+		fmt.Printf("resolveLocalVars: input: %v\n", i.Get())
 		for varName, expression := range fnconfig.Vars {
 			// We are lazy and provide all reference input to JQ
 			// the below aproach could be a more optimal solution
@@ -214,7 +215,7 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, input map[string]any) error 
 			//		localVarRefs[ref.Value] = input[ref.Value]
 			//	}
 
-			v, err := runJQ(expression, input)
+			v, err := runJQ(expression, i)
 			if err != nil {
 				return err
 			}
@@ -227,7 +228,7 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, input map[string]any) error 
 				x := map[string]interface{}
 				if err:= yaml
 			*/
-			input[varName] = v
+			i.Add(varName, v)
 		}
 	}
 	return nil

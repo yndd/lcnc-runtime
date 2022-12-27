@@ -8,6 +8,7 @@ import (
 
 	"github.com/itchyny/gojq"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -70,7 +71,7 @@ func (r *kv) WithClient(client client.Client) {}
 
 func (r *kv) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *kv) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *kv) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -78,7 +79,7 @@ func (r *kv) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input 
 	r.value = vertexContext.Function.Input.Value
 
 	// execute the function
-	return r.fec.exec(ctx, vertexContext.Function, input)
+	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
 func (r *kv) initOutput(numItems int) {
@@ -107,7 +108,7 @@ func (r *kv) getFinalResult() (output.Output, error) {
 	return o, nil
 }
 
-func (r *kv) run(ctx context.Context, input map[string]any) (any, error) {
+func (r *kv) run(ctx context.Context, i input.Input) (any, error) {
 	kv := &mapInput{
 		key:   r.key,
 		value: r.value,
@@ -119,9 +120,9 @@ func (r *kv) run(ctx context.Context, input map[string]any) (any, error) {
 		return nil, errors.New("missing input key")
 	}
 
-	varNames := make([]string, 0, len(input))
-	varValues := make([]any, 0, len(input))
-	for name, v := range input {
+	varNames := make([]string, 0, i.Length())
+	varValues := make([]any, 0, i.Length())
+	for name, v := range i.Get() {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}

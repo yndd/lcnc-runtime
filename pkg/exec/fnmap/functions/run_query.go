@@ -6,6 +6,7 @@ import (
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -64,7 +65,7 @@ func (r *query) WithClient(client client.Client) {
 
 func (r *query) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *query) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *query) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -72,7 +73,7 @@ func (r *query) Run(ctx context.Context, vertexContext *rtdag.VertexContext, inp
 	//r.selector = vertexContext.Function.Input.Selector
 
 	// execute to function
-	return r.fec.exec(ctx, vertexContext.Function, input)
+	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
 func (r *query) initOutput(numItems int) {}
@@ -96,7 +97,7 @@ func (r *query) getFinalResult() (output.Output, error) {
 	return o, nil
 }
 
-func (r *query) run(ctx context.Context, input map[string]any) (any, error) {
+func (r *query) run(ctx context.Context, i input.Input) (any, error) {
 	gvk, err := ctrlcfgv1.GetGVK(r.resource)
 	if err != nil {
 		return nil, err

@@ -7,6 +7,7 @@ import (
 
 	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -65,13 +66,13 @@ func (r *block) WithFnMap(fnMap fnmap.FuncMap) {
 	r.fnMap = fnMap
 }
 
-func (r *block) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *block) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.d = vertexContext.BlockDAG
 
 	// execute to function
-	return r.fec.exec(ctx, vertexContext.Function, input)
+	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
 func (r *block) initOutput(numItems int) {
@@ -91,7 +92,7 @@ func (r *block) getFinalResult() (output.Output, error) {
 	return output.New(), nil
 }
 
-func (r *block) run(ctx context.Context, input map[string]any) (any, error) {
+func (r *block) run(ctx context.Context, i input.Input) (any, error) {
 	// check if the dag is initialized
 	if r.d == nil {
 		return nil, fmt.Errorf("expecting an initialized dag, got: %T", r.d)

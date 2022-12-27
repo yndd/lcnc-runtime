@@ -8,6 +8,7 @@ import (
 	"time"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -74,29 +75,33 @@ func (r *execContext) run(ctx context.Context) {
 
 	// Gather the input based on the function type
 	// Determine if this is an internal fn runner or not
-	input := map[string]any{}
+	//input := map[string]any{}
+	i := input.New()
 	switch r.vertexContext.Function.Type {
 	case ctrlcfgv1.RootType:
 		// this is a dummy function, input is not relevant
 	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
-		input[r.cfg.RootVertexName] = r.cfg.Output.GetValue(r.cfg.RootVertexName)
+		i.Add(r.cfg.RootVertexName, r.cfg.Output.GetValue(r.cfg.RootVertexName))
+		//input[r.cfg.RootVertexName] = r.cfg.Output.GetValue(r.cfg.RootVertexName)
 		for _, ref := range r.vertexContext.References {
-			input[ref] = r.cfg.Output.GetValue(ref)
+			//input[ref] = r.cfg.Output.GetValue(ref)
+			i.Add(ref, r.cfg.Output.GetValue(ref))
 		}
 
 	default:
 		fmt.Printf("execContext execName %s vertexName: %s references: %v\n", r.cfg.Name, r.vertexName, r.vertexContext.References)
 		for _, ref := range r.vertexContext.References {
-			input[ref] = r.cfg.Output.GetValue(ref)
+			//input[ref] = r.cfg.Output.GetValue(ref)
+			i.Add(ref, r.cfg.Output.GetValue(ref))
 		}
 	}
-	fmt.Printf("execContext execName %s vertexName: %s input: %#v\n", r.cfg.Name, r.vertexName, input)
+	fmt.Printf("execContext execName %s vertexName: %s input: %#v\n", r.cfg.Name, r.vertexName, i.Get())
 
 	// Run the execution context
 
 	success := true
 	reason := ""
-	o, err := r.cfg.FnMap.Run(ctx, r.vertexContext, input)
+	o, err := r.cfg.FnMap.Run(ctx, r.vertexContext, i)
 	if err != nil {
 		if !errors.Is(err, ErrConditionFalse) {
 			success = false
@@ -120,7 +125,7 @@ func (r *execContext) run(ctx context.Context) {
 		VertexName: r.vertexName,
 		StartTime:  r.start,
 		EndTime:    r.finished,
-		Input:      input,
+		Input:      i,
 		Output:     o,
 		Success:    success,
 		Reason:     reason,

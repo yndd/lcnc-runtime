@@ -3,6 +3,7 @@ package fnmap
 import (
 	"context"
 
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -17,7 +18,7 @@ type Function interface {
 	WithNameAndNamespace(name, namespace string)
 	WithClient(client client.Client)
 	WithFnMap(fnMap FuncMap)
-	Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error)
+	Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error)
 }
 
 type FunctionOption func(Function)

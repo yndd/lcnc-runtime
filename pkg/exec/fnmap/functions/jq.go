@@ -6,15 +6,16 @@ import (
 	"strings"
 
 	"github.com/itchyny/gojq"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 )
 
-func runJQ(exp string, input map[string]any) (any, error) {
+func runJQ(exp string, i input.Input) (any, error) {
 	if exp == "" {
 		return nil, errors.New("missing input value")
 	}
-	varNames := make([]string, 0, len(input))
-	varValues := make([]any, 0, len(input))
-	for name, v := range input {
+	varNames := make([]string, 0, i.Length())
+	varValues := make([]any, 0, i.Length())
+	for name, v := range i.Get() {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}

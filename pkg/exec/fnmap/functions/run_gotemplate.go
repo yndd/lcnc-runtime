@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -60,7 +61,7 @@ func (r *gt) WithClient(client client.Client) {}
 
 func (r *gt) WithFnMap(fnMap fnmap.FuncMap) {}
 
-func (r *gt) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input map[string]any) (output.Output, error) {
+func (r *gt) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -71,7 +72,7 @@ func (r *gt) Run(ctx context.Context, vertexContext *rtdag.VertexContext, input 
 	}
 
 	// execute the function
-	return r.fec.exec(ctx, vertexContext.Function, input)
+	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
 func (r *gt) initOutput(numItems int) {
@@ -96,7 +97,7 @@ func (r *gt) getFinalResult() (output.Output, error) {
 	return o, nil
 }
 
-func (r *gt) run(ctx context.Context, input map[string]any) (any, error) {
+func (r *gt) run(ctx context.Context, i input.Input) (any, error) {
 	if r.template == "" {
 		return nil, errors.New("missing template")
 	}
@@ -106,8 +107,8 @@ func (r *gt) run(ctx context.Context, input map[string]any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("runGT input: %v\n", input)
-	err = tpl.Execute(result, input)
+	fmt.Printf("runGT input: %v\n", i.Get())
+	err = tpl.Execute(result, i.Get())
 	if err != nil {
 		return nil, err
 	}

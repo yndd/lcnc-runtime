@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 
@@ -29,7 +30,7 @@ type ResultInfo struct {
 	VertexName  string
 	StartTime   time.Time
 	EndTime     time.Time
-	Input       map[string]any
+	Input       input.Input
 	Output      output.Output
 	Success     bool
 	Reason      string
