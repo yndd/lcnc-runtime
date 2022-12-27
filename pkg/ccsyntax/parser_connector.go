@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -135,7 +136,13 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			// get the vertexContext from the function
 			fmt.Printf("oc: %#v, ref: %#v\n", oc, ref)
 			d := r.ceCtx.GetDAG(oc)
-			vc := d.GetVertex(oc.VertexName)
+			vc, ok := d.GetVertex(oc.VertexName).(*rtdag.VertexContext)
+			if !ok {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         fmt.Errorf("wrong type expect vertexContext: %#v", vc).Error(),
+				})
+			}
 			// lookup the localDAG first
 			/*
 				if vc.LocalVarDag != nil && vc.LocalVarDag.VertexExists(ref.Value) {

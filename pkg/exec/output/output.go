@@ -9,14 +9,14 @@ import (
 )
 
 type Output interface {
-	RecordOutput(varName string, oc *OutputInfo)
+	RecordOutput(varName string, oi *OutputInfo)
 	GetOutputInfo() map[string]*OutputInfo
 	GetValue(string) any
 	GetFinalOutput() []any
 	PrintOutput()
 }
 
-type RecordOutputFn func(varName string, oc *OutputInfo)
+type RecordOutputFn func(varName string, oi *OutputInfo)
 
 type OutputInfo struct {
 	Internal bool
@@ -35,11 +35,11 @@ type output struct {
 	o map[string]*OutputInfo
 }
 
-func (r *output) RecordOutput(varName string, oc *OutputInfo) {
+func (r *output) RecordOutput(varName string, oi *OutputInfo) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
-	r.o[varName] = oc
+	r.o[varName] = oi
 }
 
 func (r *output) GetOutputInfo() map[string]*OutputInfo {

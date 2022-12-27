@@ -11,18 +11,21 @@ import (
 )
 
 type RuntimeDAG interface {
-	AddVertex(s string, v *VertexContext) error
-	Connect(from, to string)
-	AddDownEdge(from, to string)
-	AddUpEdge(from, to string)
-	VertexExists(s string) bool
-	GetRootVertex() string
-	GetVertex(s string) *VertexContext
-	GetVertices() map[string]*VertexContext
-	GetDownVertexes(from string) []string
-	GetUpVertexes(from string) []string
-	TransitiveReduction()
+	dag.DAG
+	/*
+		AddVertex(s string, v *VertexContext) error
+		Connect(from, to string)
+		AddDownEdge(from, to string)
+		AddUpEdge(from, to string)
+		VertexExists(s string) bool
+		GetVertex(s string) *VertexContext
+		GetVertices() map[string]*VertexContext
+		GetDownVertexes(from string) []string
+		GetUpVertexes(from string) []string
+		TransitiveReduction()
+	*/
 
+	GetRootVertex() string
 	GetDependencyMap(from string)
 	PrintVertices()
 }
@@ -59,21 +62,7 @@ type VertexContext struct {
 	GVKToVarName map[string]string
 }
 
-func (r *VertexContext) AddReference(s string) {
-	r.m.Lock()
-	defer r.m.Unlock()
-	found := false
-	for _, ref := range r.References {
-		if ref == s {
-			found = true
-		}
-	}
-	if !found {
-		r.References = append(r.References, s)
-	}
-}
-
-func (r *runtimeDAG) AddVertex(s string, v *VertexContext) error {
+func (r *runtimeDAG) AddVertex(s string, v any) error {
 	return r.d.AddVertex(s, v)
 }
 
@@ -93,37 +82,12 @@ func (r *runtimeDAG) VertexExists(s string) bool {
 	return r.d.VertexExists(s)
 }
 
-func (r *runtimeDAG) GetRootVertex() string {
-	for vertexName, v := range r.d.GetVertices() {
-		vc, ok := v.(*VertexContext)
-		if ok {
-			if vc.Kind == RootVertexKind {
-				return vertexName
-			}
-		}
-	}
-	return ""
+func (r *runtimeDAG) GetVertex(s string) any {
+	return r.d.GetVertex(s)
 }
 
-func (r *runtimeDAG) GetVertex(s string) *VertexContext {
-	v := r.d.GetVertex(s)
-	vc, ok := v.(*VertexContext)
-	if ok {
-		return vc
-	}
-	return nil
-}
-
-func (r *runtimeDAG) GetVertices() map[string]*VertexContext {
-	vs := r.d.GetVertices()
-	vcs := map[string]*VertexContext{}
-	for vertexName, v := range vs {
-		vc, ok := v.(*VertexContext)
-		if ok {
-			vcs[vertexName] = vc
-		}
-	}
-	return vcs
+func (r *runtimeDAG) GetVertices() map[string]any {
+	return r.d.GetVertices()
 }
 
 func (r *runtimeDAG) GetDownVertexes(from string) []string {
@@ -137,6 +101,32 @@ func (r *runtimeDAG) GetUpVertexes(from string) []string {
 
 func (r *runtimeDAG) TransitiveReduction() {
 	r.d.TransitiveReduction()
+}
+
+func (r *VertexContext) AddReference(s string) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	found := false
+	for _, ref := range r.References {
+		if ref == s {
+			found = true
+		}
+	}
+	if !found {
+		r.References = append(r.References, s)
+	}
+}
+
+func (r *runtimeDAG) GetRootVertex() string {
+	for vertexName, v := range r.d.GetVertices() {
+		vc, ok := v.(*VertexContext)
+		if ok {
+			if vc.Kind == RootVertexKind {
+				return vertexName
+			}
+		}
+	}
+	return ""
 }
 
 func (r *runtimeDAG) GetDependencyMap(from string) {
@@ -182,9 +172,12 @@ func (r *runtimeDAG) checkVertex(s string) bool {
 
 func (r *runtimeDAG) PrintVertices() {
 	fmt.Printf("###### RUNTIME DAG output start #######\n")
-	for vertexName, vc := range r.GetVertices() {
-		fmt.Printf("vertexname: %s upVertices: %v, downVertices: %v\n", vertexName, r.GetUpVertexes(vertexName), r.GetDownVertexes(vertexName))
-		vc.Outputs.PrintOutput()
+	for vertexName, v := range r.GetVertices() {
+		vc, ok := v.(*VertexContext)
+		if ok {
+			fmt.Printf("vertexname: %s upVertices: %v, downVertices: %v\n", vertexName, r.GetUpVertexes(vertexName), r.GetDownVertexes(vertexName))
+			vc.Outputs.PrintOutput()
+		}
 	}
 	fmt.Printf("###### RUNTIME DAG output stop #######\n")
 }

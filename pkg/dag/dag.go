@@ -15,7 +15,6 @@ type DAG interface {
 	GetVertices() map[string]any
 	GetDownVertexes(from string) []string
 	GetUpVertexes(from string) []string
-
 	TransitiveReduction()
 }
 
@@ -65,7 +64,12 @@ func (r *dag) AddVertex(s string, v any) error {
 func (r *dag) GetVertices() map[string]any {
 	r.mv.RLock()
 	defer r.mv.RUnlock()
-	return r.vertices
+	vcs := map[string]any{}
+	for vertexName, v := range r.vertices {
+		vcs[vertexName] = v
+	}
+	return vcs
+
 }
 
 func (r *dag) VertexExists(s string) bool {

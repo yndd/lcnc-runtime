@@ -16,18 +16,6 @@ type Executor interface {
 	Run(ctx context.Context)
 }
 
-type exec struct {
-	cfg *Config
-
-	// cancelFn
-	cancelFn context.CancelFunc
-
-	// used during the Walk func
-	m         sync.RWMutex
-	execMap   map[string]*execContext
-	fnDoneMap map[string]chan bool
-}
-
 type Config struct {
 	Type           result.ExecType
 	Name           string
@@ -47,21 +35,36 @@ func New(cfg *Config) Executor {
 	}
 
 	// initialize the initial data in the executor
-	//s.output.Update(cfg.RootVertex, cfg.RootVertex, &fnmap.Output{Internal: true, Value: cfg.Data})
 	s.init()
 	return s
+}
+
+type exec struct {
+	cfg *Config
+
+	// cancelFn
+	cancelFn context.CancelFunc
+
+	// used during the Walk func
+	m         sync.RWMutex
+	execMap   map[string]*execContext
+	fnDoneMap map[string]chan bool
 }
 
 // init initializes the executor with channels and cancel context
 // so it is prepaared to execute the dependency map
 func (r *exec) init() {
 	r.execMap = map[string]*execContext{}
-	for vertexName, dvc := range r.cfg.DAG.GetVertices() {
+	for vertexName, v := range r.cfg.DAG.GetVertices() {
 		fmt.Printf("executor init vertexName: %s\n", vertexName)
+		vc, ok := v.(*rtdag.VertexContext)
+		if !ok {
+			fmt.Printf("expecting vertexContext: got %#v\n", v)
+		}
 		r.execMap[vertexName] = &execContext{
 			cfg:           r.cfg,
 			vertexName:    vertexName,
-			vertexContext: dvc,
+			vertexContext: vc,
 			doneChs:       make(map[string]chan bool), //snd
 			depChs:        make(map[string]chan bool), //rcv
 			// callback to gather the result
