@@ -17,6 +17,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -122,7 +123,7 @@ func (r *image) recordOutput(o any) {
 		krmOutput := make([]any, 0, len(krmslice))
 		for _, krm := range krmslice {
 			x := map[string]any{}
-			if err := json.Unmarshal([]byte(krm), &x); err != nil {
+			if err := json.Unmarshal(krm.Raw, &x); err != nil {
 				r.l.Error(err, "cannot unmarshal data")
 				r.errs = append(r.errs, err.Error())
 				break
@@ -198,7 +199,7 @@ func buildResourceContext(name, namespace string, i input.Input) (*rctxv1.Resour
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: rctxv1.ResourceContextSpec{
+		Spec: rctxv1.Spec{
 			Properties: props,
 		},
 	}
@@ -213,11 +214,11 @@ func buildResourceContext(name, namespace string, i input.Input) (*rctxv1.Resour
 	return rctx, nil
 }
 
-func buildResourceContextProperties(i input.Input) (*rctxv1.ResourceContextProperties, error) {
-	props := &rctxv1.ResourceContextProperties{
-		Origin: map[string]rctxv1.KRMResource{},
-		Input:  map[string][]rctxv1.KRMResource{},
-		Output: map[string][]rctxv1.KRMResource{},
+func buildResourceContextProperties(i input.Input) (*rctxv1.Properties, error) {
+	props := &rctxv1.Properties{
+		Origin: map[string]runtime.RawExtension{},
+		Input:  map[string][]runtime.RawExtension{},
+		Output: map[string][]runtime.RawExtension{},
 	}
 	for _, v := range i.Get() {
 		switch x := v.(type) {
@@ -227,7 +228,7 @@ func buildResourceContextProperties(i input.Input) (*rctxv1.ResourceContextPrope
 			if err != nil {
 				return nil, err
 			}
-			props.Origin[meta.GVKToString(gvk)] = rctxv1.KRMResource(res)
+			props.Origin[meta.GVKToString(gvk)] = runtime.RawExtension{Raw: []byte(res)}
 		case []any:
 			l := len(x)
 			if l > 0 {
@@ -239,9 +240,9 @@ func buildResourceContextProperties(i input.Input) (*rctxv1.ResourceContextPrope
 							return nil, err
 						}
 						if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
-							props.Input[gvk.String()] = make([]rctxv1.KRMResource, 0, l)
+							props.Input[gvk.String()] = make([]runtime.RawExtension, 0, l)
 						}
-						props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], rctxv1.KRMResource(res))
+						props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
 					default:
 						return nil, fmt.Errorf("unexpected object in []any: got %T", v)
 					}
