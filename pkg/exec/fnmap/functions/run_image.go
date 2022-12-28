@@ -116,15 +116,19 @@ func (r *image) recordOutput(o any) {
 			krmOutput = append(krmOutput, x)
 		}
 
-		outputInfo, ok := r.outputs.GetOutputInfo()[varName]
+		v, ok := r.outputs.Get()[varName]
 		if !ok {
 			r.errs = append(r.errs, fmt.Errorf("unregistered image varName: %s", varName).Error())
 			break
 		}
-		r.output.RecordOutput(varName, &output.OutputInfo{
-			Internal: outputInfo.Internal,
-			GVK:      outputInfo.GVK,
-			Value:    krmOutput,
+		oi, ok := v.(*output.OutputInfo)
+		if !ok {
+			r.errs = append(r.errs, fmt.Errorf("expecting outputInfo, got %T", v).Error())
+		}
+		r.output.AddEntry(varName, &output.OutputInfo{
+			Internal: oi.Internal,
+			GVK:      oi.GVK,
+			Data:     krmOutput,
 		})
 	}
 }

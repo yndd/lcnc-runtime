@@ -2,21 +2,14 @@ package executor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
-
-	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/exec/input"
-	"github.com/yndd/lcnc-runtime/pkg/exec/output"
-	"github.com/yndd/lcnc-runtime/pkg/exec/result"
-	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 )
 
 type execContext struct {
+	execName   string
 	vertexName string
-	cfg        *Config
 
 	// used to signal the vertex function is done
 	// to the main walk entry
@@ -31,16 +24,23 @@ type execContext struct {
 	depChs map[string]chan bool
 	// identifies the time the vertex got scheduled
 	visited time.Time
-	// identifies the time the vertex fn started
-	start time.Time
 	// identifies the time the vertex fn finished
 	finished time.Time
 
-	vertexContext *rtdag.VertexContext
+	//vertexContext *rtdag.VertexContext
+	vertexContext any
 
-	// callback
-	recordResult result.RecordResultFn
-	recordOutput output.RecordOutputFn
+	// handler
+	vertexFuntionRunFn VertexFuntionRunFn
+}
+
+type VertexResult struct {
+	Start   time.Time
+	Finish  time.Time
+	Success bool
+	Reason  string
+	Input   any
+	Output  any
 }
 
 func (r *execContext) AddDoneCh(n string, c chan bool) {
@@ -62,92 +62,32 @@ func (r *execContext) isFinished() bool {
 }
 
 func (r *execContext) isVisted() bool {
-	fmt.Printf("exec isVisited: %#v\n", r)
 	r.m.RLock()
 	defer r.m.RUnlock()
 	return !r.visited.IsZero()
 }
 
 func (r *execContext) run(ctx context.Context) {
-	r.m.Lock()
-	r.start = time.Now()
-	r.m.Unlock()
-
-	// Gather the input based on the function type
-	// Determine if this is an internal fn runner or not
-	//input := map[string]any{}
-	i := input.New()
-	switch r.vertexContext.Function.Type {
-	case ctrlcfgv1.RootType:
-		// this is a dummy function, input is not relevant
-	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
-		i.Add(r.cfg.RootVertexName, r.cfg.Output.GetValue(r.cfg.RootVertexName))
-		//input[r.cfg.RootVertexName] = r.cfg.Output.GetValue(r.cfg.RootVertexName)
-		for _, ref := range r.vertexContext.References {
-			//input[ref] = r.cfg.Output.GetValue(ref)
-			i.Add(ref, r.cfg.Output.GetValue(ref))
-		}
-
-	default:
-		fmt.Printf("execContext execName %s vertexName: %s references: %v\n", r.cfg.Name, r.vertexName, r.vertexContext.References)
-		for _, ref := range r.vertexContext.References {
-			//input[ref] = r.cfg.Output.GetValue(ref)
-			i.Add(ref, r.cfg.Output.GetValue(ref))
-		}
-	}
-	fmt.Printf("execContext execName %s vertexName: %s input: %#v\n", r.cfg.Name, r.vertexName, i.Get())
-
-	// Run the execution context
-
-	success := true
-	reason := ""
-	o, err := r.cfg.FnMap.Run(ctx, r.vertexContext, i)
-	if err != nil {
-		if !errors.Is(err, ErrConditionFalse) {
-			success = false
-		}
-		reason = err.Error()
-	}
-	fmt.Printf("execContext execName %s vertexName: %s fn executed, doneChs: %v\n", r.cfg.Name, r.vertexName, r.doneChs)
-	r.m.Lock()
+	// execute the handler that runs the function
+	success := r.vertexFuntionRunFn(ctx, r.vertexName, r.vertexContext)
 	r.finished = time.Now()
-	r.m.Unlock()
-
-	for varName, outputInfo := range o.GetOutputInfo() {
-		fmt.Printf("execContext execName: %s, vertexName: %s output  varname: %s, success: %t, reason: %s, output: %v\n", r.cfg.Name, r.vertexName, varName, success, reason, outputInfo.Value)
-		r.recordOutput(varName, outputInfo)
-	}
-
-	// callback function to capture the result
-	r.recordResult(&result.ResultInfo{
-		Type:       r.cfg.Type,
-		ExecName:   r.cfg.Name,
-		VertexName: r.vertexName,
-		StartTime:  r.start,
-		EndTime:    r.finished,
-		Input:      i,
-		Output:     o,
-		Success:    success,
-		Reason:     reason,
-	})
-
 	// signal to the dependent function the result of the vertex fn execution
 	for vertexName, doneCh := range r.doneChs {
 		doneCh <- success
 		close(doneCh)
-		fmt.Printf("execContext execName %s vertexName: %s -> %s send done\n", r.cfg.Name, r.vertexName, vertexName)
+		fmt.Printf("execContext execName %s vertexName: %s -> %s send done\n", r.execName, r.vertexName, vertexName)
 	}
 	// signal the result of the vertex execution to the main walk
 	r.doneFnCh <- success
 	close(r.doneFnCh)
-	fmt.Printf("execContext execName %s vertexName: %s -> walk main fn done\n", r.cfg.Name, r.vertexName)
+	fmt.Printf("execContext execName %s vertexName: %s -> walk main fn done\n", r.execName, r.vertexName)
 }
 
 func (r *execContext) waitDependencies(ctx context.Context) bool {
 	// for each dependency wait till a it completed, either through
 	// the dependency Channel or cancel or
 
-	fmt.Printf("execContext execName %s vertexName: %s wait dependencies: %v\n", r.cfg.Name, r.vertexName, r.depChs)
+	fmt.Printf("execContext execName %s vertexName: %s wait dependencies: %v\n", r.execName, r.vertexName, r.depChs)
 DepSatisfied:
 	for depVertexName, depCh := range r.depChs {
 		//fmt.Printf("waitDependencies %s -> %s\n", depVertexName, r.vertexName)
@@ -155,7 +95,7 @@ DepSatisfied:
 		for {
 			select {
 			case d, ok := <-depCh:
-				fmt.Printf("execContext execName %s: %s -> %s rcvd done, d: %t, ok: %t\n", r.cfg.Name, depVertexName, r.vertexName, d, ok)
+				fmt.Printf("execContext execName %s: %s -> %s rcvd done, d: %t, ok: %t\n", r.execName, depVertexName, r.vertexName, d, ok)
 				if ok {
 					continue DepSatisfied
 				}
@@ -165,10 +105,10 @@ DepSatisfied:
 				}
 				continue DepSatisfied
 			case <-time.After(time.Second * 5):
-				fmt.Printf("execContext execName %s vertexName: %s wait timeout, is waiting for %s\n", r.cfg.Name, r.vertexName, depVertexName)
+				fmt.Printf("execContext execName %s vertexName: %s wait timeout, is waiting for %s\n", r.execName, r.vertexName, depVertexName)
 			}
 		}
 	}
-	fmt.Printf("execContext execName %s vertexName: %s finished waiting\n", r.cfg.Name, r.vertexName)
+	fmt.Printf("execContext execName %s vertexName: %s finished waiting\n", r.execName, r.vertexName)
 	return true
 }

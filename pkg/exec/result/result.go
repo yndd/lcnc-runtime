@@ -2,20 +2,17 @@ package result
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/slice"
 )
 
 type Result interface {
-	RecordResult(ri *ResultInfo)
-	GetResult() []*ResultInfo
-	PrintResult()
+	slice.Slice
+	Print()
 }
-
-type RecordResultFn func(*ResultInfo)
 
 type ExecType string
 
@@ -39,33 +36,34 @@ type ResultInfo struct {
 
 func New() Result {
 	return &result{
-		r: make([]*ResultInfo, 0),
+		r: slice.New(),
 	}
 }
 
 type result struct {
-	m sync.RWMutex
-	r []*ResultInfo
+	r slice.Slice
 }
 
-func (r *result) RecordResult(ri *ResultInfo) {
-	r.m.Lock()
-	defer r.m.Unlock()
-	r.r = append(r.r, ri)
+func (r *result) Add(v any) {
+	r.r.Add(v)
 }
 
-func (r *result) GetResult() []*ResultInfo {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	return r.r
+func (r *result) Get() []any {
+	return r.r.Get()
 }
 
-func (r *result) PrintResult() {
-	r.m.RLock()
-	defer r.m.RUnlock()
+func (r *result) Length() int {
+	return r.r.Length()
+}
+
+func (r *result) Print() {
 	totalSuccess := true
 	var totalDuration time.Duration
-	for i, ri := range r.r {
+	for i, v := range r.r.Get() {
+		ri, ok := v.(*ResultInfo)
+		if !ok {
+			fmt.Printf("unexpected resultInfo, got %T\n", v)
+		}
 		if ri.Type == ExecRootType && ri.VertexName == "total" {
 			totalDuration = ri.EndTime.Sub(ri.StartTime)
 		} else {
@@ -84,7 +82,7 @@ func (r *result) PrintResult() {
 			)
 
 			if ri.BlockResult != nil {
-				ri.BlockResult.PrintResult()
+				ri.BlockResult.Print()
 			}
 		}
 	}

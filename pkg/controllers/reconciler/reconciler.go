@@ -115,21 +115,20 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		o := output.New()
 		result := result.New()
 		e := builder.New(&builder.Config{
-			Name:           req.Name,
-			Namespace:      req.Namespace,
-			RootVertexName: deleteDAGCtx.RootVertexName,
-			Data:           x,
-			Client:         r.client,
-			GVK:            gvk,
-			DAG:            deleteDAGCtx.DAG,
-			Output:         o,
-			Result:         result,
+			Name:      req.Name,
+			Namespace: req.Namespace,
+			Data:      x,
+			Client:    r.client,
+			GVK:       gvk,
+			DAG:       deleteDAGCtx.DAG,
+			Output:    o,
+			Result:    result,
 		})
 
 		// TODO should be per crName
 		e.Run(ctx)
-		o.PrintOutput()
-		result.PrintResult()
+		o.Print()
+		result.Print()
 
 		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
 			r.l.Error(err, "cannot remove finalizer")
@@ -159,21 +158,20 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	o := output.New()
 	result := result.New()
 	e := builder.New(&builder.Config{
-		Name:           req.Name,
-		Namespace:      req.Namespace,
-		RootVertexName: applyDAGCtx.RootVertexName,
-		Data:           x,
-		Client:         r.client,
-		GVK:            gvk,
-		DAG:            applyDAGCtx.DAG,
-		Output:         o,
-		Result:         result,
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		Data:      x,
+		Client:    r.client,
+		GVK:       gvk,
+		DAG:       applyDAGCtx.DAG,
+		Output:    o,
+		Result:    result,
 	})
 
 	// TODO should be per crName
 	e.Run(ctx)
-	o.PrintOutput()
-	result.PrintResult()
+	o.Print()
+	result.Print()
 
 	//time.Sleep(60 * time.Second)
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
@@ -16,8 +16,6 @@ import (
 type initOutputFn func(numItems int)
 type recordOutputFn func(any)
 type getFinalResultFn func() (output.Output, error)
-
-// type prepareInputFn func(fnconfig *ctrlcfgv1.Function) any
 type runFn func(context.Context, input.Input) (any, error)
 
 type fnExecConfig struct {
@@ -52,7 +50,7 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 					return nil, err
 				}
 				if !ok {
-					return output.New(), executor.ErrConditionFalse // error to be ignored, condition false, so we dont have to run
+					return output.New(), exechandler.ErrConditionFalse // error to be ignored, condition false, so we dont have to run
 				}
 			}
 			if fnconfig.Block.Condition.Block.Range != nil {
@@ -74,9 +72,9 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 		for n, item := range items {
 			// this is a protection to ensure we dont use the nil result in a range
 			if item.val != nil {
-				i.Add("VALUE", item.val)
-				i.Add("KEY", fmt.Sprint(n))
-				i.Add("INDEX", n)
+				i.AddEntry("VALUE", item.val)
+				i.AddEntry("KEY", fmt.Sprint(n))
+				i.AddEntry("INDEX", n)
 
 				// resolve the local vars using jq and add them to the input
 				if err := resolveLocalVars(fnconfig, i); err != nil {
@@ -228,7 +226,7 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 				x := map[string]interface{}
 				if err:= yaml
 			*/
-			i.Add(varName, v)
+			i.AddEntry(varName, v)
 		}
 	}
 	return nil

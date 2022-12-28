@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
 	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap/functions"
@@ -12,15 +13,14 @@ import (
 )
 
 type Config struct {
-	Name           string
-	Namespace      string
-	RootVertexName string
-	Data           any
-	Client         client.Client
-	GVK            *schema.GroupVersionKind
-	DAG            rtdag.RuntimeDAG
-	Output         output.Output
-	Result         result.Result
+	Name      string
+	Namespace string
+	Data      any
+	Client    client.Client
+	GVK       *schema.GroupVersionKind
+	DAG       rtdag.RuntimeDAG
+	Output    output.Output
+	Result    result.Result
 }
 
 func New(c *Config) executor.Executor {
@@ -35,19 +35,29 @@ func New(c *Config) executor.Executor {
 		Result:    c.Result,
 	})
 
+	rootVertexName := c.DAG.GetRootVertex()
+
 	// Initialize the initial data
-	c.Output.RecordOutput(c.RootVertexName, &output.OutputInfo{
+	c.Output.AddEntry(rootVertexName, &output.OutputInfo{
 		Internal: true,
-		Value:    c.Data,
+		GVK:      c.GVK,
+		Data:     c.Data,
 	})
 
-	return executor.New(c.DAG, &executor.Config{
-		Type:           result.ExecRootType,
-		Name:           c.DAG.GetRootVertex(),
-		RootVertexName: c.RootVertexName,
-		//DAG:            c.DAG,
+	// initialize the handler
+	h := exechandler.New(&exechandler.Config{
+		Name:   rootVertexName,
+		Type:   result.ExecRootType,
+		DAG:    c.DAG,
 		FnMap:  fnmap,
 		Output: c.Output,
 		Result: c.Result,
+	})
+
+	return executor.New(c.DAG, &executor.Config{
+		Name:               rootVertexName,
+		From:               rootVertexName,
+		VertexFuntionRunFn: h.FunctionRun,
+		ExecPostRunFn:      h.RecordFinalResult,
 	})
 }

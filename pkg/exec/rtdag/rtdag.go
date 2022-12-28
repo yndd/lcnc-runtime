@@ -176,7 +176,7 @@ func (r *runtimeDAG) PrintVertices() {
 		vc, ok := v.(*VertexContext)
 		if ok {
 			fmt.Printf("vertexname: %s upVertices: %v, downVertices: %v\n", vertexName, r.GetUpVertexes(vertexName), r.GetDownVertexes(vertexName))
-			vc.Outputs.PrintOutput()
+			vc.Outputs.Print()
 		}
 	}
 	fmt.Printf("###### RUNTIME DAG output stop #######\n")

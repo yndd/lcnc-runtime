@@ -1,49 +1,54 @@
 package input
 
-import "sync"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/yndd/lcnc-runtime/pkg/kv"
+)
 
 type Input interface {
-	Add(s string, v any)
-	Get() map[string]any
-	GetValue(s string) any
-	Length() int
+	kv.KV
+
+	Print(s string)
 }
 
 func New() Input {
 	return &input{
-		i: map[string]any{},
+		i: kv.New(),
 	}
 }
 
 type input struct {
-	m sync.RWMutex
-	i map[string]any
+	i kv.KV
 }
 
-func (r *input) Add(s string, v any) {
-	r.m.Lock()
-	defer r.m.Unlock()
-	r.i[s] = v
+func (r *input) AddEntry(k string, v any) {
+	r.i.AddEntry(k, v)
+}
+
+func (r *input) Add(i kv.KV) {
+	r.i.Add(i)
 }
 
 func (r *input) Get() map[string]any {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	input := map[string]any{}
-	for k, v := range r.i {
-		input[k] = v
-	}
-	return input
+	return r.i.Get()
 }
 
-func (r *input) GetValue(s string) any {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	return r.i[s]
+func (r *input) GetValue(k string) any {
+	return r.i.GetValue(k)
 }
 
 func (r *input) Length() int {
-	r.m.RLock()
-	defer r.m.RUnlock()
-	return len(r.i)
+	return r.i.Length()
+}
+
+func (r *input) Print(vertexName string) {
+	for varName, v := range r.i.Get() {
+		b, err := json.Marshal(v)
+		if err != nil {
+			fmt.Printf("input vertexName: %s, varName: %s: marshal err %s\n", vertexName, varName, err.Error())
+		}
+		fmt.Printf("json input vertexName: %s, varName: %s value:%s\n", vertexName, varName, string(b))
+	}
 }

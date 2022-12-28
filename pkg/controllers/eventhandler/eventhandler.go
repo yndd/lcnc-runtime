@@ -117,7 +117,6 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	e := builder.New(&builder.Config{
 		Name:           u.GetName(),
 		Namespace:      namespace,
-		RootVertexName: r.rootVertexName,
 		Data:           x,
 		Client:         r.client,
 		GVK:            r.gvk,
@@ -127,8 +126,8 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	})
 
 	e.Run(context.TODO())
-	o.PrintOutput()
-	result.PrintResult()
+	o.Print()
+	result.Print()
 
 	// for all the output add the queues
 

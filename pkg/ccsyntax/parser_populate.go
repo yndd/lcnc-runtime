@@ -55,7 +55,7 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 	oc.GVK = gvk
 
 	outputs := output.New()
-	outputs.RecordOutput(oc.VertexName, &output.OutputInfo{
+	outputs.AddEntry(oc.VertexName, &output.OutputInfo{
 		Internal: true,
 		GVK:      gvk,
 	})
@@ -131,7 +131,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				Error:         err.Error(),
 			})
 		}
-		outputs.RecordOutput(varName, &output.OutputInfo{
+		outputs.AddEntry(varName, &output.OutputInfo{
 			Internal: outputCfg.Internal,
 			GVK:      gvk,
 		})
@@ -161,7 +161,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 						Error:         err.Error(),
 					})
 				}
-				outputs.RecordOutput(oc.VertexName, &output.OutputInfo{
+				outputs.AddEntry(oc.VertexName, &output.OutputInfo{
 					Internal: false,
 					GVK:      gvk,
 				})
@@ -176,12 +176,12 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 						Error:         err.Error(),
 					})
 				}
-				outputs.RecordOutput(oc.VertexName, &output.OutputInfo{
+				outputs.AddEntry(oc.VertexName, &output.OutputInfo{
 					Internal: true,
 					GVK:      gvk,
 				})
 			} else {
-				outputs.RecordOutput(oc.VertexName, &output.OutputInfo{
+				outputs.AddEntry(oc.VertexName, &output.OutputInfo{
 					Internal: true,
 				})
 			}
@@ -200,22 +200,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 	}
 
-	// add localVars in a seperate DAG
-	// only used for resolution and dependencies
-	/*
-		localVarsDAG := dag.New()
-		for localVarName := range v.Vars {
-			if err := localVarsDAG.AddVertex(localVarName, &dag.VertexContext{
-				//Kind: dag.LocalVarVertexKind,
-				//Function: v,
-			}); err != nil {
-				r.recordResult(Result{
-					OriginContext: oc,
-					Error:         err.Error(),
-				})
-			}
-		}
-	*/
+	
 
 	// add the function vertex to the dag
 	// if there is a functionblock we could have a different DAG -> select the right dag

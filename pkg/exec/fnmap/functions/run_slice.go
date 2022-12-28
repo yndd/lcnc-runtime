@@ -81,11 +81,15 @@ func (r *slice) recordOutput(o any) {
 
 func (r *slice) getFinalResult() (output.Output, error) {
 	o := output.New()
-	for varName, outputInfo := range r.outputs.GetOutputInfo() {
-		o.RecordOutput(varName, &output.OutputInfo{
-			Internal: outputInfo.Internal,
-			GVK:      outputInfo.GVK,
-			Value:    r.output,
+	for varName, v := range r.outputs.Get() {
+		oi, ok := v.(*output.OutputInfo)
+		if !ok {
+			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+		}
+		o.AddEntry(varName, &output.OutputInfo{
+			Internal: oi.Internal,
+			GVK:      oi.GVK,
+			Data:     r.output,
 		})
 	}
 	return o, nil

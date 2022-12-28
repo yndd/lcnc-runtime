@@ -7,24 +7,21 @@ import (
 	"time"
 
 	"github.com/yndd/lcnc-runtime/pkg/dag"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
-	"github.com/yndd/lcnc-runtime/pkg/exec/output"
-	"github.com/yndd/lcnc-runtime/pkg/exec/result"
-	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 )
 
 type Executor interface {
 	Run(ctx context.Context)
 }
 
+type VertexFuntionRunFn func(ctx context.Context, vertexName string, vertexContext any) bool
+type ExecPostRunFn func(start, finish time.Time, success bool)
+
 type Config struct {
-	Type           result.ExecType
-	Name           string
-	RootVertexName string
-	//DAG            dag.DAG
-	FnMap  fnmap.FuncMap
-	Output output.Output
-	Result result.Result
+	Name string
+	From string
+	//Handlers
+	VertexFuntionRunFn VertexFuntionRunFn
+	ExecPostRunFn      ExecPostRunFn
 }
 
 func New(d dag.DAG, cfg *Config) Executor {
@@ -60,19 +57,16 @@ func (r *exec) init() {
 	r.execMap = map[string]*execContext{}
 	for vertexName, v := range r.d.GetVertices() {
 		fmt.Printf("executor init vertexName: %s\n", vertexName)
-		vc, ok := v.(*rtdag.VertexContext)
-		if !ok {
-			fmt.Printf("expecting vertexContext: got %#v\n", v)
-		}
 		r.execMap[vertexName] = &execContext{
-			cfg:           r.cfg,
+			execName:      r.cfg.Name,
 			vertexName:    vertexName,
-			vertexContext: vc,
+			vertexContext: v,
 			doneChs:       make(map[string]chan bool), //snd
 			depChs:        make(map[string]chan bool), //rcv
 			// callback to gather the result
-			recordResult: r.cfg.Result.RecordResult,
-			recordOutput: r.cfg.Output.RecordOutput,
+			//recordResult: r.cfg.Result.Add,
+			//recordOutput: r.cfg.Output.Add,
+			vertexFuntionRunFn: r.cfg.VertexFuntionRunFn,
 		}
 	}
 	// build the channel matrix to signal dependencies through channels
@@ -97,20 +91,15 @@ func (r *exec) init() {
 }
 
 func (r *exec) Run(ctx context.Context) {
-	from := r.cfg.RootVertexName
+	from := r.cfg.From
 	start := time.Now()
 	ctx, cancelFn := context.WithCancel(ctx)
 	r.cancelFn = cancelFn
 	success := r.execute(ctx, from, true)
-	// add total as a last entry in the result
-	r.cfg.Result.RecordResult(&result.ResultInfo{
-		Type:       r.cfg.Type,
-		ExecName:   r.cfg.Name,
-		VertexName: "total",
-		StartTime:  start,
-		EndTime:    time.Now(),
-		Success:    success,
-	})
+	finish := time.Now()
+	
+	// handler to execute a final action e.g. recording the overall result
+	r.cfg.ExecPostRunFn(start, finish, success)
 }
 
 func (r *exec) execute(ctx context.Context, from string, init bool) bool {

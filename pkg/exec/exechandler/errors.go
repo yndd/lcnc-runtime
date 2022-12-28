@@ -1,4 +1,4 @@
-package executor
+package exechandler
 
 import "errors"
 

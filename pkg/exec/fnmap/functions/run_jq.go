@@ -61,6 +61,7 @@ func (r *jq) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i inpu
 	r.outputs = vertexContext.Outputs
 	r.expression = vertexContext.Function.Input.Expression
 	// execute the function
+	i.Print(vertexContext.VertexName)
 	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
@@ -72,19 +73,24 @@ func (r *jq) recordOutput(o any) {
 
 func (r *jq) getFinalResult() (output.Output, error) {
 	o := output.New()
-	for varName, outputInfo := range r.outputs.GetOutputInfo() {
-		fmt.Printf("query getFinalResult varName: %s, outputInfo %#v\n", varName, *outputInfo)
-		fmt.Printf("query getFinalResult value: %#v\n", r.output)
-		o.RecordOutput(varName, &output.OutputInfo{
-			Internal: outputInfo.Internal,
-			GVK:      outputInfo.GVK,
-			Value:    r.output,
+	for varName, v := range r.outputs.Get() {
+		//fmt.Printf("query getFinalResult varName: %s, outputInfo %#v\n", varName, *outputInfo)
+		//fmt.Printf("query getFinalResult value: %#v\n", r.output)
+		oi, ok := v.(*output.OutputInfo)
+		if !ok {
+			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+		}
+		o.AddEntry(varName, &output.OutputInfo{
+			Internal: oi.Internal,
+			GVK:      oi.GVK,
+			Data:     r.output,
 		})
 	}
-	o.PrintOutput()
+	o.Print()
 	return o, nil
 }
 
 func (r *jq) run(ctx context.Context, i input.Input) (any, error) {
+	i.Print("dummy")
 	return runJQ(r.expression, i)
 }

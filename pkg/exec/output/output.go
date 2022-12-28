@@ -3,88 +3,91 @@ package output
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 
+	"github.com/yndd/lcnc-runtime/pkg/kv"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type Output interface {
-	RecordOutput(varName string, oi *OutputInfo)
-	GetOutputInfo() map[string]*OutputInfo
-	GetValue(string) any
-	GetFinalOutput() []any
-	PrintOutput()
-}
+	kv.KV
 
-type RecordOutputFn func(varName string, oi *OutputInfo)
+	GetData(k string) any
+	Print()
+	GetFinalOutput() []any
+}
 
 type OutputInfo struct {
 	Internal bool
 	GVK      *schema.GroupVersionKind
-	Value    any
+	Data     any
 }
 
 func New() Output {
 	return &output{
-		o: map[string]*OutputInfo{},
+		o: kv.New(),
 	}
 }
 
 type output struct {
-	m sync.RWMutex
-	o map[string]*OutputInfo
+	o kv.KV
 }
 
-func (r *output) RecordOutput(varName string, oi *OutputInfo) {
-	r.m.Lock()
-	defer r.m.Unlock()
-
-	r.o[varName] = oi
+func (r *output) AddEntry(k string, v any) {
+	r.o.AddEntry(k, v)
 }
 
-func (r *output) GetOutputInfo() map[string]*OutputInfo {
-	o := make(map[string]*OutputInfo, len(r.o))
-	for k, v := range r.o {
-		o[k] = v
-	}
-	return o
+func (r *output) Add(o kv.KV) {
+	r.o.Add(o)
 }
 
-func (r *output) GetValue(v string) any {
-	r.m.RLock()
-	defer r.m.RUnlock()
+func (r *output) Get() map[string]any {
+	return r.o.Get()
+}
 
-	oi, ok := r.o[v]
+func (r *output) GetValue(k string) any {
+	return r.o.GetValue(k)
+}
+
+func (r *output) Length() int {
+	return r.o.Length()
+}
+
+func (r *output) GetData(k string) any {
+	v := r.o.GetValue(k)
+	oi, ok := v.(*OutputInfo)
 	if !ok {
-		// not found -> should not happen
 		return nil
 	}
-	return oi.Value
-}
-
-func (r *output) GetFinalOutput() []any {
-	r.m.RLock()
-	defer r.m.RUnlock()
-
-	fo := []any{}
-	for _, oi := range r.o {
-		if !oi.Internal {
-			fo = append(fo, oi.Value)
-		}
-	}
-	return fo
+	return oi.Data
 }
 
 // used for debugging purposes
-func (r *output) PrintOutput() {
-	r.m.RLock()
-	defer r.m.RUnlock()
-
-	for varName, oi := range r.o {
-		b, err := json.Marshal(oi.Value)
+func (r *output) Print() {
+	for varName, v := range r.o.Get() {
+		oi, ok := v.(*OutputInfo)
+		if !ok {
+			fmt.Printf("unexpected outputInfo, got %T\n", v)
+			continue
+		}
+		b, err := json.Marshal(oi.Data)
 		if err != nil {
 			fmt.Printf("output %s: marshal err %s\n", varName, err.Error())
 		}
 		fmt.Printf("  json output varName: %s internal: %t gvk: %v value:%s\n", varName, oi.Internal, oi.GVK, string(b))
 	}
+}
+
+func (r *output) GetFinalOutput() []any {
+	fo := []any{}
+	for _, v := range r.o.Get() {
+		oi, ok := v.(*OutputInfo)
+		if !ok {
+			fmt.Printf("unexpected outputInfo, got %T\n", v)
+			continue
+		}
+		if !oi.Internal {
+			fo = append(fo, oi.Data)
+		}
+	}
+	return fo
 }
