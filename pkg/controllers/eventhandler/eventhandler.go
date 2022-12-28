@@ -20,8 +20,11 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
-	"github.com/yndd/lcnc-runtime/pkg/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
+	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,14 +37,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-type EventHandlerInfo struct {
+type Config struct {
 	Client         client.Client
 	RootVertexName string
 	GVK            *schema.GroupVersionKind
-	DAG            dag.DAG
+	DAG            rtdag.RuntimeDAG
+	FnMap          fnmap.FuncMap
 }
 
-func New(e *EventHandlerInfo) handler.EventHandler {
+func New(c *Config) handler.EventHandler {
 	opts := zap.Options{
 		Development: true,
 	}
@@ -49,10 +53,11 @@ func New(e *EventHandlerInfo) handler.EventHandler {
 
 	return &eventhandler{
 		//ctx:    ctx,
-		client:         e.Client,
-		gvk:            e.GVK,
-		d:              e.DAG,
-		rootVertexName: e.RootVertexName,
+		client:         c.Client,
+		rootVertexName: c.RootVertexName,
+		gvk:            c.GVK,
+		d:              c.DAG,
+		fnMap:          c.FnMap,
 		l:              ctrl.Log.WithName("lcnc eventhandler"),
 	}
 }
@@ -60,9 +65,10 @@ func New(e *EventHandlerInfo) handler.EventHandler {
 type eventhandler struct {
 	client client.Client
 	//ctx    context.Context
-	gvk            *schema.GroupVersionKind
-	d              dag.DAG
 	rootVertexName string
+	gvk            *schema.GroupVersionKind
+	d              rtdag.RuntimeDAG
+	fnMap          fnmap.FuncMap
 
 	l logr.Logger
 }
@@ -91,34 +97,37 @@ func (r *eventhandler) Generic(evt event.GenericEvent, q workqueue.RateLimitingI
 func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	r.l.Info("watch event started...")
 
-	o, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return
 	}
-	x, err := meta.MarshalData(o)
+	x, err := meta.MarshalData(u)
 	if err != nil {
 		r.l.Error(err, "cannot marshal data")
 		return
 	}
 
-	namespace := o.GetNamespace()
-	if o.GetNamespace() == "" {
+	namespace := u.GetNamespace()
+	if u.GetNamespace() == "" {
 		namespace = "default"
 	}
 
-	e := executor.New(&executor.Config{
-		Name:       o.GetName(),
-		Namespace:  namespace,
-		RootVertex: r.rootVertexName,
-		Data:       x,
-		Client:     r.client,
-		GVK:        r.gvk,
-		DAG:        r.d,
+	o := output.New()
+	result := result.New()
+	e := builder.New(&builder.Config{
+		Name:           u.GetName(),
+		Namespace:      namespace,
+		Data:           x,
+		Client:         r.client,
+		GVK:            r.gvk,
+		DAG:            r.d,
+		Output:         o,
+		Result:         result,
 	})
 
 	e.Run(context.TODO())
-	e.GetOutput()
-	e.GetResult()
+	o.Print()
+	result.Print()
 
 	// for all the output add the queues
 

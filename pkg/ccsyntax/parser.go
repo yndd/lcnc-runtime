@@ -24,42 +24,39 @@ func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
 }
 
 type parser struct {
-	cCfg *ctrlcfgv1.ControllerConfig
-	//d              dag.DAG
+	cCfg           *ctrlcfgv1.ControllerConfig
 	rootVertexName string
 }
 
 func (r *parser) Parse() (ConfigExecutionContext, []Result) {
 	// initialize the config execution context
 	// for each for and watch a new dag is created
-	ceCtx, result := r.init()
+	ceCtx, gvar, result := r.init()
 	if len(result) != 0 {
 		return nil, result
 	}
 	// resolves the dependencies in the dag
 	// step1. check if all dependencies resolve
 	// step2. add the dependencies in the dag
-	result = r.populate(ceCtx)
+	result = r.populate(ceCtx, gvar)
 	if len(result) != 0 {
 		return nil, result
 	}
 	//fmt.Println("propulate succeded")
-	result = r.resolve(ceCtx)
+	result = r.resolve(ceCtx, gvar)
 	if len(result) != 0 {
 		return nil, result
 	}
 	//fmt.Println("resolve succeded")
-	result = r.connect(ceCtx)
+	result = r.connect(ceCtx, gvar)
 	if len(result) != 0 {
 		return nil, result
 	}
-	//fmt.Println("connect succeded")
-	//d.GetDependencyMap(r.rootVertexName)
 	// optimizes the dependncy graph based on transit reduction
 	// techniques
 	r.transitivereduction(ceCtx)
 
-	//d.GetDependencyMap(r.rootVertexName)
+	ceCtx.Print()
 	return ceCtx, nil
 }
 
@@ -68,6 +65,9 @@ func (r *parser) transitivereduction(ceCtx ConfigExecutionContext) {
 	for _, od := range ceCtx.GetFOW(FOWFor) {
 		for _, dctx := range od {
 			dctx.DAG.TransitiveReduction()
+			for _, d := range dctx.BlockDAGs {
+				d.TransitiveReduction()
+			}
 		}
 
 	}
@@ -75,6 +75,9 @@ func (r *parser) transitivereduction(ceCtx ConfigExecutionContext) {
 	for _, od := range ceCtx.GetFOW(FOWWatch) {
 		for _, dctx := range od {
 			dctx.DAG.TransitiveReduction()
+			for _, d := range dctx.BlockDAGs {
+				d.TransitiveReduction()
+			}
 		}
 	}
 }

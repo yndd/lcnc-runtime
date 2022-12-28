@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -31,43 +32,40 @@ var (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 type ResourceContext struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta   `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 
-	Spec   ResourceContextSpec   `json:"spec,omitempty"`
-	Status ResourceContextStatus `json:"status,omitempty"`
+	Spec   Spec   `json:"spec,omitempty" yaml:"spec,omitempty"`
+	Status Status `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
-type ResourceContextSpec struct {
-	Properties *ResourceContextProperties `json:"properties,omitempty"`
+type Spec struct {
+	Properties *Properties `json:"properties,omitempty"`
 }
 
 // ResourceContextSpec defines the context of the resource of the controller
-type ResourceContextProperties struct {
+type Properties struct {
 	// holds the input of the CR
-	Origin map[string]KRMResource `json:"origin,omitempty"`
+	Origin map[string]runtime.RawExtension `json:"origin,omitempty" yaml:"origin,omitempty"`
 	// holds the input of the CR
-	Input map[string][]KRMResource `json:"input,omitempty"`
+	Input map[string][]runtime.RawExtension `json:"input,omitempty" yaml:"input,omitempty"`
 	// holds the allocation of the CR with the key being GVK in string format
-	//Allocations map[string][]KRMResource `json:"allocations,omitempty"`
-	// holds the extra input of the CR with the key being GVK in string format
-	Output map[string][]KRMResource `json:"extraInput,omitempty"`
+	Conditions map[string][]runtime.RawExtension `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	// holds the output of the CR with the key being GVK in string format
+	Output map[string][]runtime.RawExtension `json:"output,omitempty" yaml:"output,omitempty"`
 	//Result[]
 }
 
-// string is a string representation of the KRM resource
-type KRMResource string
-
-// ResourceContextSpec defines the context of the resource of the controller
-type ResourceContextStatus struct {
+// Status defines the context of the resource of the controller
+type Status struct {
 }
 
 // ResourceContextList
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 type ResourceContextList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline" yaml:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 
-	Items []ResourceContext `json:"items"`
+	Items []ResourceContext `json:"items" yaml:"items"`
 }

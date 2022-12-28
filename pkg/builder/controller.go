@@ -8,6 +8,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/eventhandler"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -25,17 +26,26 @@ type Builder interface {
 }
 
 type builder struct {
-	ceCtx            ccsyntax.ConfigExecutionContext
-	mgr              manager.Manager
+	mgr   manager.Manager
+	ceCtx ccsyntax.ConfigExecutionContext
+	fnMap fnmap.FuncMap
+
 	globalPredicates []predicate.Predicate
 	ctrl             controller.Controller
 	ctrlOptions      controller.Options
 }
 
-func New(mgr manager.Manager, ceCtx ccsyntax.ConfigExecutionContext, opts controller.Options) Builder {
+type Config struct {
+	Mgr   manager.Manager
+	CeCtx ccsyntax.ConfigExecutionContext
+	FnMap fnmap.FuncMap
+}
+
+func New(c *Config, opts controller.Options) Builder {
 	b := &builder{
-		mgr:         mgr,
-		ceCtx:       ceCtx,
+		mgr:         c.Mgr,
+		ceCtx:       c.CeCtx,
+		fnMap:       c.FnMap,
 		ctrlOptions: opts,
 	}
 	return b
@@ -101,11 +111,12 @@ func (blder *builder) doWatch() error {
 		// If the source of this watch is of type *source.Kind, project it.
 		src := &source.Kind{Type: obj}
 
-		eh := eventhandler.New(&eventhandler.EventHandlerInfo{
-			Client: blder.mgr.GetClient(),
+		eh := eventhandler.New(&eventhandler.Config{
+			Client:         blder.mgr.GetClient(),
 			RootVertexName: od[ccsyntax.OperationApply].RootVertexName,
-			GVK:    &gvk,
-			DAG:    od[ccsyntax.OperationApply].DAG,
+			GVK:            &gvk,
+			DAG:            od[ccsyntax.OperationApply].DAG,
+			FnMap:          blder.fnMap,
 		})
 
 		if err := blder.ctrl.Watch(src, eh, allPredicates...); err != nil {

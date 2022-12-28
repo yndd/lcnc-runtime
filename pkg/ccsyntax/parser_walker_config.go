@@ -13,21 +13,13 @@ type cfgPostHookFn func(lcncCfg *ctrlcfgv1.ControllerConfig)
 type gvkObjectFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.GroupVersionKind
 type emptyPipelineFn func(oc *OriginContext, v *ctrlcfgv1.GvkObject)
 
-// lcncBlockFn processes the block part of the Variables and functions
-//type pipelineBlockFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock)
-//type pipelineBlockEndFn func(o Origin, idx int, vertexName string, v ctrlcfgv1.ControllerConfigBlock)
-
-//type lcncVarsPreHookFn func(v []ctrlcfgv1.ControllerConfigVarBlock)
-//type lcncVarsPostHookFn func(v []ctrlcfgv1.ControllerConfigVarBlock)
-
-// lcncVarFn processes the variable in the variables section
-//type lcncVarFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigVar)
-
 type pipelinePreHookFn func(oc *OriginContext, v *ctrlcfgv1.Pipeline)
 type pipelinePostHookFn func(oc *OriginContext, v *ctrlcfgv1.Pipeline)
 
 // functionFn processes the function in the functions section
+type empryFunctionElementFn func(oc *OriginContext)
 type functionFn func(oc *OriginContext, v *ctrlcfgv1.Function)
+type functionBlockFn func(oc *OriginContext, v *ctrlcfgv1.FunctionElement)
 
 //type lcncServicesPreHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
 
@@ -42,11 +34,11 @@ type WalkConfig struct {
 	gvkObjectFn     gvkObjectFn
 	emptyPipelineFn emptyPipelineFn
 
-	pipelinePreHookFn  pipelinePreHookFn
-	functionFn         functionFn
-	pipelinePostHookFn pipelinePostHookFn
-	//pipelineBlockFn    pipelineBlockFn
-	//pipelineBlockEndFn pipelineBlockEndFn
+	pipelinePreHookFn      pipelinePreHookFn
+	empryFunctionElementFn empryFunctionElementFn
+	functionBlockFn        functionBlockFn
+	functionFn             functionFn
+	pipelinePostHookFn     pipelinePostHookFn
 	//lcncServicesPreHookFn   lcncServicesPreHookFn
 	//lcncServiceFn           lcncServiceFn
 	//lcncServicesPostHookFn  lcncServicesPreHookFn
@@ -62,7 +54,7 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	idx := 0
 	for vertexName, v := range r.cCfg.Spec.Properties.For {
 		// we run this once for apply and once for delete
-		oc := &OriginContext{FOW: FOWFor, Origin: OriginFow, VertexName: vertexName}
+		oc := &OriginContext{FOW: FOWFor, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 		idx++
 
@@ -70,14 +62,14 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Own {
 		// For Own the oepration is irrelevant
-		oc := &OriginContext{FOW: FOWOwn, Origin: OriginFow, VertexName: vertexName}
+		oc := &OriginContext{FOW: FOWOwn, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 		idx++
 	}
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Watch {
 		// we run this only for operation apply, NOT for delete
-		oc := &OriginContext{FOW: FOWWatch, Origin: OriginFow, VertexName: vertexName}
+		oc := &OriginContext{FOW: FOWWatch, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 	}
 
@@ -116,53 +108,101 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 	pipelineName := v.Name
 	if fnc.pipelinePreHookFn != nil {
 		oc := &OriginContext{
-			FOW:        oc.FOW,
-			Operation:  oc.Operation,
-			GVK:        oc.GVK,
-			Pipeline:   pipelineName,
-			Origin:     oc.Origin,
-			VertexName: oc.VertexName,
+			FOW:            oc.FOW,
+			RootVertexName: oc.RootVertexName,
+			Operation:      oc.Operation,
+			GVK:            oc.GVK,
+			Pipeline:       pipelineName,
+			Origin:         oc.Origin,
+			VertexName:     oc.VertexName,
 		}
 		fnc.pipelinePreHookFn(oc, v)
 	}
 
 	for vertexName, v := range v.Vars {
-		if fnc.functionFn != nil {
-			oc := &OriginContext{
-				FOW:        oc.FOW,
-				Operation:  oc.Operation,
-				GVK:        oc.GVK,
-				Pipeline:   pipelineName,
-				Origin:     OriginVariable,
-				VertexName: vertexName,
-			}
-			fnc.functionFn(oc, v)
+		oc := &OriginContext{
+			FOW:            oc.FOW,
+			RootVertexName: oc.RootVertexName,
+			Operation:      oc.Operation,
+			GVK:            oc.GVK,
+			Pipeline:       pipelineName,
+			Origin:         OriginVariable,
+			VertexName:     vertexName,
+			LocalVars:      v.Vars,
 		}
+		fnc.walkFunctionElement(oc, v)
 	}
 
 	for vertexName, v := range v.Tasks {
-		if fnc.functionFn != nil {
-			oc := &OriginContext{
-				FOW:        oc.FOW,
-				Operation:  oc.Operation,
-				GVK:        oc.GVK,
-				Pipeline:   pipelineName,
-				Origin:     OriginFunction,
-				VertexName: vertexName,
-			}
-			fnc.functionFn(oc, v)
+		oc := &OriginContext{
+			FOW:            oc.FOW,
+			RootVertexName: oc.RootVertexName,
+			Operation:      oc.Operation,
+			GVK:            oc.GVK,
+			Pipeline:       pipelineName,
+			Origin:         OriginFunction,
+			VertexName:     vertexName,
+			LocalVars:      v.Vars,
 		}
+		fnc.walkFunctionElement(oc, v)
 	}
 
 	if fnc.pipelinePostHookFn != nil {
 		oc := &OriginContext{
-			FOW:        oc.FOW,
-			Operation:  oc.Operation,
-			GVK:        oc.GVK,
-			Pipeline:   pipelineName,
-			Origin:     oc.Origin,
-			VertexName: oc.VertexName,
+			FOW:            oc.FOW,
+			RootVertexName: oc.RootVertexName,
+			Operation:      oc.Operation,
+			GVK:            oc.GVK,
+			Pipeline:       pipelineName,
+			Origin:         oc.Origin,
+			VertexName:     oc.VertexName,
 		}
 		fnc.pipelinePostHookFn(oc, v)
+	}
+}
+
+func (fnc *WalkConfig) walkFunctionElement(oc *OriginContext, v *ctrlcfgv1.FunctionElement) {
+	if v == nil {
+		if fnc.empryFunctionElementFn != nil {
+			fnc.empryFunctionElementFn(oc)
+		}
+		return
+	}
+
+	if v.Type == ctrlcfgv1.BlockType {
+		if fnc.functionBlockFn != nil {
+			// use to validate the function block
+			fnc.functionBlockFn(oc, v)
+		}
+		// for a block function we allocate a new dag
+		//if v.HasBlock() {
+		//	oc.BlockDAG = dag.New()
+		//}
+		// the function in the function block is treated as a regular function
+		if fnc.functionFn != nil {
+			oc.Block = true
+			fnc.functionFn(oc, &v.Function)
+		}
+
+		for vertexName, v := range v.FunctionBlock {
+			oc := &OriginContext{
+				FOW:             oc.FOW,
+				RootVertexName:  oc.RootVertexName,
+				Operation:       oc.Operation,
+				GVK:             oc.GVK,
+				Pipeline:        oc.Pipeline,
+				Origin:          oc.Origin,
+				Block:           true,
+				BlockIndex:      oc.BlockIndex + 1,
+				BlockVertexName: oc.VertexName,
+				VertexName:      vertexName,
+				LocalVars:       oc.LocalVars,
+			}
+			fnc.walkFunctionElement(oc, v)
+		}
+	} else {
+		if fnc.functionFn != nil {
+			fnc.functionFn(oc, &v.Function)
+		}
 	}
 }

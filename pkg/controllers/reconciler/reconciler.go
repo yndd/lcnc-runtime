@@ -12,10 +12,12 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
-	"github.com/yndd/lcnc-runtime/pkg/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
+	"github.com/yndd/lcnc-runtime/pkg/exec/output"
+	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"github.com/yndd/ndd-runtime/pkg/event"
-	"github.com/yndd/ndd-runtime/pkg/logging"
 )
 
 const (
@@ -30,26 +32,27 @@ const (
 
 )
 
-type ReconcileInfo struct {
+type Config struct {
 	Client       client.Client
 	PollInterval time.Duration
 	CeCtx        ccsyntax.ConfigExecutionContext
+	FnMap        fnmap.FuncMap
 
-	Log logging.Logger
 }
 
-func New(ri *ReconcileInfo) reconcile.Reconciler {
+func New(c *Config) reconcile.Reconciler {
 	opts := zap.Options{
 		Development: true,
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	return &reconciler{
-		client:       ri.Client,
-		pollInterval: ri.PollInterval,
-		ceCtx:        ri.CeCtx,
+		client:       c.Client,
+		pollInterval: c.PollInterval,
+		ceCtx:        c.CeCtx,
+		fnMap:        c.FnMap,
 		l:            ctrl.Log.WithName("lcnc reconcile"),
-		f:            meta.NewAPIFinalizer(ri.Client, defaultFinalizerName),
+		f:            meta.NewAPIFinalizer(c.Client, defaultFinalizerName),
 		record:       event.NewNopRecorder(),
 	}
 }
@@ -58,10 +61,10 @@ type reconciler struct {
 	client       client.Client
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
-
-	f      meta.Finalizer
-	l      logr.Logger
-	record event.Recorder
+	fnMap        fnmap.FuncMap
+	f            meta.Finalizer
+	l            logr.Logger
+	record       event.Recorder
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -95,20 +98,35 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.l.Info("reconcile delete started...")
 		// handle delete branch
 		deleteDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
-		e := executor.New(&executor.Config{
-			Name:       req.Name,
-			Namespace:  req.Namespace,
-			RootVertex: deleteDAGCtx.RootVertexName,
-			Data:       x,
-			Client:     r.client,
-			GVK:        gvk,
-			DAG:        deleteDAGCtx.DAG,
+		/*
+			e := executor.New(&executor.Config{
+				Name:       req.Name,
+				Namespace:  req.Namespace,
+				RootVertex: deleteDAGCtx.RootVertexName,
+				Data:       x,
+				Client:     r.client,
+				GVK:        gvk,
+				DAG:        deleteDAGCtx.DAG,
+			})
+		*/
+
+		o := output.New()
+		result := result.New()
+		e := builder.New(&builder.Config{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+			Data:      x,
+			Client:    r.client,
+			GVK:       gvk,
+			DAG:       deleteDAGCtx.DAG,
+			Output:    o,
+			Result:    result,
 		})
 
 		// TODO should be per crName
 		e.Run(ctx)
-		e.GetOutput()
-		e.GetResult()
+		o.Print()
+		result.Print()
 
 		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
 			r.l.Error(err, "cannot remove finalizer")
@@ -123,20 +141,35 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// apply branch -> used for create and update
 	r.l.Info("reconcile apply started...")
 	applyDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
-	e := executor.New(&executor.Config{
-		Name:       req.Name,
-		Namespace:  req.Namespace,
-		RootVertex: applyDAGCtx.RootVertexName,
-		Data:       x,
-		Client:     r.client,
-		GVK:        gvk,
-		DAG:        applyDAGCtx.DAG,
+	/*
+		e := executor.New(&executor.Config{
+			Name:       req.Name,
+			Namespace:  req.Namespace,
+			RootVertex: applyDAGCtx.RootVertexName,
+			Data:       x,
+			Client:     r.client,
+			GVK:        gvk,
+			DAG:        applyDAGCtx.DAG,
+		})
+	*/
+
+	o := output.New()
+	result := result.New()
+	e := builder.New(&builder.Config{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		Data:      x,
+		Client:    r.client,
+		GVK:       gvk,
+		DAG:       applyDAGCtx.DAG,
+		Output:    o,
+		Result:    result,
 	})
 
 	// TODO should be per crName
 	e.Run(ctx)
-	e.GetOutput()
-	e.GetResult()
+	o.Print()
+	result.Print()
 
 	//time.Sleep(60 * time.Second)
 
