@@ -3,16 +3,21 @@ package functions
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewRootFn() fnmap.Function {
-	r := &root{}
+	l := ctrl.Log.WithName("root fn")
+	r := &root{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  false,
@@ -20,6 +25,7 @@ func NewRootFn() fnmap.Function {
 		// execution functions
 		// result functions
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 	return r
 }
@@ -27,6 +33,8 @@ func NewRootFn() fnmap.Function {
 type root struct {
 	// fec exec config
 	fec *fnExecConfig
+	// logging
+	l logr.Logger
 }
 
 func (r *root) Init(opts ...fnmap.FunctionOption) {
@@ -49,6 +57,7 @@ func (r *root) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i in
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	// execute the function
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get())
 	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 

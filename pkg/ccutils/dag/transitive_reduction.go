@@ -1,9 +1,5 @@
 package dag
 
-import (
-	"fmt"
-)
-
 type WalkInitFn func()
 
 type WalkEntryFn func(from string, depth int)
@@ -65,7 +61,8 @@ func (r *dag) processTransitiveReducation(from string, depth int) {
 			// if an upvertex has a depth of 0 it should not be considered
 			// delete the edges for links that have different vertexDepths
 			if r.getVertexDepth(upVertex) != 0 && r.getVertexDepth(upVertex) != bestVertexDepth {
-				fmt.Printf("transitive reduction %s -> %s\n", upVertex, from)
+				//fmt.Printf("transitive reduction %s -> %s\n", upVertex, from)
+				r.l.Info("transitive reduction", "from", upVertex, "to", from)
 				r.Disconnect(upVertex, from)
 			}
 		}

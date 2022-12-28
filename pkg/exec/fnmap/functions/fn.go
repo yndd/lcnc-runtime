@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/itchyny/gojq"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
@@ -28,6 +29,8 @@ type fnExecConfig struct {
 	initOutputFn     initOutputFn
 	recordOutputFn   recordOutputFn
 	getFinalResultFn getFinalResultFn
+	// logging
+	l logr.Logger
 }
 
 func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, i input.Input) (output.Output, error) {
@@ -36,17 +39,22 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 	var ok bool
 	var err error
 	if fnconfig.HasBlock() {
+		fec.l.Info("execute block")
 		if fnconfig.Block.Range != nil {
+			fec.l.Info("execute range", "value", fnconfig.Block.Range.Value)
 			items, err = runRange(fnconfig.Block.Range.Value, i)
 			if err != nil {
+				fec.l.Error(err, "cannot run range")
 				return nil, err
 			}
 			isRange = true
 		}
 		if fnconfig.Block.Condition != nil {
+			fec.l.Info("execute condition", "expression", fnconfig.Block.Condition.Expression)
 			if exp := fnconfig.Block.Condition.Expression; exp != "" {
 				ok, err = runCondition(exp, i)
 				if err != nil {
+					fec.l.Error(err, "cannot run range")
 					return nil, err
 				}
 				if !ok {
@@ -54,8 +62,10 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 				}
 			}
 			if fnconfig.Block.Condition.Block.Range != nil {
+				fec.l.Info("execute range in condition", "value", fnconfig.Block.Condition.Block.Range.Value)
 				items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, i)
 				if err != nil {
+					fec.l.Error(err, "cannot run range in condition")
 					return nil, err
 				}
 				isRange = true
@@ -93,6 +103,7 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 		}
 	}
 	if fec.executeSingle {
+		fec.l.Info("execute single")
 		fec.initOutputFn(1)
 		// resolve the local vars using jq and add them to the input
 		if err := resolveLocalVars(fnconfig, i); err != nil {
@@ -120,8 +131,8 @@ func runRange(exp string, i input.Input) ([]*item, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
-	fmt.Printf("runRange exp: %s\n", exp)
+	//fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
+	//fmt.Printf("runRange exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
@@ -140,7 +151,7 @@ func runRange(exp string, i input.Input) ([]*item, error) {
 		}
 		if err, ok := v.(error); ok {
 			if err != nil {
-				fmt.Printf("runJQ err: %v\n", err)
+				//fmt.Printf("runJQ err: %v\n", err)
 				if strings.Contains(err.Error(), "cannot iterate over: null") {
 					return result, nil
 				}
@@ -150,7 +161,7 @@ func runRange(exp string, i input.Input) ([]*item, error) {
 		if v == nil {
 			continue
 		}
-		fmt.Printf("runRange result item: %#v\n", v)
+		//fmt.Printf("runRange result item: %#v\n", v)
 		result = append(result, &item{val: v})
 	}
 
@@ -164,8 +175,8 @@ func runCondition(exp string, i input.Input) (bool, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	fmt.Printf("runCondition varNames: %v, varValues: %v\n", varNames, varValues)
-	fmt.Printf("runCondition exp: %s\n", exp)
+	//fmt.Printf("runCondition varNames: %v, varValues: %v\n", varNames, varValues)
+	//fmt.Printf("runCondition exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
@@ -184,14 +195,14 @@ func runCondition(exp string, i input.Input) (bool, error) {
 
 	if err, ok := v.(error); ok {
 		if err != nil {
-			fmt.Printf("runCondition err: %v\n", err)
+			//fmt.Printf("runCondition err: %v\n", err)
 			//if strings.Contains(err.Error(), "cannot iterate over: null") {
 			//	return false, nil
 			//}
 			return false, err
 		}
 	}
-	fmt.Printf("runCondition value: %t\n", v)
+	//fmt.Printf("runCondition value: %t\n", v)
 	if r, ok := v.(bool); ok {
 		return r, nil
 	}
@@ -200,7 +211,7 @@ func runCondition(exp string, i input.Input) (bool, error) {
 
 func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 	if fnconfig.Vars != nil {
-		fmt.Printf("resolveLocalVars: input: %v\n", i.Get())
+		//fmt.Printf("resolveLocalVars: input: %v\n", i.Get())
 		for varName, expression := range fnconfig.Vars {
 			// We are lazy and provide all reference input to JQ
 			// the below aproach could be a more optimal solution
@@ -217,7 +228,7 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("resolveLocalVars jq %#v\n", v)
+			//fmt.Printf("resolveLocalVars jq %#v\n", v)
 			/*
 				b, err := yaml.Marshal(v)
 				if err != nil {

@@ -5,18 +5,23 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/go-logr/logr"
+	"github.com/yndd/lcnc-runtime/pkg/ccutils/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
-	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewBlockFn() fnmap.Function {
-	r := &block{}
+	l := ctrl.Log.WithName("block fn")
+	r := &block{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  false,
@@ -27,6 +32,7 @@ func NewBlockFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 	return r
 }
@@ -43,6 +49,8 @@ type block struct {
 	// result, output
 	m      sync.RWMutex
 	output []any
+	// logging
+	l logr.Logger
 }
 
 func (r *block) Init(opts ...fnmap.FunctionOption) {
@@ -68,6 +76,7 @@ func (r *block) WithFnMap(fnMap fnmap.FuncMap) {
 }
 
 func (r *block) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get())
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.d = vertexContext.BlockDAG
@@ -96,12 +105,15 @@ func (r *block) getFinalResult() (output.Output, error) {
 func (r *block) run(ctx context.Context, i input.Input) (any, error) {
 	// check if the dag is initialized
 	if r.d == nil {
-		return nil, fmt.Errorf("expecting an initialized dag, got: %T", r.d)
+		err := fmt.Errorf("expecting an initialized dag, got: %T", r.d)
+		r.l.Error(err, "dag not initialized")
+		return nil, err
 	}
 
 	// debug
 	r.d.PrintVertices()
-	fmt.Printf("block root Vertex: %s\n", r.d.GetRootVertex())
+	r.l.Info("rootVertex", "name", r.d.GetRootVertex())
+	//fmt.Printf("block root Vertex: %s\n", r.d.GetRootVertex())
 
 	rootVertexName := r.d.GetRootVertex()
 

@@ -3,6 +3,9 @@ package dag
 import (
 	"fmt"
 	"sync"
+
+	"github.com/go-logr/logr"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type DAG interface {
@@ -37,6 +40,8 @@ type dag struct {
 	// used for transit reduction
 	mvd         sync.RWMutex
 	vertexDepth map[string]int
+	// logging
+	l logr.Logger
 }
 
 func New() DAG {
@@ -45,6 +50,8 @@ func New() DAG {
 		vertices:  make(map[string]any),
 		downEdges: make(map[string]map[string]struct{}),
 		upEdges:   make(map[string]map[string]struct{}),
+
+		l: ctrl.Log.WithName("dag"),
 	}
 }
 
@@ -86,7 +93,7 @@ func (r *dag) GetVertex(s string) any {
 }
 
 func (r *dag) Connect(from, to string) {
-	fmt.Printf("connect dag: %s -> %s\n", to, from)
+	//fmt.Printf("connect dag: %s -> %s\n", to, from)
 	r.AddDownEdge(from, to)
 	r.AddUpEdge(to, from)
 }

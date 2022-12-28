@@ -2,7 +2,6 @@ package functions
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/itchyny/gojq"
@@ -19,8 +18,8 @@ func runJQ(exp string, i input.Input) (any, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	fmt.Printf("runJQ varNames: %v, varValues: %#v\n", varNames, varValues)
-	fmt.Printf("runJQ exp: %s\n", exp)
+	//fmt.Printf("runJQ varNames: %v, varValues: %#v\n", varNames, varValues)
+	//fmt.Printf("runJQ exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
@@ -40,14 +39,14 @@ func runJQ(exp string, i input.Input) (any, error) {
 		}
 		if err, ok := v.(error); ok {
 			if err != nil {
-				fmt.Printf("runJQ err: %v\n", err)
+				//fmt.Printf("runJQ err: %v\n", err)
 				if strings.Contains(err.Error(), "cannot iterate over: null") {
 					return result, nil
 				}
 				return nil, err
 			}
 		}
-		fmt.Printf("runJQ result item: %v\n", v)
+		//fmt.Printf("runJQ result item: %v\n", v)
 		result = append(result, v)
 	}
 	return result, nil
@@ -62,7 +61,7 @@ func runJQOnce(code *gojq.Code, input any, vars ...any) (any, error) {
 	}
 	if err, ok := v.(error); ok {
 		if err != nil {
-			fmt.Printf("runJQOnce err: %v\n", err)
+			//fmt.Printf("runJQOnce err: %v\n", err)
 			return nil, err
 		}
 	}

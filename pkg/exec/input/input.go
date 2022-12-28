@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/yndd/lcnc-runtime/pkg/kv"
+	"github.com/yndd/lcnc-runtime/pkg/ccutils/kv"
 )
 
 type Input interface {

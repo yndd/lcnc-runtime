@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/ccutils/dag"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 )
 

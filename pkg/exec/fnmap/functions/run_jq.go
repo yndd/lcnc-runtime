@@ -4,16 +4,21 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewJQFn() fnmap.Function {
-	r := &jq{}
+	l := ctrl.Log.WithName("jq fn")
+	r := &jq{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  false,
@@ -24,6 +29,7 @@ func NewJQFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 	return r
 }
@@ -37,6 +43,8 @@ type jq struct {
 	expression string
 	// result, output
 	output any
+	// logging
+	l logr.Logger
 }
 
 func (r *jq) Init(opts ...fnmap.FunctionOption) {
@@ -56,12 +64,13 @@ func (r *jq) WithClient(client client.Client) {}
 func (r *jq) WithFnMap(fnMap fnmap.FuncMap) {}
 
 func (r *jq) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "expression", vertexContext.Function.Input.Expression)
+
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
 	r.expression = vertexContext.Function.Input.Expression
 	// execute the function
-	i.Print(vertexContext.VertexName)
 	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
@@ -78,7 +87,9 @@ func (r *jq) getFinalResult() (output.Output, error) {
 		//fmt.Printf("query getFinalResult value: %#v\n", r.output)
 		oi, ok := v.(*output.OutputInfo)
 		if !ok {
-			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+			err := fmt.Errorf("expecting outputInfo, got %T", v)
+			r.l.Error(err, "cannot record result")
+			return o, err
 		}
 		o.AddEntry(varName, &output.OutputInfo{
 			Internal: oi.Internal,
@@ -86,11 +97,9 @@ func (r *jq) getFinalResult() (output.Output, error) {
 			Data:     r.output,
 		})
 	}
-	o.Print()
 	return o, nil
 }
 
 func (r *jq) run(ctx context.Context, i input.Input) (any, error) {
-	i.Print("dummy")
 	return runJQ(r.expression, i)
 }

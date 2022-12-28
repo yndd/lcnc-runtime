@@ -3,7 +3,7 @@ package vardag
 import (
 	"fmt"
 
-	"github.com/yndd/lcnc-runtime/pkg/dag"
+	"github.com/yndd/lcnc-runtime/pkg/ccutils/dag"
 )
 
 type VarDAG interface {

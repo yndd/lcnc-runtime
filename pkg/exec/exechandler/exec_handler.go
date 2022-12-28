@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type ExecHandler interface {
@@ -31,11 +33,13 @@ type Config struct {
 func New(c *Config) ExecHandler {
 	return &execHandler{
 		cfg: c,
+		l:   ctrl.Log.WithName("execHandler"),
 	}
 }
 
 type execHandler struct {
 	cfg *Config
+	l   logr.Logger
 }
 
 func (r *execHandler) FunctionRun(ctx context.Context, vertexName string, vertexContext any) bool {
@@ -44,8 +48,12 @@ func (r *execHandler) FunctionRun(ctx context.Context, vertexName string, vertex
 	reason := ""
 	rootVertexName := r.cfg.DAG.GetRootVertex()
 
+	r.l.WithValues("execName", rootVertexName, "vertexName", vertexName)
+
 	vc, ok := vertexContext.(*rtdag.VertexContext)
 	if !ok {
+		err := fmt.Errorf("expecting *rtdag.VertexContext, got %T", vertexContext)
+		r.l.Error(err, "wrong context input")
 		r.cfg.Result.Add(&result.ResultInfo{
 			Type:       r.cfg.Type,
 			ExecName:   r.cfg.Name,
@@ -53,7 +61,7 @@ func (r *execHandler) FunctionRun(ctx context.Context, vertexName string, vertex
 			StartTime:  start,
 			EndTime:    time.Now(),
 			Success:    false,
-			Reason:     fmt.Errorf("expecting *rtdag.VertexContext, got %T", vertexContext).Error(),
+			Reason:     err.Error(),
 		})
 	}
 
@@ -68,12 +76,13 @@ func (r *execHandler) FunctionRun(ctx context.Context, vertexName string, vertex
 			i.AddEntry(ref, r.cfg.Output.GetData(ref))
 		}
 	default:
-		fmt.Printf("execContext execName %s vertexName: %s references: %v\n", rootVertexName, vc.VertexName, vc.References)
+		r.l.Info("prepare input", "references", vc.References)
+		//fmt.Printf("execContext execName %s vertexName: %s references: %v\n", rootVertexName, vc.VertexName, vc.References)
 		for _, ref := range vc.References {
 			i.AddEntry(ref, r.cfg.Output.GetData(ref))
 		}
 	}
-	i.Print(vertexName)
+	//i.Print(vertexName)
 
 	o, err := r.cfg.FnMap.Run(ctx, vc, i)
 	if err != nil {

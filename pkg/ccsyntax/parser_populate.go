@@ -200,8 +200,6 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 	}
 
-	
-
 	// add the function vertex to the dag
 	// if there is a functionblock we could have a different DAG -> select the right dag
 	// BlockDAG = nil -> no range -> process regularly and add everything to the main runtimeDAG
@@ -236,6 +234,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		// this is the initial block index and we need to add the vertex to both the main runtimeDAG
 		// and the block runtime DAG -> in the main runtimeDAG add the blockDAG
 		if err := rootDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			VertexName:   oc.VertexName,
 			Kind:         rtdag.FunctionVertexKind,
 			BlockDAG:     blockDAG,
 			Function:     v,
@@ -266,6 +265,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 	} else {
 		if err := blockDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+			VertexName:   oc.VertexName,
 			Kind:         rtdag.FunctionVertexKind,
 			Function:     v,
 			References:   []string{},   // initialize reference

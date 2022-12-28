@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/itchyny/gojq"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,7 +28,10 @@ type mapOutput struct {
 }
 
 func NewMapFn() fnmap.Function {
-	r := &kv{}
+	l := ctrl.Log.WithName("map fn")
+	r := &kv{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  true,
@@ -37,6 +42,7 @@ func NewMapFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 
 	return r
@@ -53,6 +59,8 @@ type kv struct {
 	// result, output
 	m      sync.RWMutex
 	output map[string]any
+	// logging
+	l logr.Logger
 }
 
 func (r *kv) Init(opts ...fnmap.FunctionOption) {
@@ -72,6 +80,8 @@ func (r *kv) WithClient(client client.Client) {}
 func (r *kv) WithFnMap(fnMap fnmap.FuncMap) {}
 
 func (r *kv) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "key", vertexContext.Function.Input.Key, "value", vertexContext.Function.Input.Value)
+
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -89,7 +99,9 @@ func (r *kv) initOutput(numItems int) {
 func (r *kv) recordOutput(o any) {
 	out, ok := o.(*mapOutput)
 	if !ok {
-		fmt.Printf("expecting mapOutput, got: %T", o)
+		err := fmt.Errorf("expecting mapOutput, got: %T", o)
+		r.l.Error(err, "cannot record output")
+		return
 	}
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -101,7 +113,9 @@ func (r *kv) getFinalResult() (output.Output, error) {
 	for varName, v := range r.outputs.Get() {
 		oi, ok := v.(*output.OutputInfo)
 		if !ok {
-			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+			err := fmt.Errorf("expecting outputInfo, got %T", v)
+			r.l.Error(err, "cannot record output")
+			return o, err
 		}
 		o.AddEntry(varName, &output.OutputInfo{
 			Internal: oi.Internal,
@@ -118,10 +132,14 @@ func (r *kv) run(ctx context.Context, i input.Input) (any, error) {
 		value: r.value,
 	}
 	if kv.value == "" {
-		return nil, errors.New("missing input value")
+		err := errors.New("missing input value")
+		r.l.Error(err, "cannot run wrong input", "kv", kv)
+		return nil, err
 	}
 	if kv.key == "" {
-		return nil, errors.New("missing input key")
+		err := errors.New("missing input key")
+		r.l.Error(err, "cannot run wrong input", "kv", kv)
+		return nil, err
 	}
 
 	varNames := make([]string, 0, i.Length())
@@ -130,45 +148,50 @@ func (r *kv) run(ctx context.Context, i input.Input) (any, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	fmt.Printf("buildKV varNames: %v, varValues: %v\n", varNames, varValues)
-	fmt.Printf("buildKV exp: %s\n", kv.value)
+
+	r.l.Info("buildKV", "varNames", varNames, "varValues", varValues, "expression", kv.value)
+	//fmt.Printf("buildKV varNames: %v, varValues: %v\n", varNames, varValues)
+	//fmt.Printf("buildKV exp: %s\n", kv.value)
 
 	valq, err := gojq.Parse(kv.value)
 	if err != nil {
-		fmt.Printf("buildKV valq: %s\n", err.Error())
+		r.l.Error(err, "cannot parse jq valq", "kv", kv)
 		return nil, err
 	}
 	valC, err := gojq.Compile(valq, gojq.WithVariables(varNames))
 	if err != nil {
-		fmt.Printf("buildKV valC: %s\n", err.Error())
+		r.l.Error(err, "cannot compile jq valC", "varNames", varNames)
 		return nil, err
 	}
 	keyq, err := gojq.Parse(kv.key)
 	if err != nil {
-		fmt.Printf("buildKV keyq: %s\n", err.Error())
+		r.l.Error(err, "cannot buildKV keyq", "kv", kv)
 		return nil, err
 	}
 	keyC, err := gojq.Compile(keyq, gojq.WithVariables(varNames))
 	if err != nil {
-		fmt.Printf("buildKV keyC: %s\n", err.Error())
+		r.l.Error(err, "cannot buildKV keyC", "kv", kv)
 		return nil, err
 	}
 
 	v, err := runJQOnce(valC, nil, varValues...)
 	if err != nil {
-		fmt.Printf("buildKV runJQOnce valC: %v\n", err.Error())
+		r.l.Error(err, "cannot buildKV runJQOnce valC")
 		return nil, err
 	}
 
 	k, err := runJQOnce(keyC, nil, varValues...)
 	if err != nil {
-		fmt.Printf("buildKV runJQOnce keyC: %s\n", err.Error())
+		r.l.Error(err, "cannot buildKV runJQOnce keyC")
 		return nil, err
 	}
-	fmt.Printf("buildKV k: %T %#v\n", k, k)
+	//fmt.Printf("buildKV k: %T %#v\n", k, k)
+	r.l.Info("buildkv", "key", k)
 	ks, ok := k.(string)
 	if !ok {
-		return nil, fmt.Errorf("unexpected key format: %T", k)
+		err := fmt.Errorf("unexpected key format: %T", k)
+		r.l.Error(err, "wrong key formaat")
+		return nil, err
 	}
 	return &mapOutput{key: ks, value: v}, nil
 }

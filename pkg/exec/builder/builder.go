@@ -2,7 +2,7 @@ package builder
 
 import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
-	"github.com/yndd/lcnc-runtime/pkg/exec/executor"
+	"github.com/yndd/lcnc-runtime/pkg/ccutils/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap/functions"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"

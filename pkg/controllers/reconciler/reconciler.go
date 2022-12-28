@@ -18,7 +18,6 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"github.com/yndd/ndd-runtime/pkg/event"
-	"github.com/yndd/ndd-runtime/pkg/logging"
 )
 
 const (
@@ -39,7 +38,6 @@ type Config struct {
 	CeCtx        ccsyntax.ConfigExecutionContext
 	FnMap        fnmap.FuncMap
 
-	Log logging.Logger
 }
 
 func New(c *Config) reconcile.Reconciler {

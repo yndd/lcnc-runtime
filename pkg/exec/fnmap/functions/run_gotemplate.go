@@ -9,16 +9,21 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewGTFn() fnmap.Function {
-	r := &gt{}
+	l := ctrl.Log.WithName("gotemplate fn")
+	r := &gt{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  true,
@@ -29,6 +34,7 @@ func NewGTFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 	return r
 }
@@ -43,6 +49,8 @@ type gt struct {
 	// result, output
 	m      sync.RWMutex
 	output []any
+	// logging
+	l logr.Logger
 }
 
 func (r *gt) Init(opts ...fnmap.FunctionOption) {
@@ -62,6 +70,8 @@ func (r *gt) WithClient(client client.Client) {}
 func (r *gt) WithFnMap(fnMap fnmap.FuncMap) {}
 
 func (r *gt) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "resource", vertexContext.Function.Input.Resource.Raw)
+
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -90,7 +100,9 @@ func (r *gt) getFinalResult() (output.Output, error) {
 	for varName, v := range r.outputs.Get() {
 		oi, ok := v.(*output.OutputInfo)
 		if !ok {
-			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+			err := fmt.Errorf("expecting outputInfo, got %T", v)
+			r.l.Error(err, "got wrong type")
+			return o, err
 		}
 		o.AddEntry(varName, &output.OutputInfo{
 			Internal: oi.Internal,
@@ -103,21 +115,24 @@ func (r *gt) getFinalResult() (output.Output, error) {
 
 func (r *gt) run(ctx context.Context, i input.Input) (any, error) {
 	if r.template == "" {
-		return nil, errors.New("missing template")
+		err := errors.New("missing template")
+		r.l.Error(err, "cannot run gotemplate without a template")
+		return nil, err
 	}
 	result := new(bytes.Buffer)
 	// TODO: add template custom functions
 	tpl, err := template.New("default").Option("missingkey=zero").Parse(r.template)
 	if err != nil {
+		r.l.Error(err, "cannot parse template")
 		return nil, err
 	}
-	fmt.Printf("runGT input: %v\n", i.Get())
+	r.l.Info("run", "input", i.Get())
 	err = tpl.Execute(result, i.Get())
 	if err != nil {
 		return nil, err
 	}
 	var x any
 	err = json.Unmarshal(result.Bytes(), &x)
-	fmt.Printf("runGT result: %s", x)
+	r.l.Info("run", "output", x)
 	return x, err
 }

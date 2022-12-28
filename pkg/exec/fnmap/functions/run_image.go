@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/go-logr/logr"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
@@ -17,13 +18,16 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
 func NewImageFn() fnmap.Function {
+	l := ctrl.Log.WithName("image fn")
 	r := &image{
 		errs: make([]string, 0),
+		l:    l,
 	}
 
 	r.fec = &fnExecConfig{
@@ -35,6 +39,7 @@ func NewImageFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 	return r
 }
@@ -54,6 +59,8 @@ type image struct {
 	output   output.Output
 	numItems int
 	errs     []string
+	// logging
+	l logr.Logger
 }
 
 func (r *image) Init(opts ...fnmap.FunctionOption) {
@@ -76,6 +83,8 @@ func (r *image) WithClient(client client.Client) {}
 func (r *image) WithFnMap(fnMap fnmap.FuncMap) {}
 
 func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "gvkToName", vertexContext.GVKToVarName)
+
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.fnconfig = vertexContext.Function
@@ -96,12 +105,17 @@ func (r *image) recordOutput(o any) {
 	defer r.m.Unlock()
 	rctx, ok := o.(*rctxv1.ResourceContext)
 	if !ok {
-		fmt.Println("unexpetec result object")
+		err := fmt.Errorf("expected type *rctxv1.ResourceContext, got: %T", o)
+		r.l.Error(err, "cannot record output")
+		r.errs = append(r.errs, err.Error())
+		return
 	}
 	for gvkString, krmslice := range rctx.Spec.Properties.Output {
 		varName, ok := r.gvkToVarName[gvkString]
 		if !ok {
-			r.errs = append(r.errs, fmt.Errorf("unregistered image gvk: %s", gvkString).Error())
+			err := fmt.Errorf("unregistered image gvk: %s", gvkString)
+			r.l.Error(err, "cannot record output since the variable is not initialized")
+			r.errs = append(r.errs, err.Error())
 			break
 		}
 
@@ -109,7 +123,8 @@ func (r *image) recordOutput(o any) {
 		for _, krm := range krmslice {
 			x := map[string]any{}
 			if err := json.Unmarshal([]byte(krm), &x); err != nil {
-				r.errs = append(r.errs, fmt.Errorf("error unmarshaling the data, err: %s", err.Error()).Error())
+				r.l.Error(err, "cannot unmarshal data")
+				r.errs = append(r.errs, err.Error())
 				break
 			}
 
@@ -118,12 +133,17 @@ func (r *image) recordOutput(o any) {
 
 		v, ok := r.outputs.Get()[varName]
 		if !ok {
-			r.errs = append(r.errs, fmt.Errorf("unregistered image varName: %s", varName).Error())
+			err := fmt.Errorf("unregistered image varName: %s", varName)
+			r.l.Error(err, "cannot record output")
+			r.errs = append(r.errs, err.Error())
 			break
 		}
 		oi, ok := v.(*output.OutputInfo)
 		if !ok {
-			r.errs = append(r.errs, fmt.Errorf("expecting outputInfo, got %T", v).Error())
+			err := fmt.Errorf("expected type *output.OutputInfo, got: %T", v)
+			r.l.Error(err, "cannot record output")
+			r.errs = append(r.errs, err.Error())
+			break
 		}
 		r.output.AddEntry(varName, &output.OutputInfo{
 			Internal: oi.Internal,
@@ -147,14 +167,17 @@ func (r *image) run(ctx context.Context, i input.Input) (any, error) {
 		},
 	)
 	if err != nil {
+		r.l.Error(err, "cannot get runner")
 		return nil, err
 	}
 	rctx, err := buildResourceContext(r.name, r.namespace, i)
 	if err != nil {
+		r.l.Error(err, "cannot build resource context")
 		return nil, err
 	}
 	o, err := runner.Run(rctx)
 	if err != nil {
+		r.l.Error(err, "failed tunner")
 		return nil, err
 	}
 	return o, nil

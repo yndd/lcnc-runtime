@@ -51,7 +51,7 @@ func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i i
 	r.m.RLock()
 	initializer, ok := r.funcs[vertexContext.Function.Type]
 	r.m.RUnlock()
-	fmt.Printf("fnmap run %s, type: %s\n", vertexContext.VertexName, string(vertexContext.Function.Type))
+	//fmt.Printf("fnmap run %s, type: %s\n", vertexContext.VertexName, string(vertexContext.Function.Type))
 	if !ok {
 		return nil, fmt.Errorf("function not registered, got: %s", string(vertexContext.Function.Type))
 	}

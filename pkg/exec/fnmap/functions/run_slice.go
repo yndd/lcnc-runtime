@@ -6,17 +6,22 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/itchyny/gojq"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewSliceFn() fnmap.Function {
-	r := &slice{}
+	l := ctrl.Log.WithName("slice fn")
+	r := &slice{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  true,
@@ -27,6 +32,7 @@ func NewSliceFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 	return r
 }
@@ -41,6 +47,8 @@ type slice struct {
 	// result, output
 	m      sync.RWMutex
 	output []any
+	// logging
+	l logr.Logger
 }
 
 func (r *slice) Init(opts ...fnmap.FunctionOption) {
@@ -60,6 +68,7 @@ func (r *slice) WithClient(client client.Client) {}
 func (r *slice) WithFnMap(fnMap fnmap.FuncMap) {}
 
 func (r *slice) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "expression", r.value)
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -84,7 +93,9 @@ func (r *slice) getFinalResult() (output.Output, error) {
 	for varName, v := range r.outputs.Get() {
 		oi, ok := v.(*output.OutputInfo)
 		if !ok {
-			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+			err := fmt.Errorf("expecting outputInfo, got %T", v)
+			r.l.Error(err, "cannot get result")
+			return o, err
 		}
 		o.AddEntry(varName, &output.OutputInfo{
 			Internal: oi.Internal,
@@ -97,7 +108,9 @@ func (r *slice) getFinalResult() (output.Output, error) {
 
 func (r *slice) run(ctx context.Context, i input.Input) (any, error) {
 	if r.value == "" {
-		return nil, errors.New("missing input value")
+		err := errors.New("missing input value")
+		r.l.Error(err, "wrong input value")
+		return nil, err
 	}
 	varNames := make([]string, 0, i.Length())
 	varValues := make([]any, 0, i.Length())
@@ -105,29 +118,34 @@ func (r *slice) run(ctx context.Context, i input.Input) (any, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	fmt.Printf("buildSliceItem varNames: %v, varValues: %v\n", varNames, varValues)
-	fmt.Printf("buildSliceItem exp: %s\n", r.value)
+	//fmt.Printf("buildSliceItem varNames: %v, varValues: %v\n", varNames, varValues)
+	//fmt.Printf("buildSliceItem exp: %s\n", r.value)
+	r.l.Info("buildSliceItem", "varNames", varNames, "varValues", varValues, "expression", r.value)
 
 	q, err := gojq.Parse(r.value)
 	if err != nil {
+		r.l.Error(err, "cannot parse jq", "expression", r.value)
 		return nil, err
 	}
 	code, err := gojq.Compile(q, gojq.WithVariables(varNames))
 	if err != nil {
+		r.l.Error(err, "cannot conpile jq", "varNames", varNames)
 		return nil, err
 	}
 
 	iter := code.Run(nil, varValues...)
 	v, ok := iter.Next()
 	if !ok {
-		return nil, errors.New("no value")
+		err := errors.New("no value")
+		r.l.Error(err, "wrong result")
+		return nil, err
 	}
 	if err, ok := v.(error); ok {
 		if err != nil {
-			fmt.Printf("buildSliceItem err: %v\n", err)
+			r.l.Error(err, "run jq error")
 			return nil, err
 		}
 	}
-	fmt.Printf("buildSliceItem value: %v\n", v)
+	r.l.Info("buildSliceItem", "value", v)
 	return v, nil
 }

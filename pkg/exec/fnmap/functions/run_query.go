@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
@@ -13,12 +14,16 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
 func NewQueryFn() fnmap.Function {
-	r := &query{}
+	l := ctrl.Log.WithName("query fn")
+	r := &query{
+		l: l,
+	}
 
 	r.fec = &fnExecConfig{
 		executeRange:  false,
@@ -29,6 +34,7 @@ func NewQueryFn() fnmap.Function {
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
 		getFinalResultFn: r.getFinalResult,
+		l:                l,
 	}
 
 	return r
@@ -45,6 +51,8 @@ type query struct {
 	selector *metav1.LabelSelector
 	// output, output
 	output any
+	// logging
+	l logr.Logger
 }
 
 func (r *query) Init(opts ...fnmap.FunctionOption) {
@@ -66,6 +74,7 @@ func (r *query) WithClient(client client.Client) {
 func (r *query) WithFnMap(fnMap fnmap.FuncMap) {}
 
 func (r *query) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
+	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "resource", vertexContext.Function.Input.Resource)
 	// Here we prepare the input we get from the runtime
 	// e.g. DAG, outputs/outputInfo (internal/GVK/etc), fnConfig parameters, etc etc
 	r.outputs = vertexContext.Outputs
@@ -87,7 +96,9 @@ func (r *query) getFinalResult() (output.Output, error) {
 	for varName, v := range r.outputs.Get() {
 		oi, ok := v.(*output.OutputInfo)
 		if !ok {
-			return o, fmt.Errorf("expecting outputInfo, got %T", v)
+			err := fmt.Errorf("expecting outputInfo, got %T", v)
+			r.l.Error(err, "cannot record result")
+			return o, err
 		}
 		o.AddEntry(varName, &output.OutputInfo{
 			Internal: oi.Internal,
@@ -102,9 +113,10 @@ func (r *query) getFinalResult() (output.Output, error) {
 func (r *query) run(ctx context.Context, i input.Input) (any, error) {
 	gvk, err := ctrlcfgv1.GetGVK(r.resource)
 	if err != nil {
+		r.l.Error(err, "cannot get GVK")
 		return nil, err
 	}
-	fmt.Printf("Query: gvk: %v\n", *gvk)
+	r.l.Info("query run", "gvk", gvk)
 
 	opts := []client.ListOption{}
 	if r.selector != nil {
@@ -115,6 +127,7 @@ func (r *query) run(ctx context.Context, i input.Input) (any, error) {
 
 	o := meta.GetUnstructuredListFromGVK(gvk)
 	if err := r.client.List(ctx, o, opts...); err != nil {
+		r.l.Error(err, "cannot list gvk", "gvk", gvk, "options", opts)
 		return nil, err
 	}
 
@@ -122,11 +135,13 @@ func (r *query) run(ctx context.Context, i input.Input) (any, error) {
 	for _, v := range o.Items {
 		b, err := yaml.Marshal(v.UnstructuredContent())
 		if err != nil {
+			r.l.Error(err, "cannot marshal data")
 			return nil, err
 		}
 
 		vrj := map[string]interface{}{}
 		if err := yaml.Unmarshal(b, &vrj); err != nil {
+			r.l.Error(err, "cannot unmarshal data")
 			return nil, err
 		}
 		rj = append(rj, vrj)
