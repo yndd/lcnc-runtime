@@ -49,11 +49,34 @@ type Properties struct {
 	Origin map[string]runtime.RawExtension `json:"origin,omitempty" yaml:"origin,omitempty"`
 	// holds the input of the CR
 	Input map[string][]runtime.RawExtension `json:"input,omitempty" yaml:"input,omitempty"`
-	// holds the allocation of the CR with the key being GVK in string format
-	Conditions map[string][]runtime.RawExtension `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	// fnconfig provides additional configuration for the function
+	FunctionConfig runtime.RawExtension `json:"functionConfig,omitempty" yaml:"functionConfig,omitempty"`
 	// holds the output of the CR with the key being GVK in string format
 	Output map[string][]runtime.RawExtension `json:"output,omitempty" yaml:"output,omitempty"`
-	//Result[]
+	// holds the allocation of the CR with the key being GVK in string format
+	Conditions map[string][]runtime.RawExtension `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	// results provide a structured
+	Results Results `json:"results,omitempty" yaml:"results,omitempty"`
+}
+
+type Results []*Result
+
+// Result defines a result for the fucntion execution
+type Result struct {
+	// Message is a human readable message. This field is required.
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
+
+	// ResourceRef is a reference to a resource.
+	// Required fields: apiVersion, kind, name.
+	ResourceRef *ResourceRef `json:"resourceRef,omitempty" yaml:"resourceRef,omitempty"`
+}
+
+// ResourceRef fills the ResourceRef field in Results
+type ResourceRef struct {
+	APIVersion string `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
+	Kind       string `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Name       string `json:"name,omitempty" yaml:"name,omitempty"`
+	Namespace  string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
 }
 
 // Status defines the context of the resource of the controller
