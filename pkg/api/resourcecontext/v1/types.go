@@ -46,7 +46,7 @@ type Spec struct {
 // ResourceContextSpec defines the context of the resource of the controller
 type Properties struct {
 	// fnconfig provides additional configuration for the function
-	FunctionConfig runtime.RawExtension `json:"functionConfig,omitempty" yaml:"functionConfig,omitempty"`
+	FunctionConfig map[string]runtime.RawExtension `json:"functionConfig,omitempty" yaml:"functionConfig,omitempty"`
 	// holds the input of the CR
 	Origin map[string]runtime.RawExtension `json:"origin,omitempty" yaml:"origin,omitempty"`
 	// holds the input of the CR
