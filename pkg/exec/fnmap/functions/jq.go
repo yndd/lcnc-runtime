@@ -2,6 +2,7 @@ package functions
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/itchyny/gojq"
@@ -18,15 +19,17 @@ func runJQ(exp string, i input.Input) (any, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	//fmt.Printf("runJQ varNames: %v, varValues: %#v\n", varNames, varValues)
-	//fmt.Printf("runJQ exp: %s\n", exp)
+	fmt.Printf("runJQ varNames: %v, varValues: %#v\n", varNames, varValues)
+	fmt.Printf("runJQ exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
+		fmt.Printf("runJQ err: %s\n", err.Error())
 		return nil, err
 	}
 	code, err := gojq.Compile(q, gojq.WithVariables(varNames))
 	if err != nil {
+		fmt.Printf("runJQ err: %s\n", err.Error())
 		return nil, err
 	}
 

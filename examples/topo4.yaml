@@ -53,7 +53,7 @@ spec:
                 type: map
                 input:
                   key: $VALUE.name
-                  value: $allTemplates | .[] | select(.metadata.name == $VALUE.children.[] ) 
+                  value: $allTemplates | [.[] | select(.metadata.name == $VALUE.children.[] )]
           discoveryRuleNames:
             type: jq
             input: 
@@ -88,26 +88,20 @@ spec:
                       longitude: b
           createFabric:
             range:
-              value: $masterTemplates
+              value: $masterTemplates | .[]
+            type: container
             image: docker.io/yndd/fn-lcnc-fabric-image@latest
             vars:
-              localChildTemplates:
-                range:
-                  value: $childTemplates
-                  condition:
-                    expression: xxx
-                kind: slice
-                input: 
-                  value: $KEY 
+              localChildTemplates: $childTemplates | .($VALUE.metadata.name)
             input:
               masterTemplate: $VALUE
-              localChildTemplates: $localChildTemplates
+              localChildTemplates: $localChildTemplates 
             output:
               nodes:
-                resources:
+                resource:
                   apiVersion: topo.yndd.io/v1alpha1
                   kind: Node
               links:
-                resources:
+                resource:
                   apiVersion: topo.yndd.io/v1alpha1
                   kind: Link

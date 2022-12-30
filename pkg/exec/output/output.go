@@ -37,6 +37,9 @@ func (r *output) AddEntry(k string, v any) {
 }
 
 func (r *output) Add(o kv.KV) {
+	if o == nil {
+		return
+	}
 	r.o.Add(o)
 }
 

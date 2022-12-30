@@ -47,6 +47,7 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 				fec.l.Error(err, "cannot run range")
 				return nil, err
 			}
+			fec.l.Info("range", "items", items)
 			isRange = true
 		}
 		if fnconfig.Block.Condition != nil {
@@ -80,6 +81,7 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 	if numItems > 0 && isRange {
 		fec.initOutputFn(numItems)
 		for n, item := range items {
+			fmt.Printf("range items: n: %d, item %#v\n", n, item)
 			// this is a protection to ensure we dont use the nil result in a range
 			if item.val != nil {
 				i.AddEntry("VALUE", item.val)
@@ -90,6 +92,8 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 				if err := resolveLocalVars(fnconfig, i); err != nil {
 					return nil, err
 				}
+
+				i.Print("range")
 
 				if fec.executeRange {
 					//extraInput := fec.prepareInputFn(fnconfig)
@@ -130,9 +134,10 @@ func runRange(exp string, i input.Input) ([]*item, error) {
 	for name, v := range i.Get() {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
+		fmt.Printf("runRange variables: name: %s, value: %v\n", name, v)
 	}
-	//fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
-	//fmt.Printf("runRange exp: %s\n", exp)
+	fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
+	fmt.Printf("runRange exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
@@ -161,7 +166,7 @@ func runRange(exp string, i input.Input) ([]*item, error) {
 		if v == nil {
 			continue
 		}
-		//fmt.Printf("runRange result item: %#v\n", v)
+		fmt.Printf("runRange result item: %#v\n", v)
 		result = append(result, &item{val: v})
 	}
 
@@ -223,12 +228,13 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 			//	for _, ref := range refs {
 			//		localVarRefs[ref.Value] = input[ref.Value]
 			//	}
+			fmt.Printf("resolveLocalVars varname: %s expression %s\n", varName, expression)
 
 			v, err := runJQ(expression, i)
 			if err != nil {
 				return err
 			}
-			//fmt.Printf("resolveLocalVars jq %#v\n", v)
+			fmt.Printf("resolveLocalVars varname: %s jq %#v\n", varName, v)
 			/*
 				b, err := yaml.Marshal(v)
 				if err != nil {
