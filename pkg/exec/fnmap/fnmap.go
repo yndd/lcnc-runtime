@@ -21,11 +21,12 @@ type FuncMap interface {
 }
 
 type Config struct {
-	Name      string
-	Namespace string
-	Client    client.Client
-	Output    output.Output
-	Result    result.Result
+	Name           string
+	Namespace      string
+	RootVertexName string
+	Client         client.Client
+	Output         output.Output
+	Result         result.Result
 }
 
 func New(c *Config) FuncMap {
@@ -67,6 +68,7 @@ func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i i
 		fn.WithClient(r.cfg.Client)
 	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
 		fn.WithNameAndNamespace(r.cfg.Name, r.cfg.Namespace)
+		fn.WithRootVertexName(r.cfg.RootVertexName)
 	}
 	// run the function
 	return fn.Run(ctx, vertexContext, i)

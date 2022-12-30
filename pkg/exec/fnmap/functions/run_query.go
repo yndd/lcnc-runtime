@@ -29,6 +29,7 @@ func NewQueryFn() fnmap.Function {
 		executeRange:  false,
 		executeSingle: true,
 		// execution functions
+		filterInputFn: r.filterInput,
 		runFn: r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
@@ -66,6 +67,8 @@ func (r *query) WithOutput(output output.Output) {}
 func (r *query) WithResult(result result.Result) {}
 
 func (r *query) WithNameAndNamespace(name, namespace string) {}
+
+func (r *query) WithRootVertexName(name string) {}
 
 func (r *query) WithClient(client client.Client) {
 	r.client = client
@@ -109,6 +112,8 @@ func (r *query) getFinalResult() (output.Output, error) {
 	o.Print()
 	return o, nil
 }
+
+func (r *query) filterInput(i input.Input) input.Input {return i}
 
 func (r *query) run(ctx context.Context, i input.Input) (any, error) {
 	gvk, err := ctrlcfgv1.GetGVK(r.resource)

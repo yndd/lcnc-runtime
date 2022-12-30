@@ -24,6 +24,7 @@ func NewJQFn() fnmap.Function {
 		executeRange:  false,
 		executeSingle: true,
 		// execution functions
+		filterInputFn: r.filterInput,
 		runFn: r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
@@ -58,6 +59,8 @@ func (r *jq) WithOutput(output output.Output) {}
 func (r *jq) WithResult(result result.Result) {}
 
 func (r *jq) WithNameAndNamespace(name, namespace string) {}
+
+func (r *jq) WithRootVertexName(name string) {}
 
 func (r *jq) WithClient(client client.Client) {}
 
@@ -99,6 +102,8 @@ func (r *jq) getFinalResult() (output.Output, error) {
 	}
 	return o, nil
 }
+
+func (r *jq) filterInput(i input.Input) input.Input {return i}
 
 func (r *jq) run(ctx context.Context, i input.Input) (any, error) {
 	return runJQ(r.expression, i)

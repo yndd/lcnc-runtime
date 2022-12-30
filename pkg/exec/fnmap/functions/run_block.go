@@ -27,6 +27,7 @@ func NewBlockFn() fnmap.Function {
 		executeRange:  false,
 		executeSingle: true,
 		// execution functions
+		filterInputFn: r.filterInput,
 		runFn: r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
@@ -69,6 +70,8 @@ func (r *block) WithResult(result result.Result) {
 
 func (r *block) WithNameAndNamespace(name, namespace string) {}
 
+func (r *block) WithRootVertexName(name string) {}
+
 func (r *block) WithClient(client client.Client) {}
 
 func (r *block) WithFnMap(fnMap fnmap.FuncMap) {
@@ -101,6 +104,8 @@ func (r *block) getFinalResult() (output.Output, error) {
 	}
 	return output.New(), nil
 }
+
+func (r *block) filterInput(i input.Input) input.Input {return i}
 
 func (r *block) run(ctx context.Context, i input.Input) (any, error) {
 	// check if the dag is initialized

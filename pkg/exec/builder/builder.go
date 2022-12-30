@@ -1,8 +1,8 @@
 package builder
 
 import (
-	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
 	"github.com/yndd/lcnc-runtime/pkg/ccutils/executor"
+	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap/functions"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
@@ -24,18 +24,17 @@ type Config struct {
 }
 
 func New(c *Config) executor.Executor {
-	// create a new output
+	rootVertexName := c.DAG.GetRootVertex()
 
 	// create a new fn map
 	fnmap := functions.Init(&fnmap.Config{
-		Name:      c.Name,
-		Namespace: c.Namespace,
-		Client:    c.Client,
-		Output:    c.Output,
-		Result:    c.Result,
+		Name:           c.Name,
+		Namespace:      c.Namespace,
+		RootVertexName: rootVertexName,
+		Client:         c.Client,
+		Output:         c.Output,
+		Result:         c.Result,
 	})
-
-	rootVertexName := c.DAG.GetRootVertex()
 
 	// Initialize the initial data
 	c.Output.AddEntry(rootVertexName, &output.OutputInfo{

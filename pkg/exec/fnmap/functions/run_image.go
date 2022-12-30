@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 func NewImageFn() fnmap.Function {
@@ -34,7 +33,8 @@ func NewImageFn() fnmap.Function {
 		executeRange:  true,
 		executeSingle: true,
 		// execution functions
-		runFn: r.run,
+		filterInputFn: r.filterInput,
+		runFn:         r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
@@ -48,8 +48,9 @@ type image struct {
 	// fec exec config
 	fec *fnExecConfig
 	// init config
-	name      string
-	namespace string
+	name           string
+	namespace      string
+	rootVertexName string
 	// runtime config
 	fnconfig     *ctrlcfgv1.Function
 	outputs      output.Output
@@ -76,6 +77,10 @@ func (r *image) WithResult(result result.Result) {}
 func (r *image) WithNameAndNamespace(name, namespace string) {
 	r.name = name
 	r.namespace = namespace
+}
+
+func (r *image) WithRootVertexName(name string) {
+	r.rootVertexName = name
 }
 
 func (r *image) WithClient(client client.Client) {}
@@ -160,6 +165,24 @@ func (r *image) getFinalResult() (output.Output, error) {
 	return r.output, nil
 }
 
+// for the image we filter the input
+// we convert to resourceContext and this might fail if we provide
+// unneccessary variables
+func (r *image) filterInput(i input.Input) input.Input {
+	newInput := input.New()
+	for varName, v := range i.Get() {
+		for ivarName := range r.fnconfig.Vars {
+			switch {
+			case varName == ivarName:
+				newInput.AddEntry(varName, v)
+			case  varName == r.rootVertexName:
+				newInput.AddEntry(varName, v)
+			}
+		}
+	}
+	return newInput
+}
+
 func (r *image) run(ctx context.Context, i input.Input) (any, error) {
 	runner, err := fnruntime.NewRunner(ctx, r.fnconfig,
 		fnruntime.RunnerOptions{
@@ -202,6 +225,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 		Output:     map[string][]runtime.RawExtension{},
 		Conditions: map[string][]runtime.RawExtension{},
 	}
+	i.Print("runImage")
 	for _, v := range i.Get() {
 		switch x := v.(type) {
 		case map[string]any:
@@ -228,6 +252,25 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 							props.Input[gvk.String()] = make([]runtime.RawExtension, 0, l)
 						}
 						props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
+					case []any:
+						l := len(x)
+						if l > 0 {
+							for _, v := range x {
+								switch x := v.(type) {
+								case map[string]any:
+									gvk, res, err := getGVKResource(x)
+									if err != nil {
+										return nil, err
+									}
+									if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
+										props.Input[gvk.String()] = make([]runtime.RawExtension, 0, l)
+									}
+									props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
+								default:
+									return nil, fmt.Errorf("unexpected object in []any[]any: got %T", v)
+								}
+							}
+						}
 					default:
 						return nil, fmt.Errorf("unexpected object in []any: got %T", v)
 					}
@@ -253,7 +296,7 @@ func getGVKResource(x map[string]any) (*schema.GroupVersionKind, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
-	b, err := yaml.Marshal(x)
+	b, err := json.Marshal(x)
 	if err != nil {
 		return nil, "", err
 	}

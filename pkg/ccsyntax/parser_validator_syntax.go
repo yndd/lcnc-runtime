@@ -193,7 +193,7 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	// validate input references
 	// e.g. check if a VALUE, KEY, INDEX is not used when no block is present
 	if v.Input == nil {
-		if v.Type != ctrlcfgv1.BlockType {
+		if !(v.Type == ctrlcfgv1.BlockType || v.Type == ctrlcfgv1.ContainerType) {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         fmt.Errorf("input is needed in a function %s", v.Type).Error(),

@@ -23,6 +23,7 @@ func NewRootFn() fnmap.Function {
 		executeRange:  false,
 		executeSingle: false,
 		// execution functions
+		//filterInputFn: r.filterInput,
 		// result functions
 		getFinalResultFn: r.getFinalResult,
 		l:                l,
@@ -49,6 +50,8 @@ func (r *root) WithResult(result result.Result) {}
 
 func (r *root) WithNameAndNamespace(name, namespace string) {}
 
+func (r *root) WithRootVertexName(name string) {}
+
 func (r *root) WithClient(client client.Client) {}
 
 func (r *root) WithFnMap(fnMap fnmap.FuncMap) {}
@@ -64,3 +67,5 @@ func (r *root) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i in
 func (r *root) getFinalResult() (output.Output, error) {
 	return output.New(), nil
 }
+
+//func (r *root) filterInput(i input.Input) input.Input {return i}

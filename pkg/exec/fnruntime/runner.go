@@ -60,8 +60,8 @@ func NewRunner(
 	}
 
 	fnResult := &fnresultv1.Result{
-		Image:    *fnc.Executor.Image,
-		ExecPath: *fnc.Executor.Exec,
+		Image: *fnc.Executor.Image,
+		//ExecPath: *fnc.Executor.Exec,
 	}
 
 	var run Run
@@ -180,7 +180,7 @@ func (fr *FunctionRunner) Run(rCtx *fn.ResourceContext) (*fn.ResourceContext, er
 		return nil, err
 	}
 
-	//fmt.Printf("run rctx after printer: %v\n", in.String())
+	fmt.Printf("run rctx after printer:\n%s\n", in.String())
 
 	// call the specific implementation of run (container, exec or wasm)
 	ex := fr.run(in, out)

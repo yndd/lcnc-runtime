@@ -27,7 +27,8 @@ func NewSliceFn() fnmap.Function {
 		executeRange:  true,
 		executeSingle: false,
 		// execution functions
-		runFn: r.run,
+		filterInputFn: r.filterInput,
+		runFn:         r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
@@ -62,6 +63,8 @@ func (r *slice) WithOutput(output output.Output) {}
 func (r *slice) WithResult(result result.Result) {}
 
 func (r *slice) WithNameAndNamespace(name, namespace string) {}
+
+func (r *slice) WithRootVertexName(name string) {}
 
 func (r *slice) WithClient(client client.Client) {}
 
@@ -105,6 +108,8 @@ func (r *slice) getFinalResult() (output.Output, error) {
 	}
 	return o, nil
 }
+
+func (r *slice) filterInput(i input.Input) input.Input { return i }
 
 func (r *slice) run(ctx context.Context, i input.Input) (any, error) {
 	if r.value == "" {

@@ -18,6 +18,7 @@ type Function interface {
 	WithNameAndNamespace(name, namespace string)
 	WithClient(client client.Client)
 	WithFnMap(fnMap FuncMap)
+	WithRootVertexName(name string)
 	Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error)
 }
 
@@ -50,5 +51,11 @@ func WithClient(client client.Client) FunctionOption {
 func WithFnMap(fnMap FuncMap) FunctionOption {
 	return func(r Function) {
 		r.WithFnMap(fnMap)
+	}
+}
+
+func WithRootVertexName(name string) FunctionOption {
+	return func(r Function) {
+		r.WithRootVertexName(name)
 	}
 }

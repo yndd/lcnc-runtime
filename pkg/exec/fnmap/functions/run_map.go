@@ -37,6 +37,7 @@ func NewMapFn() fnmap.Function {
 		executeRange:  true,
 		executeSingle: false,
 		// execution functions
+		filterInputFn: r.filterInput,
 		runFn: r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
@@ -74,6 +75,8 @@ func (r *kv) WithOutput(output output.Output) {}
 func (r *kv) WithResult(result result.Result) {}
 
 func (r *kv) WithNameAndNamespace(name, namespace string) {}
+
+func (r *kv) WithRootVertexName(name string) {}
 
 func (r *kv) WithClient(client client.Client) {}
 
@@ -125,6 +128,8 @@ func (r *kv) getFinalResult() (output.Output, error) {
 	}
 	return o, nil
 }
+
+func (r *kv) filterInput(i input.Input) input.Input {return i}
 
 func (r *kv) run(ctx context.Context, i input.Input) (any, error) {
 	kv := &mapInput{

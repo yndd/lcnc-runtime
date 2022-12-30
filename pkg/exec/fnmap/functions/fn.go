@@ -17,6 +17,7 @@ import (
 type initOutputFn func(numItems int)
 type recordOutputFn func(any)
 type getFinalResultFn func() (output.Output, error)
+type filterInputFn func(input.Input) input.Input
 type runFn func(context.Context, input.Input) (any, error)
 
 type fnExecConfig struct {
@@ -24,6 +25,7 @@ type fnExecConfig struct {
 	executeSingle bool
 	// execution functions
 	//prepareInputFn prepareInputFn
+	filterInputFn filterInputFn
 	runFn runFn
 	// result functions
 	initOutputFn     initOutputFn
@@ -97,7 +99,8 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 
 				if fec.executeRange {
 					//extraInput := fec.prepareInputFn(fnconfig)
-					x, err := fec.runFn(ctx, i)
+					fi := fec.filterInputFn(i)
+					x, err := fec.runFn(ctx, fi)
 					if err != nil {
 						return nil, err
 					}
@@ -114,7 +117,8 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 			return nil, err
 		}
 		//extraInput := fec.prepareInputFn(fnconfig)
-		x, err := fec.runFn(ctx, i)
+		fi := fec.filterInputFn(i)
+		x, err := fec.runFn(ctx, fi)
 		if err != nil {
 			return nil, err
 		}

@@ -90,12 +90,10 @@ spec:
             range:
               value: $masterTemplates | .[]
             type: container
-            image: docker.io/yndd/fn-lcnc-fabric-image@latest
+            image: docker.io/yndd/fn-lcnc-fabric-image
             vars:
-              localChildTemplates: $childTemplates | .($VALUE.metadata.name)
-            input:
-              masterTemplate: $VALUE
-              localChildTemplates: $localChildTemplates 
+              localMasterTemplate: $VALUE | .
+              localChildTemplates: $VALUE | .metadata.name as $_a | $childTemplates | .[$_a]
             output:
               nodes:
                 resource:

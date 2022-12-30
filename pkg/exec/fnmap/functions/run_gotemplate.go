@@ -29,6 +29,7 @@ func NewGTFn() fnmap.Function {
 		executeRange:  true,
 		executeSingle: true,
 		// execution functions
+		filterInputFn: r.filterInput,
 		runFn: r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
@@ -64,6 +65,8 @@ func (r *gt) WithOutput(output output.Output) {}
 func (r *gt) WithResult(result result.Result) {}
 
 func (r *gt) WithNameAndNamespace(name, namespace string) {}
+
+func (r *gt) WithRootVertexName(name string) {}
 
 func (r *gt) WithClient(client client.Client) {}
 
@@ -112,6 +115,8 @@ func (r *gt) getFinalResult() (output.Output, error) {
 	}
 	return o, nil
 }
+
+func (r *gt) filterInput(i input.Input) input.Input {return i}
 
 func (r *gt) run(ctx context.Context, i input.Input) (any, error) {
 	if r.template == "" {
