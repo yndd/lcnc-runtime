@@ -8,9 +8,9 @@ import (
 	"io"
 
 	"github.com/google/shlex"
+	"github.com/yndd/lcnc-function-sdk/go/fn"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
-	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 )
 
 type Run func(reader io.Reader, writer io.Writer) error
@@ -166,11 +166,11 @@ type FunctionRunner struct {
 	opts RunnerOptions
 }
 
-func (fr *FunctionRunner) Run(rctx *rctxv1.ResourceContext) (*rctxv1.ResourceContext, error) {
+func (fr *FunctionRunner) Run(rCtx *fn.ResourceContext) (*fn.ResourceContext, error) {
 	in := &bytes.Buffer{}
 	out := &bytes.Buffer{}
 
-	b, err := json.Marshal(rctx)
+	b, err := json.Marshal(rCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,9 +189,9 @@ func (fr *FunctionRunner) Run(rctx *rctxv1.ResourceContext) (*rctxv1.ResourceCon
 	}
 	fmt.Printf("run rctx after run:\n%v\n", out.String())
 
-	newRctx := &rctxv1.ResourceContext{}
-	if err := json.Unmarshal(out.Bytes(), newRctx); err != nil {
+	newrCtx := &fn.ResourceContext{}
+	if err := json.Unmarshal(out.Bytes(), newrCtx); err != nil {
 		return nil, err
 	}
-	return newRctx, nil
+	return newrCtx, nil
 }

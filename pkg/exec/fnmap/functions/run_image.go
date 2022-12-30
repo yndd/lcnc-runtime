@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/yndd/lcnc-function-sdk/go/fn"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
-	rctxv1 "github.com/yndd/lcnc-runtime/pkg/api/resourcecontext/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
@@ -16,7 +16,6 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -104,17 +103,17 @@ func (r *image) initOutput(numItems int) {
 func (r *image) recordOutput(o any) {
 	r.m.Lock()
 	defer r.m.Unlock()
-	rctx, ok := o.(*rctxv1.ResourceContext)
+	rctx, ok := o.(*fn.ResourceContext)
 	if !ok {
 		err := fmt.Errorf("expected type *rctxv1.ResourceContext, got: %T", o)
 		r.l.Error(err, "cannot record output")
 		r.errs = append(r.errs, err.Error())
 		return
 	}
-	for gvkString, krmslice := range rctx.Spec.Properties.Output {
+	for gvkString, krmslice := range rctx.Resources.Output {
 		varName, ok := r.gvkToVarName[gvkString]
 		if !ok {
-			err := fmt.Errorf("unregistered image gvk: %s", gvkString)
+			err := fmt.Errorf("unregistered image output gvk: %s", gvkString)
 			r.l.Error(err, "cannot record output since the variable is not initialized")
 			r.errs = append(r.errs, err.Error())
 			break
@@ -171,12 +170,12 @@ func (r *image) run(ctx context.Context, i input.Input) (any, error) {
 		r.l.Error(err, "cannot get runner")
 		return nil, err
 	}
-	rctx, err := buildResourceContext(r.name, r.namespace, i)
+	rCtx, err := buildResourceContext(i)
 	if err != nil {
 		r.l.Error(err, "cannot build resource context")
 		return nil, err
 	}
-	o, err := runner.Run(rctx)
+	o, err := runner.Run(rCtx)
 	if err != nil {
 		r.l.Error(err, "failed tunner")
 		return nil, err
@@ -184,41 +183,24 @@ func (r *image) run(ctx context.Context, i input.Input) (any, error) {
 	return o, nil
 }
 
-func buildResourceContext(name, namespace string, i input.Input) (*rctxv1.ResourceContext, error) {
-	props, err := buildResourceContextProperties(i)
+func buildResourceContext(i input.Input) (*fn.ResourceContext, error) {
+	resources, err := buildResourceContextResources(i)
 	if err != nil {
 		return nil, err
 	}
 
-	rctx := &rctxv1.ResourceContext{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ResourceContext",
-			APIVersion: "lcnc.yndd.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: rctxv1.Spec{
-			Properties: props,
-		},
+	rCtx := &fn.ResourceContext{
+		Resources: resources,
 	}
 
-	gvk := schema.GroupVersionKind{
-		Group:   "lcnc.yndd.io",
-		Version: "v1",
-		Kind:    "ResourceContext",
-	}
-
-	rctx.SetGroupVersionKind(gvk)
-	return rctx, nil
+	return rCtx, nil
 }
 
-func buildResourceContextProperties(i input.Input) (*rctxv1.Properties, error) {
-	props := &rctxv1.Properties{
-		Origin: map[string]runtime.RawExtension{},
-		Input:  map[string][]runtime.RawExtension{},
-		Output: map[string][]runtime.RawExtension{},
+func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
+	props := &fn.Resources{
+		Input:      map[string][]runtime.RawExtension{},
+		Output:     map[string][]runtime.RawExtension{},
+		Conditions: map[string][]runtime.RawExtension{},
 	}
 	for _, v := range i.Get() {
 		switch x := v.(type) {
@@ -228,7 +210,10 @@ func buildResourceContextProperties(i input.Input) (*rctxv1.Properties, error) {
 			if err != nil {
 				return nil, err
 			}
-			props.Origin[meta.GVKToString(gvk)] = runtime.RawExtension{Raw: []byte(res)}
+			if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
+				props.Input[gvk.String()] = make([]runtime.RawExtension, 0)
+			}
+			props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
 		case []any:
 			l := len(x)
 			if l > 0 {

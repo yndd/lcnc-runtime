@@ -24,14 +24,14 @@ spec:
       - name: forDeletePipeline
       - name: forApplyPipeline
         vars:
-          parentTemplateNames:
+          masterTemplateNames:
             type: jq
             input: 
               expression: $topoDef | .spec.properties.templates | select((. | length) > 0) | .[].templateRef.name
           conditionedTemplateBlock:
             type: block
             condition:
-              expression: $parentTemplateNames | length != 0
+              expression: $masterTemplateNames | length != 0
             block:
               allTemplates:
                 type: query
@@ -39,17 +39,17 @@ spec:
                   resource: 
                     apiVersion: topo.yndd.io/v1alpha1
                     kind: Template
-              parentTemplates:
+              masterTemplates:
                 type: jq
                 input:
-                  expression: '$parentTemplateNames | .[] as $_a | $allTemplates | .[] | select(.metadata.name == $_a)'
-              parentChildTemplateName:
+                  expression: '$masterTemplateNames | .[] as $_a | $allTemplates | .[] | select(.metadata.name == $_a)'
+              masterChildTemplateName:
                 type: jq
                 input:
-                  expression: '$parentTemplates | .[] as $_a | {"name": ($_a.metadata.name), "children": [.[].spec.properties.fabric.pod | .[].templateRef.name | select(. != null)]}'
+                  expression: '$masterTemplates | .[] as $_a | {"name": ($_a.metadata.name), "children": [.[].spec.properties.fabric.pod | .[].templateRef.name | select(. != null)]}'
               childTemplates:
                 range:
-                  value: $parentChildTemplateName | .[]
+                  value: $masterChildTemplateName | .[]
                 type: map
                 input:
                   key: $VALUE.name
@@ -86,3 +86,28 @@ spec:
                     location:
                       latitude: a
                       longitude: b
+          createFabric:
+            range:
+              value: $masterTemplates
+            image: docker.io/yndd/fn-lcnc-fabric-image@latest
+            vars:
+              localChildTemplates:
+                range:
+                  value: $childTemplates
+                  condition:
+                    expression: xxx
+                kind: slice
+                input: 
+                  value: $KEY 
+            input:
+              masterTemplate: $VALUE
+              localChildTemplates: $localChildTemplates
+            output:
+              nodes:
+                resources:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  kind: Node
+              links:
+                resources:
+                  apiVersion: topo.yndd.io/v1alpha1
+                  kind: Link
