@@ -1604,8 +1604,8 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q
 github.com/xlab/treeprint v0.0.0-20181112141820-a009c3971eca h1:1CFlNzQhALwjS9mBAUkycX616GzgsuYUOCHA5+HSlXI=
 github.com/xlab/treeprint v0.0.0-20181112141820-a009c3971eca/go.mod h1:ce1O1j6UtZfjr22oyGxGLbauSBp2YVXpARAosm7dHBg=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
-github.com/yndd/lcnc-function-sdk v0.0.9 h1:6mWJQ11H5JCshhsdHSUX7OO2PbKrNA2jFaVlWBzVEY4=
-github.com/yndd/lcnc-function-sdk v0.0.9/go.mod h1:wA1e2SHNNy69kOYShHVaRVODkNyl876aeJXdtSEHx9E=
+github.com/yndd/lcnc-function-sdk v0.0.10 h1:88Bmp9sazZlhLJwuUvPTXnBbIH7l894Z55mp7sCCxIE=
+github.com/yndd/lcnc-function-sdk v0.0.10/go.mod h1:wA1e2SHNNy69kOYShHVaRVODkNyl876aeJXdtSEHx9E=
 github.com/yndd/ndd-core v0.1.6/go.mod h1:zlQTBILqiJlYj3WYy0yHGBBIMZemhVXoNnXE4vhF+pI=
 github.com/yndd/ndd-core v0.1.7/go.mod h1:zlQTBILqiJlYj3WYy0yHGBBIMZemhVXoNnXE4vhF+pI=
 github.com/yndd/ndd-core v0.2.19/go.mod h1:vL11h7D7PDf629XFxhLMa4OROZrq4GbsM6tmk+T93xQ=

@@ -180,14 +180,14 @@ func (fr *FunctionRunner) Run(rCtx *fn.ResourceContext) (*fn.ResourceContext, er
 		return nil, err
 	}
 
-	fmt.Printf("run rctx after printer:\n%s\n", in.String())
+	fmt.Printf("rctx before fn Execution:\n%s\n", in.String())
 
 	// call the specific implementation of run (container, exec or wasm)
 	ex := fr.run(in, out)
 	if ex != nil {
 		return nil, fmt.Errorf("fn run failed: %s", ex.Error())
 	}
-	fmt.Printf("run rctx after run:\n%v\n", out.String())
+	//fmt.Printf("rctx after fn execution:\n%v\n", out.String())
 
 	newrCtx := &fn.ResourceContext{}
 	if err := json.Unmarshal(out.Bytes(), newrCtx); err != nil {

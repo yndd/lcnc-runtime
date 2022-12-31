@@ -15,9 +15,8 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
-	"github.com/yndd/lcnc-runtime/pkg/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -175,7 +174,7 @@ func (r *image) filterInput(i input.Input) input.Input {
 			switch {
 			case varName == ivarName:
 				newInput.AddEntry(varName, v)
-			case  varName == r.rootVertexName:
+			case varName == r.rootVertexName:
 				newInput.AddEntry(varName, v)
 			}
 		}
@@ -220,7 +219,7 @@ func buildResourceContext(i input.Input) (*fn.ResourceContext, error) {
 }
 
 func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
-	props := &fn.Resources{
+	resources := &fn.Resources{
 		Input:      map[string][]runtime.RawExtension{},
 		Output:     map[string][]runtime.RawExtension{},
 		Conditions: map[string][]runtime.RawExtension{},
@@ -229,43 +228,39 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 	for _, v := range i.Get() {
 		switch x := v.(type) {
 		case map[string]any:
-			// we should only have 1 resource with this type which is the origin
-			gvk, res, err := getGVKResource(x)
+			o, err := getObject(x)
 			if err != nil {
 				return nil, err
 			}
-			if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
-				props.Input[gvk.String()] = make([]runtime.RawExtension, 0)
+			if err := resources.AddUniqueIntput(o); err != nil {
+				return nil, err
 			}
-			props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
 		case []any:
 			l := len(x)
 			if l > 0 {
 				for _, v := range x {
 					switch x := v.(type) {
 					case map[string]any:
-						gvk, res, err := getGVKResource(x)
+						o, err := getObject(x)
 						if err != nil {
 							return nil, err
 						}
-						if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
-							props.Input[gvk.String()] = make([]runtime.RawExtension, 0, l)
+						if err := resources.AddUniqueIntput(o); err != nil {
+							return nil, err
 						}
-						props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
 					case []any:
 						l := len(x)
 						if l > 0 {
 							for _, v := range x {
 								switch x := v.(type) {
 								case map[string]any:
-									gvk, res, err := getGVKResource(x)
+									o, err := getObject(x)
 									if err != nil {
 										return nil, err
 									}
-									if _, ok := props.Input[meta.GVKToString(gvk)]; !ok {
-										props.Input[gvk.String()] = make([]runtime.RawExtension, 0, l)
+									if err := resources.AddUniqueIntput(o); err != nil {
+										return nil, err
 									}
-									props.Input[meta.GVKToString(gvk)] = append(props.Input[meta.GVKToString(gvk)], runtime.RawExtension{Raw: []byte(res)})
 								default:
 									return nil, fmt.Errorf("unexpected object in []any[]any: got %T", v)
 								}
@@ -280,29 +275,17 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 			return nil, fmt.Errorf("unexpected input object: got %T", v)
 		}
 	}
-	return props, nil
+	return resources, nil
 }
 
-func getGVKResource(x map[string]any) (*schema.GroupVersionKind, string, error) {
-	apiVersion, ok := x["apiVersion"]
-	if !ok {
-		return nil, "", fmt.Errorf("origin is not a KRM resource apiVersion missing")
-	}
-	kind, ok := x["kind"]
-	if !ok {
-		return nil, "", fmt.Errorf("origin is not a KRM resource kind missing")
-	}
-	gv, err := schema.ParseGroupVersion(apiVersion.(string))
-	if err != nil {
-		return nil, "", err
-	}
+func getObject(x map[string]any) (fn.Object, error) {
 	b, err := json.Marshal(x)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return &schema.GroupVersionKind{
-			Group:   gv.Group,
-			Version: gv.Version,
-			Kind:    kind.(string)},
-		string(b), nil
+	u := &unstructured.Unstructured{}
+	if err := json.Unmarshal(b, u); err != nil {
+		return nil, err
+	}
+	return u, nil
 }
