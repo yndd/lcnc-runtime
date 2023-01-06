@@ -21,7 +21,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
@@ -42,7 +41,6 @@ type Config struct {
 	RootVertexName string
 	GVK            *schema.GroupVersionKind
 	DAG            rtdag.RuntimeDAG
-	FnMap          fnmap.FuncMap
 }
 
 func New(c *Config) handler.EventHandler {
@@ -57,7 +55,6 @@ func New(c *Config) handler.EventHandler {
 		rootVertexName: c.RootVertexName,
 		gvk:            c.GVK,
 		d:              c.DAG,
-		fnMap:          c.FnMap,
 		l:              ctrl.Log.WithName("lcnc eventhandler"),
 	}
 }
@@ -68,7 +65,6 @@ type eventhandler struct {
 	rootVertexName string
 	gvk            *schema.GroupVersionKind
 	d              rtdag.RuntimeDAG
-	fnMap          fnmap.FuncMap
 
 	l logr.Logger
 }
@@ -115,14 +111,14 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	o := output.New()
 	result := result.New()
 	e := builder.New(&builder.Config{
-		Name:           u.GetName(),
-		Namespace:      namespace,
-		Data:           x,
-		Client:         r.client,
-		GVK:            r.gvk,
-		DAG:            r.d,
-		Output:         o,
-		Result:         result,
+		Name:      u.GetName(),
+		Namespace: namespace,
+		Data:      x,
+		Client:    r.client,
+		GVK:       r.gvk,
+		DAG:       r.d,
+		Output:    o,
+		Result:    result,
 	})
 
 	e.Run(context.TODO())
