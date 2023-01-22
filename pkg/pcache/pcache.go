@@ -18,8 +18,8 @@ import (
 )
 
 type ProxyCache interface {
+	// Discovers the server
 	Start(context.Context)
-	// Discover Config/State Cache
 	// Subscribe to the State Cache for the (ipam, etc) GVK
 	// Allocation -> lookup in local cache based on (ipam, etc) gvknsn
 	// Timer based refresh Config/State Cache

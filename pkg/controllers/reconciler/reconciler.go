@@ -37,7 +37,6 @@ type Config struct {
 	PollInterval time.Duration
 	CeCtx        ccsyntax.ConfigExecutionContext
 	FnMap        fnmap.FuncMap
-
 }
 
 func New(c *Config) reconcile.Reconciler {

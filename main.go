@@ -6,14 +6,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/henderiw-k8s-lcnc/discovery/discovery"
-	"github.com/henderiw-k8s-lcnc/discovery/registrator"
+	//"github.com/henderiw-k8s-lcnc/discovery/discovery"
+	//"github.com/henderiw-k8s-lcnc/discovery/registrator"
 	"github.com/pkg/profile"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
-	"github.com/yndd/lcnc-runtime/pkg/pcache"
+	//"github.com/yndd/lcnc-runtime/pkg/pcache"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
@@ -136,8 +136,10 @@ func main() {
 		os.Exit(1)
 	}
 
+
 	l.Info("setup controller")
 	ctx := ctrl.SetupSignalHandler()
+	/*
 	reg, err := registrator.New(ctx, ctrl.GetConfigOrDie(), &registrator.Options{
 		ServiceDiscovery:          discovery.ServiceDiscoveryTypeK8s,
 		ServiceDiscoveryNamespace: "ipam",
@@ -156,6 +158,7 @@ func main() {
 	})
 
 	c.Start(ctx)
+	*/
 
 	l.Info("starting controller manager")
 	if err := mgr.Start(ctx); err != nil {

@@ -12,18 +12,6 @@ import (
 
 type RuntimeDAG interface {
 	dag.DAG
-	/*
-		AddVertex(s string, v *VertexContext) error
-		Connect(from, to string)
-		AddDownEdge(from, to string)
-		AddUpEdge(from, to string)
-		VertexExists(s string) bool
-		GetVertex(s string) *VertexContext
-		GetVertices() map[string]*VertexContext
-		GetDownVertexes(from string) []string
-		GetUpVertexes(from string) []string
-		TransitiveReduction()
-	*/
 
 	GetRootVertex() string
 	GetDependencyMap(from string)

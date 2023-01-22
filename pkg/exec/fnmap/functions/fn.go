@@ -35,29 +35,29 @@ type fnExecConfig struct {
 	l logr.Logger
 }
 
-func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, i input.Input) (output.Output, error) {
+func (r *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, i input.Input) (output.Output, error) {
 	var items []*item
 	var isRange bool
 	var ok bool
 	var err error
 	if fnconfig.HasBlock() {
-		fec.l.Info("execute block")
+		r.l.Info("execute block")
 		if fnconfig.Block.Range != nil {
-			fec.l.Info("execute range", "value", fnconfig.Block.Range.Value)
+			r.l.Info("execute range", "value", fnconfig.Block.Range.Value)
 			items, err = runRange(fnconfig.Block.Range.Value, i)
 			if err != nil {
-				fec.l.Error(err, "cannot run range")
+				r.l.Error(err, "cannot run range")
 				return nil, err
 			}
-			fec.l.Info("range", "items", items)
+			r.l.Info("range", "items", items)
 			isRange = true
 		}
 		if fnconfig.Block.Condition != nil {
-			fec.l.Info("execute condition", "expression", fnconfig.Block.Condition.Expression)
+			r.l.Info("execute condition", "expression", fnconfig.Block.Condition.Expression)
 			if exp := fnconfig.Block.Condition.Expression; exp != "" {
 				ok, err = runCondition(exp, i)
 				if err != nil {
-					fec.l.Error(err, "cannot run range")
+					r.l.Error(err, "cannot run range")
 					return nil, err
 				}
 				if !ok {
@@ -65,10 +65,10 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 				}
 			}
 			if fnconfig.Block.Condition.Block.Range != nil {
-				fec.l.Info("execute range in condition", "value", fnconfig.Block.Condition.Block.Range.Value)
+				r.l.Info("execute range in condition", "value", fnconfig.Block.Condition.Block.Range.Value)
 				items, err = runRange(fnconfig.Block.Condition.Block.Range.Value, i)
 				if err != nil {
-					fec.l.Error(err, "cannot run range in condition")
+					r.l.Error(err, "cannot run range in condition")
 					return nil, err
 				}
 				isRange = true
@@ -77,11 +77,11 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 	}
 	numItems := len(items)
 	if numItems == 0 && isRange {
-		fec.initOutputFn(0)
+		r.initOutputFn(0)
 		return nil, nil // no entries in the range, so we are done
 	}
 	if numItems > 0 && isRange {
-		fec.initOutputFn(numItems)
+		r.initOutputFn(numItems)
 		for n, item := range items {
 			fmt.Printf("range items: n: %d, item %#v\n", n, item)
 			// this is a protection to ensure we dont use the nil result in a range
@@ -97,34 +97,37 @@ func (fec *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function,
 
 				i.Print("range")
 
-				if fec.executeRange {
+				if r.executeRange {
 					//extraInput := fec.prepareInputFn(fnconfig)
-					fi := fec.filterInputFn(i)
-					x, err := fec.runFn(ctx, fi)
+					fi := r.filterInputFn(i)
+					x, err := r.runFn(ctx, fi)
 					if err != nil {
 						return nil, err
 					}
-					fec.recordOutputFn(x)
+
+					// TODO add hook for service resolution
+					r.recordOutputFn(x)
 				}
 			}
 		}
 	}
-	if fec.executeSingle {
-		fec.l.Info("execute single")
-		fec.initOutputFn(1)
+	if r.executeSingle {
+		r.l.Info("execute single")
+		r.initOutputFn(1)
 		// resolve the local vars using jq and add them to the input
 		if err := resolveLocalVars(fnconfig, i); err != nil {
 			return nil, err
 		}
 		//extraInput := fec.prepareInputFn(fnconfig)
-		fi := fec.filterInputFn(i)
-		x, err := fec.runFn(ctx, fi)
+		fi := r.filterInputFn(i)
+		x, err := r.runFn(ctx, fi)
 		if err != nil {
 			return nil, err
 		}
-		fec.recordOutputFn(x)
+		// TODO add hook for service resolution
+		r.recordOutputFn(x)
 	}
-	return fec.getFinalResultFn()
+	return r.getFinalResultFn()
 }
 
 type item struct {
@@ -140,8 +143,8 @@ func runRange(exp string, i input.Input) ([]*item, error) {
 		varValues = append(varValues, v)
 		fmt.Printf("runRange variables: name: %s, value: %v\n", name, v)
 	}
-	fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
-	fmt.Printf("runRange exp: %s\n", exp)
+	//fmt.Printf("runRange varNames: %v, varValues: %v\n", varNames, varValues)
+	//fmt.Printf("runRange exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
@@ -184,8 +187,6 @@ func runCondition(exp string, i input.Input) (bool, error) {
 		varNames = append(varNames, "$"+name)
 		varValues = append(varValues, v)
 	}
-	//fmt.Printf("runCondition varNames: %v, varValues: %v\n", varNames, varValues)
-	//fmt.Printf("runCondition exp: %s\n", exp)
 
 	q, err := gojq.Parse(exp)
 	if err != nil {
@@ -204,14 +205,9 @@ func runCondition(exp string, i input.Input) (bool, error) {
 
 	if err, ok := v.(error); ok {
 		if err != nil {
-			//fmt.Printf("runCondition err: %v\n", err)
-			//if strings.Contains(err.Error(), "cannot iterate over: null") {
-			//	return false, nil
-			//}
 			return false, err
 		}
 	}
-	//fmt.Printf("runCondition value: %t\n", v)
 	if r, ok := v.(bool); ok {
 		return r, nil
 	}
@@ -220,7 +216,6 @@ func runCondition(exp string, i input.Input) (bool, error) {
 
 func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 	if fnconfig.Vars != nil {
-		//fmt.Printf("resolveLocalVars: input: %v\n", i.Get())
 		for varName, expression := range fnconfig.Vars {
 			// We are lazy and provide all reference input to JQ
 			// the below aproach could be a more optimal solution
@@ -232,21 +227,14 @@ func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
 			//	for _, ref := range refs {
 			//		localVarRefs[ref.Value] = input[ref.Value]
 			//	}
-			fmt.Printf("resolveLocalVars varname: %s expression %s\n", varName, expression)
+			//fmt.Printf("resolveLocalVars varname: %s expression %s\n", varName, expression)
 
 			v, err := runJQ(expression, i)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("resolveLocalVars varname: %s jq %#v\n", varName, v)
-			/*
-				b, err := yaml.Marshal(v)
-				if err != nil {
-					return err
-				}
-				x := map[string]interface{}
-				if err:= yaml
-			*/
+			//fmt.Printf("resolveLocalVars varname: %s jq %#v\n", varName, v)
+
 			i.AddEntry(varName, v)
 		}
 	}
