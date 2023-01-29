@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const yamlFile = "./examples/topo4.yaml"
+const yamlFile = "./examples/upf.yaml"
 
 func main() {
 	var metricsAddr string

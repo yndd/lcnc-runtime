@@ -2,15 +2,19 @@ package reconciler
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/yndd/lcnc-runtime/pkg/applicator"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
@@ -46,7 +50,7 @@ func New(c *Config) reconcile.Reconciler {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	return &reconciler{
-		client:       c.Client,
+		client:       applicator.ClientApplicator{Client: c.Client, Applicator: applicator.NewAPIPatchingApplicator(c.Client)},
 		pollInterval: c.PollInterval,
 		ceCtx:        c.CeCtx,
 		fnMap:        c.FnMap,
@@ -57,7 +61,7 @@ func New(c *Config) reconcile.Reconciler {
 }
 
 type reconciler struct {
-	client       client.Client
+	client       applicator.ClientApplicator
 	pollInterval time.Duration
 	ceCtx        ccsyntax.ConfigExecutionContext
 	fnMap        fnmap.FuncMap
@@ -67,7 +71,7 @@ type reconciler struct {
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
+	r.l = log.FromContext(ctx)
 	r.l.Info("reconcile start...")
 
 	gvk := r.ceCtx.GetForGVK()
@@ -97,17 +101,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.l.Info("reconcile delete started...")
 		// handle delete branch
 		deleteDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationDelete)
-		/*
-			e := executor.New(&executor.Config{
-				Name:       req.Name,
-				Namespace:  req.Namespace,
-				RootVertex: deleteDAGCtx.RootVertexName,
-				Data:       x,
-				Client:     r.client,
-				GVK:        gvk,
-				DAG:        deleteDAGCtx.DAG,
-			})
-		*/
 
 		o := output.New()
 		result := result.New()
@@ -140,17 +133,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// apply branch -> used for create and update
 	r.l.Info("reconcile apply started...")
 	applyDAGCtx := r.ceCtx.GetDAGCtx(ccsyntax.FOWFor, gvk, ccsyntax.OperationApply)
-	/*
-		e := executor.New(&executor.Config{
-			Name:       req.Name,
-			Namespace:  req.Namespace,
-			RootVertex: applyDAGCtx.RootVertexName,
-			Data:       x,
-			Client:     r.client,
-			GVK:        gvk,
-			DAG:        applyDAGCtx.DAG,
-		})
-	*/
 
 	o := output.New()
 	result := result.New()
@@ -170,10 +152,38 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	o.Print()
 	result.Print()
 
+	for _, output := range o.GetFinalOutput() {
+		b, err := json.MarshalIndent(output, "", "  ")
+		if err != nil {
+			r.l.Error(err, "cannot marshal the content")
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+		}
+		//r.l.Info("final output", "jsin string", string(b))
+		u := &unstructured.Unstructured{}
+		if err := json.Unmarshal(b, u); err != nil {
+			r.l.Error(err, "cannot unmarshal the content")
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+		}
+		r.l.Info("final output", "unstructured", u)
+
+		r.l.Info("gvk", "cr", cr.GroupVersionKind(), "u", u.GroupVersionKind())
+
+		if u.GroupVersionKind() == cr.GroupVersionKind() {
+			cr = u
+		} else {
+			if err := r.client.Apply(ctx, u); err != nil {
+				r.l.Error(err, "cannot apply the content")
+			}
+
+			if err := r.client.Status().Update(ctx, u); err != nil {
+				r.l.Error(err, "cannot update status")
+			}
+		}
+	}
+
 	//time.Sleep(60 * time.Second)
 
 	r.l.Info("reconcile apply finsihed...")
 
-	return reconcile.Result{}, nil
-	//return reconcile.Result{RequeueAfter: r.pollInterval}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+	return reconcile.Result{}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 }

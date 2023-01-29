@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
-	"github.com/yndd/lcnc-function-sdk/go/fn"
+	"github.com/henderiw-k8s-lcnc/fn-sdk/go/fn"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
@@ -114,13 +114,14 @@ func (r *image) recordOutput(o any) {
 		r.errs = append(r.errs, err.Error())
 		return
 	}
-	for gvkString, krmslice := range rctx.Resources.Output {
+	for gvkString, krmslice := range rctx.Resources {
+		r.l.Info("recordOutput", "gvkString", gvkString, "krmslice", krmslice)
 		varName, ok := r.gvkToVarName[gvkString]
 		if !ok {
 			err := fmt.Errorf("unregistered image output gvk: %s", gvkString)
 			r.l.Error(err, "cannot record output since the variable is not initialized")
-			r.errs = append(r.errs, err.Error())
-			break
+			//r.errs = append(r.errs, err.Error())
+			continue
 		}
 
 		krmOutput := make([]any, 0, len(krmslice))
@@ -161,6 +162,14 @@ func (r *image) getFinalResult() (output.Output, error) {
 	if len(r.errs) > 0 {
 		return nil, fmt.Errorf("errors executing image: %v", r.errs)
 	}
+
+	/* TODO add channel
+	for gvk, v := range r.output.GetConditionedOutput() {
+		// inform the
+	}
+	*/
+	r.output.Print()
+
 	return r.output, nil
 }
 
@@ -212,7 +221,7 @@ func buildResourceContext(i input.Input) (*fn.ResourceContext, error) {
 	}
 
 	rCtx := &fn.ResourceContext{
-		Resources: resources,
+		Resources: resources.Resources,
 	}
 
 	return rCtx, nil
@@ -220,9 +229,7 @@ func buildResourceContext(i input.Input) (*fn.ResourceContext, error) {
 
 func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 	resources := &fn.Resources{
-		Input:      map[string][]runtime.RawExtension{},
-		Output:     map[string][]runtime.RawExtension{},
-		Conditions: map[string][]runtime.RawExtension{},
+		Resources: map[string][]runtime.RawExtension{},
 	}
 	i.Print("runImage")
 	for _, v := range i.Get() {
@@ -232,7 +239,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 			if err != nil {
 				return nil, err
 			}
-			if err := resources.AddUniqueIntput(o); err != nil {
+			if err := resources.AddResource(o); err != nil {
 				return nil, err
 			}
 		case []any:
@@ -245,7 +252,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 						if err != nil {
 							return nil, err
 						}
-						if err := resources.AddUniqueIntput(o); err != nil {
+						if err := resources.AddResource(o); err != nil {
 							return nil, err
 						}
 					case []any:
@@ -258,7 +265,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 									if err != nil {
 										return nil, err
 									}
-									if err := resources.AddUniqueIntput(o); err != nil {
+									if err := resources.AddResource(o); err != nil {
 										return nil, err
 									}
 								default:

@@ -56,8 +56,9 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 
 	outputs := output.New()
 	outputs.AddEntry(oc.VertexName, &output.OutputInfo{
-		Internal: true,
-		GVK:      gvk,
+		Internal:    true,
+		Conditioned: false,
+		GVK:         gvk,
 	})
 
 	// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
@@ -132,8 +133,9 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			})
 		}
 		outputs.AddEntry(varName, &output.OutputInfo{
-			Internal: outputCfg.Internal,
-			GVK:      gvk,
+			Internal:    outputCfg.Internal,
+			Conditioned: outputCfg.Conditioned,
+			GVK:         gvk,
 		})
 		gvkToVarName[meta.GVKToString(gvk)] = varName
 
@@ -162,8 +164,9 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 					})
 				}
 				outputs.AddEntry(oc.VertexName, &output.OutputInfo{
-					Internal: false,
-					GVK:      gvk,
+					Internal:    false,
+					Conditioned: false,
+					GVK:         gvk,
 				})
 			}
 			// TODO what to do for a template ??? How do i get a GVK, is it also an external resource
@@ -177,12 +180,14 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 					})
 				}
 				outputs.AddEntry(oc.VertexName, &output.OutputInfo{
-					Internal: true,
-					GVK:      gvk,
+					Internal:    true,
+					Conditioned: false,
+					GVK:         gvk,
 				})
 			} else {
 				outputs.AddEntry(oc.VertexName, &output.OutputInfo{
-					Internal: true,
+					Internal:    true,
+					Conditioned: false,
 				})
 			}
 		}

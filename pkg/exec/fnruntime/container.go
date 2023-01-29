@@ -15,6 +15,7 @@ import (
 	"time"
 
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
 	"github.com/yndd/lcnc-runtime/pkg/internal/printer"
 	"golang.org/x/mod/semver"
 	"sigs.k8s.io/kustomize/kyaml/fn/runtime/runtimeutil"
@@ -63,7 +64,7 @@ type ContainerFn struct {
 	// Image is the container image to run
 	Image string
 	// ImagePullPolicy controls the image pulling behavior.
-	ImagePullPolicy ImagePullPolicy
+	ImagePullPolicy fnlib.ImagePullPolicy
 	// Container function will be killed after this timeour.
 	// The default value is 5 minutes.
 	Timeout time.Duration
@@ -171,11 +172,11 @@ func (f *ContainerFn) getCmd(binName string) (*exec.Cmd, context.CancelFunc) {
 	}
 
 	switch f.ImagePullPolicy {
-	case NeverPull:
+	case fnlib.NeverPull:
 		args = append(args, "--pull", "never")
-	case AlwaysPull:
+	case fnlib.AlwaysPull:
 		args = append(args, "--pull", "always")
-	case IfNotPresentPull:
+	case fnlib.IfNotPresentPull:
 		args = append(args, "--pull", "missing")
 	default:
 		args = append(args, "--pull", "missing")

@@ -148,20 +148,28 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			})
 		}
 	case ctrlcfgv1.QueryType:
-		if len(v.Input.Resource.Raw) == 0 {
-			r.recordResult(Result{
-				OriginContext: oc,
-				Error:         fmt.Errorf("gvk needs to be present in %s", v.Type).Error(),
-			})
-		} else {
-			_, err := ctrlcfgv1.GetGVK(v.Input.Resource)
-			if err != nil {
+		if v.Input != nil {
+			if len(v.Input.Resource.Raw) == 0 {
 				r.recordResult(Result{
 					OriginContext: oc,
-					Error:         err.Error(),
+					Error:         fmt.Errorf("gvk needs to be present in %s", v.Type).Error(),
 				})
+			} else {
+				_, err := ctrlcfgv1.GetGVK(v.Input.Resource)
+				if err != nil {
+					r.recordResult(Result{
+						OriginContext: oc,
+						Error:         err.Error(),
+					})
+				}
 			}
+		} else {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("input needs to be present in %s", v.Type).Error(),
+			})
 		}
+
 	case ctrlcfgv1.GoTemplateType:
 		if len(v.Input.Resource.Raw) == 0 && v.Input.Template == "" {
 			r.recordResult(Result{

@@ -54,8 +54,7 @@ type Properties struct {
 	//Functions map[string]ControllerConfigFunctionBlock `json:",inline" yaml:",inline"`
 	Pipelines []*Pipeline `json:"pipelines,omitempty" yaml:"pipelines,omitempty"`
 
-	//Services  []ControllerConfigFunctionsBlock `json:"services,omitempty" yaml:"services,omitempty"`
-	//Services map[string]ControllerConfigFunction `json:"services,omitempty" yaml:"services,omitempty"`
+	Services map[string]*Function `json:"services,omitempty" yaml:"services,omitempty"`
 }
 
 type GvkObject struct {
@@ -121,9 +120,9 @@ type Function struct {
 }
 
 type Output struct {
-	Internal bool                 `json:"internal" yaml:"internal"`
-	Resource runtime.RawExtension `json:"resource" yaml:"resource"`
-	//GenericOutput string               `json:",inline" yaml:",inline"`
+	Internal    bool                 `json:"internal" yaml:"internal"`
+	Conditioned bool                 `json:"conditioned" yaml:"conditioned"`
+	Resource    runtime.RawExtension `json:"resource" yaml:"resource"`
 }
 
 type Input struct {

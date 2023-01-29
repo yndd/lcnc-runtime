@@ -43,7 +43,7 @@ func (r *varDAG) VarExists(s string) bool {
 
 func (r *varDAG) GetVarInfo(s string) *VariableContext {
 	v := r.d.GetVertex(s)
-	fmt.Printf("getVarInfo: %s, variableContext: %#v\n", s, v)
+	//fmt.Printf("getVarInfo: %s, variableContext: %#v\n", s, v)
 	oc, ok := v.(*VariableContext)
 	if ok {
 		return oc

@@ -6,6 +6,7 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/henderiw-k8s-lcnc/discovery v0.0.4
+	github.com/henderiw-k8s-lcnc/fn-sdk v0.0.0-20230121181129-00290ffaac80
 	github.com/itchyny/gojq v0.12.10
 	github.com/nokia/k8s-ipam v0.0.3
 	github.com/onsi/ginkgo/v2 v2.6.0
@@ -13,11 +14,10 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.6.0
 	github.com/prometheus/client_golang v1.14.0
-	github.com/yndd/lcnc-function-sdk v0.0.10
 	github.com/yndd/ndd-runtime v0.5.22
 	golang.org/x/mod v0.7.0
 	k8s.io/api v0.26.0
-	k8s.io/apimachinery v0.26.0
+	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.0
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448

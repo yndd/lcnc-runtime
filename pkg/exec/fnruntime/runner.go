@@ -8,16 +8,17 @@ import (
 	"io"
 
 	"github.com/google/shlex"
-	"github.com/yndd/lcnc-function-sdk/go/fn"
+	"github.com/henderiw-k8s-lcnc/fn-sdk/go/fn"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
 )
 
 type Run func(reader io.Reader, writer io.Writer) error
 
 type RunnerOptions struct {
 	// ImagePullPolicy controls the image pulling behavior before running the container.
-	ImagePullPolicy ImagePullPolicy
+	ImagePullPolicy fnlib.ImagePullPolicy
 
 	// allowExec determines if function binary executable are allowed
 	// to be run during execution. Running function binaries is a
@@ -37,7 +38,7 @@ type RunnerOptions struct {
 type ImageResolveFunc func(ctx context.Context, image string) (string, error)
 
 func (o *RunnerOptions) InitDefaults() {
-	o.ImagePullPolicy = IfNotPresentPull
+	o.ImagePullPolicy = fnlib.IfNotPresentPull
 	o.ResolveToImage = ResolveToImageForCLI
 }
 

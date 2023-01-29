@@ -130,7 +130,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 	for _, ref := range refs {
 		// RangeRefKind do nothing
 		// for regular values we resolve the variables
-		// for varibales that start with _ this is a special case and
+		// for variables that start with _ this is a special case and
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
