@@ -111,7 +111,7 @@ func NewRunner(
 					AllowMount:   true,
 				},
 				StorageMounts: []runtimeutil.StorageMount{
-					{MountType: "volume", Src: filepath.Join(home, ".kube", "config"), DstPath: "/config"},
+					{MountType: "bind", Src: filepath.Join(home, ".kube", "config"), DstPath: "/config"},
 				},
 				Env: []string{
 					strings.Join([]string{"FN_SERVICE_PORT", servicePort}, "="),
