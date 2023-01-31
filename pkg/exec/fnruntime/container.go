@@ -15,6 +15,7 @@ import (
 	"time"
 
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
 	"github.com/yndd/lcnc-runtime/pkg/internal/printer"
 	"golang.org/x/mod/semver"
 	"sigs.k8s.io/kustomize/kyaml/fn/runtime/runtimeutil"
@@ -63,7 +64,7 @@ type ContainerFn struct {
 	// Image is the container image to run
 	Image string
 	// ImagePullPolicy controls the image pulling behavior.
-	ImagePullPolicy ImagePullPolicy
+	ImagePullPolicy fnlib.ImagePullPolicy
 	// Container function will be killed after this timeour.
 	// The default value is 5 minutes.
 	Timeout time.Duration
@@ -96,7 +97,7 @@ func (r ContainerRuntime) GetBin() string {
 // Run runs the container function using docker runtime.
 // It reads the input from the given reader and writes the output
 // to the provided writer.
-func (f *ContainerFn) Run(reader io.Reader, writer io.Writer) error {
+func (f *ContainerFn) SvcRun(ctx context.Context) error {
 	// If the env var is empty, stringToContainerRuntime defaults it to docker.
 	runtime, err := StringToContainerRuntime(os.Getenv(ContainerRuntimeEnv))
 	if err != nil {
@@ -112,17 +113,71 @@ func (f *ContainerFn) Run(reader io.Reader, writer io.Writer) error {
 
 	switch runtime {
 	case Podman:
-		return f.runCLI(reader, writer, podmanBin, filterPodmanCLIOutput)
+		return f.runSvcCLI(ctx, podmanBin, filterPodmanCLIOutput)
 	case Nerdctl:
-		return f.runCLI(reader, writer, nerdctlBin, filterNerdctlCLIOutput)
+		return f.runSvcCLI(ctx, nerdctlBin, filterNerdctlCLIOutput)
 	default:
-		return f.runCLI(reader, writer, dockerBin, filterDockerCLIOutput)
+		return f.runSvcCLI(ctx, dockerBin, filterDockerCLIOutput)
 	}
 }
 
-func (f *ContainerFn) runCLI(reader io.Reader, writer io.Writer, bin string, filterCLIOutputFn func(io.Reader) string) error {
+func (f *ContainerFn) runSvcCLI(ctx context.Context, bin string, filterCLIOutputFn func(io.Reader) string) error {
 	errSink := bytes.Buffer{}
-	cmd, cancel := f.getCmd(bin)
+	// getCmd gets the command to run, false means no timeout required
+	cmd, _ := f.getCmd(ctx, bin, false)
+	cmd.Stderr = &errSink
+
+	fmt.Printf("container cmd: %v\n", cmd)
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			fmt.Printf("container cmd: %v error: %v\n", cmd, err.Error())
+			return &ExecError{
+				OriginalErr:    exitErr,
+				ExitCode:       exitErr.ExitCode(),
+				Stderr:         filterCLIOutputFn(&errSink),
+				TruncateOutput: printer.TruncateOutput,
+			}
+		}
+		return fmt.Errorf("unexpected function error: %w", err)
+	}
+
+	if errSink.Len() > 0 {
+		f.FnResult.Stderr = filterCLIOutputFn(&errSink)
+	}
+	return nil
+}
+
+// Run runs the container function using docker runtime.
+// It reads the input from the given reader and writes the output
+// to the provided writer.
+func (f *ContainerFn) FnRun(ctx context.Context, reader io.Reader, writer io.Writer) error {
+	// If the env var is empty, stringToContainerRuntime defaults it to docker.
+	runtime, err := StringToContainerRuntime(os.Getenv(ContainerRuntimeEnv))
+	if err != nil {
+		return err
+	}
+
+	checkContainerRuntimeOnce.Do(func() {
+		err = ContainerRuntimeAvailable(runtime)
+	})
+	if err != nil {
+		return err
+	}
+
+	switch runtime {
+	case Podman:
+		return f.runFnCLI(ctx, reader, writer, podmanBin, filterPodmanCLIOutput)
+	case Nerdctl:
+		return f.runFnCLI(ctx, reader, writer, nerdctlBin, filterNerdctlCLIOutput)
+	default:
+		return f.runFnCLI(ctx, reader, writer, dockerBin, filterDockerCLIOutput)
+	}
+}
+
+func (f *ContainerFn) runFnCLI(ctx context.Context, reader io.Reader, writer io.Writer, bin string, filterCLIOutputFn func(io.Reader) string) error {
+	errSink := bytes.Buffer{}
+	cmd, cancel := f.getCmd(ctx, bin, true)
 	defer cancel()
 	cmd.Stdin = reader
 	cmd.Stdout = writer
@@ -130,8 +185,6 @@ func (f *ContainerFn) runCLI(reader io.Reader, writer io.Writer, bin string, fil
 
 	//b, _ := io.ReadAll(reader)
 	//fmt.Printf("runCLI for container with data:\n%v\n", string(b))
-	//fmt.Printf("container cmd: %v\n", cmd)
-
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -153,7 +206,7 @@ func (f *ContainerFn) runCLI(reader io.Reader, writer io.Writer, bin string, fil
 
 // getCmd assembles a command for docker, podman or nerdctl. The input binName
 // is expected to be one of "docker", "podman" and "nerdctl".
-func (f *ContainerFn) getCmd(binName string) (*exec.Cmd, context.CancelFunc) {
+func (f *ContainerFn) getCmd(ctx context.Context, binName string, t bool) (*exec.Cmd, context.CancelFunc) {
 	network := networkNameNone
 	if f.Perm.AllowNetwork {
 		network = networkNameHost
@@ -171,11 +224,11 @@ func (f *ContainerFn) getCmd(binName string) (*exec.Cmd, context.CancelFunc) {
 	}
 
 	switch f.ImagePullPolicy {
-	case NeverPull:
+	case fnlib.NeverPull:
 		args = append(args, "--pull", "never")
-	case AlwaysPull:
+	case fnlib.AlwaysPull:
 		args = append(args, "--pull", "always")
-	case IfNotPresentPull:
+	case fnlib.IfNotPresentPull:
 		args = append(args, "--pull", "missing")
 	default:
 		args = append(args, "--pull", "missing")
@@ -187,12 +240,16 @@ func (f *ContainerFn) getCmd(binName string) (*exec.Cmd, context.CancelFunc) {
 		NewContainerEnvFromStringSlice(f.Env).GetDockerFlags()...)
 	args = append(args, f.Image)
 	// setup container run timeout
-	timeout := defaultLongTimeout
-	if f.Timeout != 0 {
-		timeout = f.Timeout
+	if t {
+		timeout := defaultLongTimeout
+		if f.Timeout != 0 {
+			timeout = f.Timeout
+		}
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		return exec.CommandContext(ctx, binName, args...), cancel
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	return exec.CommandContext(ctx, binName, args...), cancel
+	return exec.CommandContext(ctx, binName, args...), nil
+
 }
 
 // NewContainerEnvFromStringSlice returns a new ContainerEnv pointer with parsing
@@ -200,6 +257,7 @@ func (f *ContainerFn) getCmd(binName string) (*exec.Cmd, context.CancelFunc) {
 // using this instead of runtimeutil.NewContainerEnvFromStringSlice() to avoid
 // default envs LOG_TO_STDERR
 func NewContainerEnvFromStringSlice(envStr []string) *runtimeutil.ContainerEnv {
+	fmt.Printf("NewContainerEnvFromStringSlice: %v\n", envStr)
 	ce := &runtimeutil.ContainerEnv{
 		EnvVars: make(map[string]string),
 	}
@@ -212,6 +270,7 @@ func NewContainerEnvFromStringSlice(envStr []string) *runtimeutil.ContainerEnv {
 			ce.AddKeyValue(parts[0], parts[1])
 		}
 	}
+	fmt.Printf("NewContainerEnvFromStringSlice: %v\n", ce.GetDockerFlags())
 	return ce
 }
 

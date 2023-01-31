@@ -130,12 +130,17 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 	for _, ref := range refs {
 		// RangeRefKind do nothing
 		// for regular values we resolve the variables
-		// for varibales that start with _ this is a special case and
+		// for variables that start with _ this is a special case and
 		// should only be used within a jq construct
 		if ref.Kind == RegularReferenceKind && ref.Value[0] != '_' {
 			// get the vertexContext from the function
-			fmt.Printf("oc: %#v, ref: %#v\n", oc, ref)
+			fmt.Printf("oc: %#v, ref: %#v, gvk: %s\n", oc, ref, oc.GVK.String())
 			d := r.ceCtx.GetDAG(oc)
+			if d == nil {
+				fmt.Printf("empty dag\n")
+			}
+			fmt.Printf("vertexName: %s\n", oc.VertexName)
+			d.PrintVertices()
 			vc, ok := d.GetVertex(oc.VertexName).(*rtdag.VertexContext)
 			if !ok {
 				r.recordResult(Result{
@@ -143,18 +148,12 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 					Error:         fmt.Errorf("wrong type expect vertexContext: %#v", vc).Error(),
 				})
 			}
+			fmt.Printf("vc: %#v\n", vc)
 			// lookup the localDAG first
-			/*
-				if vc.LocalVarDag != nil && vc.LocalVarDag.VertexExists(ref.Value) {
-					// the References are added to the runtime vertex context to ease processing
-					vc.AddReference(ref.Value)
-					// if the localVar lookup succeeds we are done -> continue
-					continue
-				}
-			*/
 			if oc.LocalVars != nil {
+				fmt.Printf("localVar: %#v\n", oc.LocalVars[ref.Value])
 				if _, ok := oc.LocalVars[ref.Value]; ok {
-					// add the lcoal Variable to the reference list
+					// add the local Variable to the reference list
 					vc.AddReference(ref.Value)
 					// if the lookup succeeds we are done
 					continue
@@ -163,7 +162,7 @@ func (r *connector) connectRefs(oc *OriginContext, s string) {
 			// this is a global reference
 			// the References are added to the runtime vertex context to ease processing
 			vc.AddReference(ref.Value)
-			varInfo := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).GetVarInfo(ref.Value)
+			varInfo := r.gvar.GetDAG(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.RootVertexName}).GetVarInfo(ref.Value)
 			if varInfo == nil {
 				r.recordResult(Result{
 					OriginContext: oc,

@@ -14,12 +14,14 @@ type Output interface {
 	GetData(k string) any
 	Print()
 	GetFinalOutput() []any
+	GetConditionedOutput() map[string]any
 }
 
 type OutputInfo struct {
-	Internal bool
-	GVK      *schema.GroupVersionKind
-	Data     any
+	Internal    bool
+	Conditioned bool
+	GVK         *schema.GroupVersionKind
+	Data        any
 }
 
 func New() Output {
@@ -33,6 +35,7 @@ type output struct {
 }
 
 func (r *output) AddEntry(k string, v any) {
+	//fmt.Printf("output: %s, value: %v\n", k, v)
 	r.o.AddEntry(k, v)
 }
 
@@ -89,8 +92,26 @@ func (r *output) GetFinalOutput() []any {
 			continue
 		}
 		if !oi.Internal {
-			fo = append(fo, oi.Data)
+			switch d := oi.Data.(type) {
+			case []any:
+				fo = append(fo, d...)
+			}
 		}
 	}
 	return fo
+}
+
+func (r *output) GetConditionedOutput() map[string]any {
+	co := map[string]any{}
+	for k, v := range r.o.Get() {
+		oi, ok := v.(*OutputInfo)
+		if !ok {
+			fmt.Printf("unexpected outputInfo, got %T\n", v)
+			continue
+		}
+		if oi.Conditioned {
+			co[k] = v
+		}
+	}
+	return co
 }

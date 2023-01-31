@@ -10,11 +10,13 @@ import (
 	"text/template"
 
 	"github.com/go-logr/logr"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -30,7 +32,7 @@ func NewGTFn() fnmap.Function {
 		executeSingle: true,
 		// execution functions
 		filterInputFn: r.filterInput,
-		runFn: r.run,
+		runFn:         r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
@@ -71,6 +73,8 @@ func (r *gt) WithRootVertexName(name string) {}
 func (r *gt) WithClient(client client.Client) {}
 
 func (r *gt) WithFnMap(fnMap fnmap.FuncMap) {}
+
+func (r *gt) WithServiceClients(map[schema.GroupVersionKind]svcclient.ServiceClient) {}
 
 func (r *gt) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "resource", vertexContext.Function.Input.Resource.Raw)
@@ -116,7 +120,7 @@ func (r *gt) getFinalResult() (output.Output, error) {
 	return o, nil
 }
 
-func (r *gt) filterInput(i input.Input) input.Input {return i}
+func (r *gt) filterInput(i input.Input) input.Input { return i }
 
 func (r *gt) run(ctx context.Context, i input.Input) (any, error) {
 	if r.template == "" {

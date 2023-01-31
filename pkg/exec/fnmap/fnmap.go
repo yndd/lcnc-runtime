@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -27,6 +29,7 @@ type Config struct {
 	Client         client.Client
 	Output         output.Output
 	Result         result.Result
+	ServiceClients map[schema.GroupVersionKind]svcclient.ServiceClient
 }
 
 func New(c *Config) FuncMap {
@@ -69,6 +72,7 @@ func (r *fnMap) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i i
 	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
 		fn.WithNameAndNamespace(r.cfg.Name, r.cfg.Namespace)
 		fn.WithRootVertexName(r.cfg.RootVertexName)
+		fn.WithServiceClients(r.cfg.ServiceClients)
 	}
 	// run the function
 	return fn.Run(ctx, vertexContext, i)

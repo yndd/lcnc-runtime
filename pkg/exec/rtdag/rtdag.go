@@ -12,18 +12,6 @@ import (
 
 type RuntimeDAG interface {
 	dag.DAG
-	/*
-		AddVertex(s string, v *VertexContext) error
-		Connect(from, to string)
-		AddDownEdge(from, to string)
-		AddUpEdge(from, to string)
-		VertexExists(s string) bool
-		GetVertex(s string) *VertexContext
-		GetVertices() map[string]*VertexContext
-		GetDownVertexes(from string) []string
-		GetUpVertexes(from string) []string
-		TransitiveReduction()
-	*/
 
 	GetRootVertex() string
 	GetDependencyMap(from string)
@@ -54,7 +42,7 @@ type VertexContext struct {
 
 	// the below elements provide information that is needed during the runtime operation
 	BlockDAG   RuntimeDAG
-	Function   *ctrlcfgv1.Function
+	Function   ctrlcfgv1.Function
 	References []string
 	// contains the information about the output to ease the reverse mapping
 	// of the output the function provides to the output we produce
@@ -177,6 +165,8 @@ func (r *runtimeDAG) PrintVertices() {
 		if ok {
 			fmt.Printf("vertexname: %s upVertices: %v, downVertices: %v\n", vertexName, r.GetUpVertexes(vertexName), r.GetDownVertexes(vertexName))
 			vc.Outputs.Print()
+		} else {
+			fmt.Printf("vertexname: %s wrong context\n", vertexName)
 		}
 	}
 	fmt.Printf("###### RUNTIME DAG output stop #######\n")

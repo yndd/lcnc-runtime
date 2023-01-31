@@ -72,6 +72,10 @@ func (r *ControllerConfig) getGvkList(gvrObjs map[string]*GvkObject) ([]*schema.
 	return gvks, nil
 }
 
+func (r *ControllerConfig) GetServices() map[string]*Function {
+	return r.Spec.Properties.Services
+}
+
 func GetIdxName(idxName string) (string, int) {
 	split := strings.Split(idxName, "/")
 	idx, _ := strconv.Atoi(split[1])

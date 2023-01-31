@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/yndd/lcnc-runtime/pkg/ccutils/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
@@ -13,14 +14,15 @@ import (
 )
 
 type Config struct {
-	Name      string
-	Namespace string
-	Data      any
-	Client    client.Client
-	GVK       *schema.GroupVersionKind
-	DAG       rtdag.RuntimeDAG
-	Output    output.Output
-	Result    result.Result
+	Name           string
+	Namespace      string
+	Data           any
+	Client         client.Client
+	GVK            *schema.GroupVersionKind
+	DAG            rtdag.RuntimeDAG
+	Output         output.Output
+	Result         result.Result
+	ServiceClients map[schema.GroupVersionKind]svcclient.ServiceClient
 }
 
 func New(c *Config) executor.Executor {
@@ -34,6 +36,7 @@ func New(c *Config) executor.Executor {
 		Client:         c.Client,
 		Output:         c.Output,
 		Result:         c.Result,
+		ServiceClients: c.ServiceClients,
 	})
 
 	// Initialize the initial data

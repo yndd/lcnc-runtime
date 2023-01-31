@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"sync"
 
+	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"github.com/yndd/lcnc-runtime/pkg/exec/service"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -13,21 +15,30 @@ type ConfigExecutionContext interface {
 	Add(oc *OriginContext) error
 	AddBlock(oc *OriginContext) error
 	GetDAG(oc *OriginContext) rtdag.RuntimeDAG
-	GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *RTDAGCtx
-	GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx
+	GetDAGCtx(fow FOWS, gvk *schema.GroupVersionKind, op Operation) *RTDAGCtx
+	GetFOW(fow FOWS) map[schema.GroupVersionKind]OperationCtx
 	GetForGVK() *schema.GroupVersionKind
+	AddService(gvk *schema.GroupVersionKind, fn ctrlcfgv1.Function) error
+	GetServices() service.Services
 	Print()
 }
 
 type cfgExecContext struct {
-	name  string
-	m     sync.RWMutex
-	For   map[schema.GroupVersionKind]OperationCtx
-	own   map[schema.GroupVersionKind]OperationCtx
-	watch map[schema.GroupVersionKind]OperationCtx
+	name       string
+	m          sync.RWMutex
+	For        map[schema.GroupVersionKind]OperationCtx
+	own        map[schema.GroupVersionKind]OperationCtx
+	watch      map[schema.GroupVersionKind]OperationCtx
+	serviceIdx int
+	services   map[schema.GroupVersionKind]ServiceCtx
 }
 
 type OperationCtx map[Operation]*RTDAGCtx
+
+type ServiceCtx struct {
+	Port int
+	Fn   ctrlcfgv1.Function
+}
 
 type RTDAGCtx struct {
 	DAG            rtdag.RuntimeDAG
@@ -38,10 +49,12 @@ type RTDAGCtx struct {
 
 func NewConfigExecutionContext(n string) ConfigExecutionContext {
 	return &cfgExecContext{
-		name:  n,
-		For:   make(map[schema.GroupVersionKind]OperationCtx),
-		own:   make(map[schema.GroupVersionKind]OperationCtx),
-		watch: make(map[schema.GroupVersionKind]OperationCtx),
+		name:       n,
+		serviceIdx: 0,
+		For:        make(map[schema.GroupVersionKind]OperationCtx),
+		own:        make(map[schema.GroupVersionKind]OperationCtx),
+		watch:      make(map[schema.GroupVersionKind]OperationCtx),
+		services:   make(map[schema.GroupVersionKind]ServiceCtx),
 	}
 }
 
@@ -53,7 +66,7 @@ func (r *cfgExecContext) GetName() string {
 func (r *cfgExecContext) Add(oc *OriginContext) error {
 	r.m.Lock()
 	defer r.m.Unlock()
-	switch oc.FOW {
+	switch oc.FOWS {
 	case FOWFor:
 		// rootVertexName -> oc.VertexName
 		r.For[*oc.GVK] = map[Operation]*RTDAGCtx{
@@ -79,13 +92,13 @@ func (r *cfgExecContext) Add(oc *OriginContext) error {
 			},
 		}
 	default:
-		return fmt.Errorf("unknown FOW, got: %s", oc.FOW)
+		return fmt.Errorf("unexpected FOW, got: %s", oc.FOWS)
 	}
 	return nil
 }
 
 func (r *cfgExecContext) AddBlock(oc *OriginContext) error {
-	dctx := r.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation)
+	dctx := r.GetDAGCtx(oc.FOWS, oc.GVK, oc.Operation)
 	if dctx == nil {
 		return fmt.Errorf("dag context not found, got: %v", oc)
 	}
@@ -95,7 +108,7 @@ func (r *cfgExecContext) AddBlock(oc *OriginContext) error {
 	return nil
 }
 
-func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Operation) *RTDAGCtx {
+func (r *cfgExecContext) GetDAGCtx(fow FOWS, gvk *schema.GroupVersionKind, op Operation) *RTDAGCtx {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	switch fow {
@@ -134,7 +147,7 @@ func (r *cfgExecContext) GetDAGCtx(fow FOW, gvk *schema.GroupVersionKind, op Ope
 }
 
 func (r *cfgExecContext) GetDAG(oc *OriginContext) rtdag.RuntimeDAG {
-	dctx := r.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation)
+	dctx := r.GetDAGCtx(oc.FOWS, oc.GVK, oc.Operation)
 	if dctx == nil {
 		return nil
 	}
@@ -146,7 +159,7 @@ func (r *cfgExecContext) GetDAG(oc *OriginContext) rtdag.RuntimeDAG {
 	return dctx.BlockDAGs[oc.BlockVertexName]
 }
 
-func (r *cfgExecContext) GetFOW(fow FOW) map[schema.GroupVersionKind]OperationCtx {
+func (r *cfgExecContext) GetFOW(fow FOWS) map[schema.GroupVersionKind]OperationCtx {
 	// A copy is returned
 	gvkDAGMap := map[schema.GroupVersionKind]OperationCtx{}
 	r.m.RLock()
@@ -182,6 +195,25 @@ func (r *cfgExecContext) GetForGVK() *schema.GroupVersionKind {
 		return &gvk
 	}
 	return &schema.GroupVersionKind{}
+}
+
+func (r *cfgExecContext) AddService(gvk *schema.GroupVersionKind, fn ctrlcfgv1.Function) error {
+	if _, ok := r.services[*gvk]; ok {
+		return fmt.Errorf("duplicate gvk service entry: %s", gvk.String())
+	}
+	r.services[*gvk] = ServiceCtx{Fn: fn, Port: 9000 + r.serviceIdx}
+	r.serviceIdx++
+	return nil
+}
+
+func (r *cfgExecContext) GetServices() service.Services {
+	r.m.RLock()
+	defer r.m.RUnlock()
+	s := service.New()
+	for gvk, svcCtx := range r.services {
+		s.AddEntry(gvk, service.ServiceCtx{Port: svcCtx.Port, Fn: svcCtx.Fn})
+	}
+	return s
 }
 
 func (r *cfgExecContext) Print() {

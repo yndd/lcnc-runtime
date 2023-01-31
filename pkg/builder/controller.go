@@ -8,11 +8,11 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/eventhandler"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -28,7 +28,7 @@ type Builder interface {
 type builder struct {
 	mgr   manager.Manager
 	ceCtx ccsyntax.ConfigExecutionContext
-	fnMap fnmap.FuncMap
+	ge    chan event.GenericEvent
 
 	globalPredicates []predicate.Predicate
 	ctrl             controller.Controller
@@ -36,16 +36,16 @@ type builder struct {
 }
 
 type Config struct {
-	Mgr   manager.Manager
-	CeCtx ccsyntax.ConfigExecutionContext
-	FnMap fnmap.FuncMap
+	Mgr          manager.Manager
+	CeCtx        ccsyntax.ConfigExecutionContext
+	GenericEvent chan event.GenericEvent
 }
 
 func New(c *Config, opts controller.Options) Builder {
 	b := &builder{
 		mgr:         c.Mgr,
 		ceCtx:       c.CeCtx,
-		fnMap:       c.FnMap,
+		ge:          c.GenericEvent,
 		ctrlOptions: opts,
 	}
 	return b
@@ -73,13 +73,16 @@ func (blder *builder) Build(r reconcile.Reconciler) (controller.Controller, erro
 func (blder *builder) doWatch() error {
 	// handle For
 	// we validate that there is only 1 for so we are ok here
-
 	gvk := blder.ceCtx.GetForGVK()
 	typeForSrc := meta.GetUnstructuredFromGVK(gvk)
 	src := &source.Kind{Type: typeForSrc}
 	hdler := &handler.EnqueueRequestForObject{}
 	allPredicates := append(blder.globalPredicates, []predicate.Predicate{}...)
 	if err := blder.ctrl.Watch(src, hdler, allPredicates...); err != nil {
+		return err
+	}
+	// add the generic event watch to the for object
+	if err := blder.ctrl.Watch(&source.Channel{Source: blder.ge}, hdler, allPredicates...); err != nil {
 		return err
 	}
 
@@ -116,7 +119,6 @@ func (blder *builder) doWatch() error {
 			RootVertexName: od[ccsyntax.OperationApply].RootVertexName,
 			GVK:            &gvk,
 			DAG:            od[ccsyntax.OperationApply].DAG,
-			FnMap:          blder.fnMap,
 		})
 
 		if err := blder.ctrl.Watch(src, eh, allPredicates...); err != nil {

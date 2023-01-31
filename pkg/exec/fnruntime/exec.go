@@ -1,17 +1,3 @@
-// Copyright 2021 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package fnruntime
 
 import (
@@ -43,15 +29,17 @@ type ExecFn struct {
 	FnResult *fnresultv1.Result
 }
 
+func (f *ExecFn) SvcRun(ctx context.Context) error { return nil }
+
 // Run runs the executable file which reads the input from r and
 // writes the output to w.
-func (f *ExecFn) Run(r io.Reader, w io.Writer) error {
+func (f *ExecFn) FnRun(ctx context.Context, r io.Reader, w io.Writer) error {
 	// setup exec run timeout
 	timeout := defaultLongTimeout
 	if f.Timeout != 0 {
 		timeout = f.Timeout
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, f.Path, f.Args...)

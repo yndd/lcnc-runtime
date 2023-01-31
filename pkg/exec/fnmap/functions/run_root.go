@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -55,6 +57,8 @@ func (r *root) WithRootVertexName(name string) {}
 func (r *root) WithClient(client client.Client) {}
 
 func (r *root) WithFnMap(fnMap fnmap.FuncMap) {}
+
+func (r *root) WithServiceClients(map[schema.GroupVersionKind]svcclient.ServiceClient) {}
 
 func (r *root) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	// Here we prepare the input we get from the runtime

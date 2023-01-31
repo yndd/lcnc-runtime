@@ -1,8 +1,10 @@
 package ccsyntax
 
 import (
+	"github.com/go-logr/logr"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type Parser interface {
@@ -15,6 +17,7 @@ func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
 		cCfg: cfg,
 		//d:       dag.NewDAG(),
 		//output: map[string]string{},
+		l: ctrl.Log.WithName("parser"),
 	}
 	// add the callback function to record validation results results
 	result := p.ValidateSyntax()
@@ -26,6 +29,7 @@ func NewParser(cfg *ctrlcfgv1.ControllerConfig) (Parser, []Result) {
 type parser struct {
 	cCfg           *ctrlcfgv1.ControllerConfig
 	rootVertexName string
+	l              logr.Logger
 }
 
 func (r *parser) Parse() (ConfigExecutionContext, []Result) {
@@ -40,16 +44,19 @@ func (r *parser) Parse() (ConfigExecutionContext, []Result) {
 	// step2. add the dependencies in the dag
 	result = r.populate(ceCtx, gvar)
 	if len(result) != 0 {
+		r.l.Info("populate failed")
 		return nil, result
 	}
 	//fmt.Println("propulate succeded")
 	result = r.resolve(ceCtx, gvar)
 	if len(result) != 0 {
+		r.l.Info("resolve failed")
 		return nil, result
 	}
 	//fmt.Println("resolve succeded")
 	result = r.connect(ceCtx, gvar)
 	if len(result) != 0 {
+		r.l.Info("connect failed")
 		return nil, result
 	}
 	// optimizes the dependncy graph based on transit reduction

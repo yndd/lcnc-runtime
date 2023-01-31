@@ -1,4 +1,4 @@
-package fnruntime
+package fnlib
 
 type ImagePullPolicy string
 
@@ -7,11 +7,3 @@ const (
 	IfNotPresentPull ImagePullPolicy = "IfNotPresent"
 	NeverPull        ImagePullPolicy = "Never"
 )
-
-/*
-var allImagePullPolicy = []ImagePullPolicy{
-	AlwaysPull,
-	IfNotPresentPull,
-	NeverPull,
-}
-*/

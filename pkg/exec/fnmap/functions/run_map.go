@@ -7,12 +7,14 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/itchyny/gojq"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -38,7 +40,7 @@ func NewMapFn() fnmap.Function {
 		executeSingle: false,
 		// execution functions
 		filterInputFn: r.filterInput,
-		runFn: r.run,
+		runFn:         r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
@@ -81,6 +83,8 @@ func (r *kv) WithRootVertexName(name string) {}
 func (r *kv) WithClient(client client.Client) {}
 
 func (r *kv) WithFnMap(fnMap fnmap.FuncMap) {}
+
+func (r *kv) WithServiceClients(map[schema.GroupVersionKind]svcclient.ServiceClient) {}
 
 func (r *kv) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "key", vertexContext.Function.Input.Key, "value", vertexContext.Function.Input.Value)
@@ -129,7 +133,7 @@ func (r *kv) getFinalResult() (output.Output, error) {
 	return o, nil
 }
 
-func (r *kv) filterInput(i input.Input) input.Input {return i}
+func (r *kv) filterInput(i input.Input) input.Input { return i }
 
 func (r *kv) run(ctx context.Context, i input.Input) (any, error) {
 	kv := &mapInput{

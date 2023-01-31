@@ -17,10 +17,10 @@ func (r *parser) ValidateSyntax() []Result {
 		cfgPreHookFn:           vs.validatePreHook,
 		gvkObjectFn:            vs.validateGvk,
 		emptyPipelineFn:        vs.validateEmptyPipeline,
-		empryFunctionElementFn: vs.validateEmptyFunctionElement,
+		emptyFunctionElementFn: vs.validateEmptyFunctionElement,
 		functionBlockFn:        vs.validateFunctionBlock,
 		functionFn:             vs.validateFunction,
-		//lcncServiceFn:    vs.validateServiceFn,
+		serviceFn:              vs.validateServiceFunction,
 	}
 
 	// walk the config to validate the syntax
@@ -43,7 +43,7 @@ func (r *vs) recordResult(result Result) {
 func (r *vs) validatePreHook(lcncCfg *ctrlcfgv1.ControllerConfig) {
 	if len(lcncCfg.Spec.Properties.For) != 1 {
 		r.recordResult(Result{
-			OriginContext: &OriginContext{FOW: FOWFor},
+			OriginContext: &OriginContext{FOWS: FOWFor},
 			Error:         fmt.Errorf("lcnc config must have just 1 for statement, got: %v", lcncCfg.Spec.Properties.For).Error(),
 		})
 	}
@@ -68,7 +68,7 @@ func (r *vs) validateGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Grou
 
 func (r *vs) validateEmptyPipeline(oc *OriginContext, v *ctrlcfgv1.GvkObject) {
 	issue := false
-	switch oc.FOW {
+	switch oc.FOWS {
 	case FOWFor:
 		// for a for we need to supply both an apply AND a delete pipeline
 		issue = true
@@ -148,20 +148,28 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			})
 		}
 	case ctrlcfgv1.QueryType:
-		if len(v.Input.Resource.Raw) == 0 {
-			r.recordResult(Result{
-				OriginContext: oc,
-				Error:         fmt.Errorf("gvk needs to be present in %s", v.Type).Error(),
-			})
-		} else {
-			_, err := ctrlcfgv1.GetGVK(v.Input.Resource)
-			if err != nil {
+		if v.Input != nil {
+			if len(v.Input.Resource.Raw) == 0 {
 				r.recordResult(Result{
 					OriginContext: oc,
-					Error:         err.Error(),
+					Error:         fmt.Errorf("gvk needs to be present in %s", v.Type).Error(),
 				})
+			} else {
+				_, err := ctrlcfgv1.GetGVK(v.Input.Resource)
+				if err != nil {
+					r.recordResult(Result{
+						OriginContext: oc,
+						Error:         err.Error(),
+					})
+				}
 			}
+		} else {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         fmt.Errorf("input needs to be present in %s", v.Type).Error(),
+			})
 		}
+
 	case ctrlcfgv1.GoTemplateType:
 		if len(v.Input.Resource.Raw) == 0 && v.Input.Template == "" {
 			r.recordResult(Result{
@@ -181,7 +189,7 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 	case ctrlcfgv1.BlockType:
 		// nothing to do since this is already validated
 	case ctrlcfgv1.ContainerType, ctrlcfgv1.WasmType:
-		if v.Executor.Exec == nil && v.Executor.Image == nil {
+		if v.Executor.Exec == "" && v.Executor.Image == "" {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         fmt.Errorf("external functions need an image or exec, got %v", v).Error(),
@@ -234,6 +242,47 @@ func (r *vs) validateFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 	// validate local vars -> TBD
 
+}
+
+// valdates the service function
+func (r *vs) validateServiceFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
+	// validate Ouput
+	if v.Type != ctrlcfgv1.ContainerType {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("cannot use services with type other than container").Error(),
+		})
+	}
+	if v.Image == "" {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("cannot use services with an image").Error(),
+		})
+	}
+	// for output a GVK needs to be present + validate the GVK syntax
+	if v.Output != nil {
+		for _, v := range v.Output {
+			if len(v.Resource.Raw) == 0 {
+				r.recordResult(Result{
+					OriginContext: oc,
+					Error:         fmt.Errorf("cannot use output without data").Error(),
+				})
+			} else {
+				_, err := ctrlcfgv1.GetGVK(v.Resource)
+				if err != nil {
+					r.recordResult(Result{
+						OriginContext: oc,
+						Error:         err.Error(),
+					})
+				}
+			}
+		}
+	} else {
+		r.recordResult(Result{
+			OriginContext: oc,
+			Error:         fmt.Errorf("cannot use a service w/o output definition").Error(),
+		})
+	}
 }
 
 func (r *vs) validateBlock(oc *OriginContext, v ctrlcfgv1.Block) {

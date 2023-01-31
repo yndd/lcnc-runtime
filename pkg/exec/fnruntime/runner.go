@@ -6,18 +6,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/google/shlex"
-	"github.com/yndd/lcnc-function-sdk/go/fn"
+	"github.com/henderiw-k8s-lcnc/fn-sdk/go/fn"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
 )
 
-type Run func(reader io.Reader, writer io.Writer) error
+type FunctionKind string
+
+const (
+	FuntionKindFunction FunctionKind = "function"
+	FunctionKindService FunctionKind = "service"
+)
 
 type RunnerOptions struct {
+	Kind FunctionKind
+
+	// only used for kind =service, exposes the port used by the service in the container
+	ServicePort int
+
 	// ImagePullPolicy controls the image pulling behavior before running the container.
-	ImagePullPolicy ImagePullPolicy
+	ImagePullPolicy fnlib.ImagePullPolicy
 
 	// allowExec determines if function binary executable are allowed
 	// to be run during execution. Running function binaries is a
@@ -27,7 +40,7 @@ type RunnerOptions struct {
 	// allowWasm determines if function wasm are allowed to be run during
 	// execution. Running wasm function is an alpha feature, so it needs to be
 	// enabled explicitly.
-	// AllowWasm bool
+	AllowWasm bool
 
 	// ResolveToImage will resolve a partial image to a fully-qualified one
 	ResolveToImage ImageResolveFunc
@@ -37,161 +50,132 @@ type RunnerOptions struct {
 type ImageResolveFunc func(ctx context.Context, image string) (string, error)
 
 func (o *RunnerOptions) InitDefaults() {
-	o.ImagePullPolicy = IfNotPresentPull
+	o.ImagePullPolicy = fnlib.IfNotPresentPull
 	o.ResolveToImage = ResolveToImageForCLI
+}
+
+type Runner interface {
+	Run(ctx context.Context, rCtx *fn.ResourceContext) (*fn.ResourceContext, error)
+}
+
+type runner struct {
+	opts     RunnerOptions
+	fnRunner FunctionRunner
+}
+
+type FunctionRunner interface {
+	FnRun(ctx context.Context, reader io.Reader, writer io.Writer) error
+	SvcRun(ctx context.Context) error
 }
 
 // NewRunner returns a FunctionRunner given a specification of a function
 // and it's config.
 func NewRunner(
 	ctx context.Context,
-	fnc *ctrlcfgv1.Function,
-	//fnResults *fnresultv1.ResultList,
+	fnc ctrlcfgv1.Function,
 	opts RunnerOptions,
-	//runtime fn.FunctionRuntime,
-) (*FunctionRunner, error) {
-	if *fnc.Executor.Image != "" {
+) (Runner, error) {
+	r := &runner{
+		opts: opts,
+	}
+	if fnc.Executor.Image != "" {
 		// resolve partial image
-		img, err := opts.ResolveToImage(ctx, *fnc.Executor.Image)
+		img, err := opts.ResolveToImage(ctx, fnc.Executor.Image)
 		if err != nil {
 			return nil, err
 		}
-		fnc.Executor.Image = &img
+		fnc.Executor.Image = img
 	}
 
 	fnResult := &fnresultv1.Result{
-		Image: *fnc.Executor.Image,
-		//ExecPath: *fnc.Executor.Exec,
+		Image: fnc.Executor.Image,
 	}
 
-	var run Run
 	switch {
-	case fnc.Executor.Image != nil:
-		// If allowWasm is true, we will use wasm runtime for image field.
-		/*
-			if opts.AllowWasm {
-
-					wFn, err := NewWasmFn(NewOciLoader(filepath.Join(os.TempDir(), "kpt-fn-wasm"), f.Image))
-					if err != nil {
-						return nil, err
-					}
-					fltr.Run = wFn.Run
-
-				return nil, fmt.Errorf("wasm not yet supported")
-			} else {
-		*/
-		cfn := &ContainerFn{
-			Image:           *fnc.Executor.Image,
-			ImagePullPolicy: opts.ImagePullPolicy,
-			Ctx:             ctx,
-			FnResult:        fnResult,
+	case fnc.Executor.Image != "":
+		// TODO WASM
+		switch opts.Kind {
+		case FunctionKindService:
+			servicePort := strconv.Itoa(r.opts.ServicePort)
+			r.fnRunner = &ContainerFn{
+				Image:           fnc.Executor.Image,
+				ImagePullPolicy: opts.ImagePullPolicy,
+				FnResult:        fnResult,
+				Perm: ContainerFnPermission{
+					AllowNetwork: true,
+				},
+				Env: []string{strings.Join([]string{"FN_SERVICE_PORT", servicePort}, "=")},
+			}
+		default:
+			r.fnRunner = &ContainerFn{
+				Image:           fnc.Executor.Image,
+				ImagePullPolicy: opts.ImagePullPolicy,
+				FnResult:        fnResult,
+			}
 		}
-		run = cfn.Run
-		//}
-	case fnc.Executor.Exec != nil:
-		// If AllowWasm is true, we will use wasm runtime for exec field.
-		/*
-			if opts.AllowWasm {
-					wFn, err := NewWasmFn(&FsLoader{Filename: f.Exec})
-					if err != nil {
-						return nil, err
-					}
-					fltr.Run = wFn.Run
-				return nil, fmt.Errorf("wasm not yet supported")
-			} else {
-		*/
+	case fnc.Executor.Exec != "":
+		if opts.Kind == FunctionKindService {
+			return nil, fmt.Errorf("service not supported with exec")
+		}
+		// TODO WASM
 		var execArgs []string
 		// assuming exec here
-		s, err := shlex.Split(*fnc.Executor.Exec)
+		s, err := shlex.Split(fnc.Executor.Exec)
 		if err != nil {
-			return nil, fmt.Errorf("exec command %q must be valid: %w", *fnc.Executor.Exec, err)
+			return nil, fmt.Errorf("exec command %q must be valid: %w", fnc.Executor.Exec, err)
 		}
-		execPath := *fnc.Executor.Exec
+		execPath := fnc.Executor.Exec
 		if len(s) > 0 {
 			execPath = s[0]
 		}
 		if len(s) > 1 {
 			execArgs = s[1:]
 		}
-		eFn := &ExecFn{
+		r.fnRunner = &ExecFn{
 			Path:     execPath,
 			Args:     execArgs,
 			FnResult: fnResult,
 		}
-		run = eFn.Run
 		//}
 	default:
 		return nil, fmt.Errorf("must specify `exec` or `image` to execute a function")
 	}
 
-	return NewFunctionRunner(ctx, run, opts)
+	return r, nil
 }
 
-// NewFunctionRunner returns a FunctionRunner given a specification of a function
-// and it's config.
-func NewFunctionRunner(ctx context.Context,
-	//fltr *runtimeutil.FunctionFilter,
-	run Run,
-	//pkgPath types.UniquePath,
-	//fnResult *fnresultv1.Result,
-	//fnResults *fnresultv1.ResultList,
-	opts RunnerOptions) (*FunctionRunner, error) {
-
-	// by default, the inner most runtimeutil.FunctionFilter scopes resources to the
-	// directory specified by the functionConfig, kpt v1+ doesn't scope resources
-	// during function execution, so marking the scope to global.
-	// See https://github.com/GoogleContainerTools/kpt/issues/3230 for more details.
-	return &FunctionRunner{
-		ctx: ctx,
-		//name: name,
-		//pkgPath:   pkgPath,
-		//filter:    fltr,
-		run: run,
-		//fnResult:  fnResult,
-		//fnResults: fnResults,
-		opts: opts,
-	}, nil
-}
-
-// FunctionRunner wraps FunctionFilter and implements kio.Filter interface.
-type FunctionRunner struct {
-	ctx context.Context
-	//name string
-	//pkgPath          types.UniquePath
-	//disableCLIOutput bool
-	//filter    *runtimeutil.FunctionFilter
-	run Run
-	//fnResult  *fnresultv1.Result
-	//fnResults *fnresultv1.ResultList
-	opts RunnerOptions
-}
-
-func (fr *FunctionRunner) Run(rCtx *fn.ResourceContext) (*fn.ResourceContext, error) {
-	in := &bytes.Buffer{}
-	out := &bytes.Buffer{}
-
-	b, err := json.Marshal(rCtx)
-	if err != nil {
+func (r *runner) Run(ctx context.Context, rCtx *fn.ResourceContext) (*fn.ResourceContext, error) {
+	switch r.opts.Kind {
+	case FunctionKindService:
+		err := r.fnRunner.SvcRun(ctx)
 		return nil, err
-	}
+	default:
+		in := &bytes.Buffer{}
+		out := &bytes.Buffer{}
 
-	_, err = in.Write(b)
-	if err != nil {
-		return nil, err
-	}
+		b, err := json.Marshal(rCtx)
+		if err != nil {
+			return nil, err
+		}
 
-	fmt.Printf("rctx before fn Execution:\n%s\n", in.String())
+		_, err = in.Write(b)
+		if err != nil {
+			return nil, err
+		}
 
-	// call the specific implementation of run (container, exec or wasm)
-	ex := fr.run(in, out)
-	if ex != nil {
-		return nil, fmt.Errorf("fn run failed: %s", ex.Error())
-	}
-	//fmt.Printf("rctx after fn execution:\n%v\n", out.String())
+		fmt.Printf("rctx before fn Execution:\n%s\n", in.String())
 
-	newrCtx := &fn.ResourceContext{}
-	if err := json.Unmarshal(out.Bytes(), newrCtx); err != nil {
-		return nil, err
+		// call the specific implementation of run (container, exec or wasm)
+		ex := r.fnRunner.FnRun(ctx, in, out)
+		if ex != nil {
+			return nil, fmt.Errorf("fn run failed: %s", ex.Error())
+		}
+		//fmt.Printf("rctx after fn execution:\n%v\n", out.String())
+
+		newrCtx := &fn.ResourceContext{}
+		if err := json.Unmarshal(out.Bytes(), newrCtx); err != nil {
+			return nil, err
+		}
+		return newrCtx, nil
 	}
-	return newrCtx, nil
 }
