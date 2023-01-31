@@ -21,12 +21,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/yndd/lcnc-runtime/pkg/applicator"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
+	"github.com/yndd/lcnc-runtime/pkg/event"
 	"github.com/yndd/lcnc-runtime/pkg/exec/builder"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/meta"
-	"github.com/yndd/ndd-runtime/pkg/event"
 )
 
 const (

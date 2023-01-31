@@ -26,7 +26,7 @@ type fnExecConfig struct {
 	// execution functions
 	//prepareInputFn prepareInputFn
 	filterInputFn filterInputFn
-	runFn runFn
+	runFn         runFn
 	// result functions
 	initOutputFn     initOutputFn
 	recordOutputFn   recordOutputFn

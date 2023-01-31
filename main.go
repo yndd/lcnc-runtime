@@ -26,6 +26,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 )
@@ -68,7 +69,8 @@ func main() {
 	}
 
 	mgr, err := manager.New(ctrl.GetConfigOrDie(), manager.Options{
-		Namespace: os.Getenv("POD_NAMESPACE"),
+		Namespace:              os.Getenv("POD_NAMESPACE"),
+		HealthProbeBindAddress: probeAddr,
 	})
 	if err != nil {
 		l.Error(err, "unable to create manager")
@@ -194,6 +196,15 @@ func main() {
 	}
 
 	time.Sleep(2 * time.Second)
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		l.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		l.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
 
 	l.Info("starting controller manager")
 	if err := mgr.Start(ctx); err != nil {

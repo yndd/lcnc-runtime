@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,11 +34,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 
+	"github.com/yndd/lcnc-runtime/pkg/internal/httpserver"
 	intrec "github.com/yndd/lcnc-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	//intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 
@@ -46,6 +50,10 @@ import (
 const (
 	// Values taken from: https://github.com/kubernetes/component-base/blob/master/config/v1alpha1/defaults.go
 	defaultGracefulShutdownPeriod = 30 * time.Second
+
+	defaultReadinessEndpoint = "/readyz"
+	defaultLivenessEndpoint  = "/healthz"
+	defaultMetricsEndpoint   = "/metrics"
 )
 
 var _ Runnable = &controllerManager{}
@@ -64,6 +72,21 @@ type controllerManager struct {
 	// recorderProvider is used to generate event recorders that will be injected into Controllers
 	// (and EventHandlers, Sources and Predicates).
 	recorderProvider *intrec.Provider
+
+	// healthProbeListener is used to serve liveness probe
+	healthProbeListener net.Listener
+
+	// Readiness probe endpoint name
+	readinessEndpointName string
+
+	// Liveness probe endpoint name
+	livenessEndpointName string
+
+	// Readyz probe handler
+	readyzHandler *healthz.Handler
+
+	// Healthz probe handler
+	healthzHandler *healthz.Handler
 
 	// controllerOptions are the global controller options.
 	controllerOptions v1alpha1.ControllerConfigurationSpec
@@ -123,6 +146,40 @@ func (cm *controllerManager) add(r Runnable) error {
 	return cm.runnables.Add(r)
 }
 
+// AddHealthzCheck allows you to add Healthz checker.
+func (cm *controllerManager) AddHealthzCheck(name string, check healthz.Checker) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	if cm.started {
+		return fmt.Errorf("unable to add new checker because healthz endpoint has already been created")
+	}
+
+	if cm.healthzHandler == nil {
+		cm.healthzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
+	}
+
+	cm.healthzHandler.Checks[name] = check
+	return nil
+}
+
+// AddReadyzCheck allows you to add Readyz checker.
+func (cm *controllerManager) AddReadyzCheck(name string, check healthz.Checker) error {
+	cm.Lock()
+	defer cm.Unlock()
+
+	if cm.started {
+		return fmt.Errorf("unable to add new checker because healthz endpoint has already been created")
+	}
+
+	if cm.readyzHandler == nil {
+		cm.readyzHandler = &healthz.Handler{Checks: map[string]healthz.Checker{}}
+	}
+
+	cm.readyzHandler.Checks[name] = check
+	return nil
+}
+
 // Deprecated: use the equivalent Options field to set a field. This method will be removed in v0.10.
 func (cm *controllerManager) SetFields(i interface{}) error {
 	if err := cm.cluster.SetFields(i); err != nil {
@@ -180,6 +237,60 @@ func (cm *controllerManager) GetControllerOptions() v1alpha1.ControllerConfigura
 	return cm.controllerOptions
 }
 
+func (cm *controllerManager) serveHealthProbes() {
+	mux := http.NewServeMux()
+	server := httpserver.New(mux)
+
+	if cm.readyzHandler != nil {
+		mux.Handle(cm.readinessEndpointName, http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
+		// Append '/' suffix to handle subpaths
+		mux.Handle(cm.readinessEndpointName+"/", http.StripPrefix(cm.readinessEndpointName, cm.readyzHandler))
+	}
+	if cm.healthzHandler != nil {
+		mux.Handle(cm.livenessEndpointName, http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+		// Append '/' suffix to handle subpaths
+		mux.Handle(cm.livenessEndpointName+"/", http.StripPrefix(cm.livenessEndpointName, cm.healthzHandler))
+	}
+
+	go cm.httpServe("health probe", cm.logger, server, cm.healthProbeListener)
+}
+
+func (cm *controllerManager) httpServe(kind string, log logr.Logger, server *http.Server, ln net.Listener) {
+	log = log.WithValues("kind", kind, "addr", ln.Addr())
+
+	go func() {
+		log.Info("Starting server")
+		if err := server.Serve(ln); err != nil {
+			if errors.Is(err, http.ErrServerClosed) {
+				return
+			}
+			if atomic.LoadInt64(cm.stopProcedureEngaged) > 0 {
+				// There might be cases where connections are still open and we try to shutdown
+				// but not having enough time to close the connection causes an error in Serve
+				//
+				// In that case we want to avoid returning an error to the main error channel.
+				log.Error(err, "error on Serve after stop has been engaged")
+				return
+			}
+			cm.errChan <- err
+		}
+	}()
+
+	// Shutdown the server when stop is closed.
+	<-cm.internalProceduresStop
+	if err := server.Shutdown(cm.shutdownCtx); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			// Avoid logging context related errors.
+			return
+		}
+		if atomic.LoadInt64(cm.stopProcedureEngaged) > 0 {
+			cm.logger.Error(err, "error on Shutdown after stop has been engaged")
+			return
+		}
+		cm.errChan <- err
+	}
+}
+
 // Start starts the manager and waits indefinitely.
 // There is only two ways to have start return:
 // An error has occurred during in one of the internal operations,
@@ -225,6 +336,11 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 	// Add the cluster runnable.
 	if err := cm.add(cm.cluster); err != nil {
 		return fmt.Errorf("failed to add cluster to runnables: %w", err)
+	}
+
+	// Serve health probes.
+	if cm.healthProbeListener != nil {
+		cm.serveHealthProbes()
 	}
 
 	// Start and wait for caches.

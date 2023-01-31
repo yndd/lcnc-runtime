@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/yndd/lcnc-runtime/pkg/ccutils/slice"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
-	"github.com/yndd/lcnc-runtime/pkg/ccutils/slice"
 )
 
 type Result interface {

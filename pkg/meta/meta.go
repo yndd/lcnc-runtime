@@ -7,7 +7,3 @@ import (
 func WasDeleted(o metav1.Object) bool {
 	return !o.GetDeletionTimestamp().IsZero()
 }
-
-
-
-

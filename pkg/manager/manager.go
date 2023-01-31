@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	//intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
@@ -67,6 +68,12 @@ type Manager interface {
 	// If the simple path -> handler mapping offered here is not enough, a new http server/listener should be added as
 	// Runnable to the manager via Add method.
 	//AddMetricsExtraHandler(path string, handler http.Handler) error
+
+	// AddHealthzCheck allows you to add Healthz checker
+	AddHealthzCheck(name string, check healthz.Checker) error
+
+	// AddReadyzCheck allows you to add Readyz checker
+	AddReadyzCheck(name string, check healthz.Checker) error
 
 	// Start starts all registered Controllers and blocks until the context is cancelled.
 	// Returns an error if there is an error starting any controller.
@@ -132,6 +139,17 @@ type Options struct {
 	// It can be set to "0" to disable the metrics serving.
 	MetricsBindAddress string
 
+	// HealthProbeBindAddress is the TCP address that the controller should bind to
+	// for serving health probes
+	// It can be set to "0" or "" to disable serving the health probe.
+	HealthProbeBindAddress string
+
+	// Readiness probe endpoint name, defaults to "readyz"
+	ReadinessEndpointName string
+
+	// Liveness probe endpoint name, defaults to "healthz"
+	LivenessEndpointName string
+
 	// Functions to allow for a user to customize values that will be injected.
 
 	// NewCache is the function that will create the cache to be used
@@ -181,10 +199,10 @@ type Options struct {
 	makeBroadcaster intrec.EventBroadcasterProducer
 
 	// Dependency injection for testing
-	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
-	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
-	newMetricsListener  func(addr string) (net.Listener, error)
-	//newHealthProbeListener func(addr string) (net.Listener, error)
+	newRecorderProvider    func(config *rest.Config, scheme *runtime.Scheme, logger logr.Logger, makeBroadcaster intrec.EventBroadcasterProducer) (*intrec.Provider, error)
+	newResourceLock        func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
+	newMetricsListener     func(addr string) (net.Listener, error)
+	newHealthProbeListener func(addr string) (net.Listener, error)
 }
 
 // BaseContextFunc is a function used to provide a base Context to Runnables
@@ -258,6 +276,13 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	// By default we have no extra endpoints to expose on metrics http server.
 	//metricsExtraHandlers := make(map[string]http.Handler)
 
+	// Create health probes listener. This will throw an error if the bind
+	// address is invalid or already in use.
+	healthProbeListener, err := options.newHealthProbeListener(options.HealthProbeBindAddress)
+	if err != nil {
+		return nil, err
+	}
+
 	errChan := make(chan error)
 	runnables := newRunnables(options.BaseContext, errChan)
 
@@ -272,6 +297,9 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		controllerOptions:       options.Controller,
 		logger:                  options.Logger,
 		elected:                 make(chan struct{}),
+		healthProbeListener:     healthProbeListener,
+		readinessEndpointName:   options.ReadinessEndpointName,
+		livenessEndpointName:    options.LivenessEndpointName,
 		gracefulShutdownTimeout: *options.GracefulShutdownTimeout,
 		internalProceduresStop:  make(chan struct{}),
 		leaderElectionStopped:   make(chan struct{}),
@@ -321,6 +349,19 @@ func (o Options) AndFromOrDie(loader config.ControllerManagerConfiguration) Opti
 	return o
 }
 
+// defaultHealthProbeListener creates the default health probes listener bound to the given address.
+func defaultHealthProbeListener(addr string) (net.Listener, error) {
+	if addr == "" || addr == "0" {
+		return nil, nil
+	}
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("error listening on %s: %w", addr, err)
+	}
+	return ln, nil
+}
+
 // defaultBaseContext is used as the BaseContext value in Options if one
 // has not already been set.
 func defaultBaseContext() context.Context {
@@ -355,6 +396,18 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.newMetricsListener == nil {
 		options.newMetricsListener = metrics.NewListener
+	}
+
+	if options.ReadinessEndpointName == "" {
+		options.ReadinessEndpointName = defaultReadinessEndpoint
+	}
+
+	if options.LivenessEndpointName == "" {
+		options.LivenessEndpointName = defaultLivenessEndpoint
+	}
+
+	if options.newHealthProbeListener == nil {
+		options.newHealthProbeListener = defaultHealthProbeListener
 	}
 
 	if options.GracefulShutdownTimeout == nil {
