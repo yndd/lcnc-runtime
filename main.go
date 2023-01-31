@@ -14,6 +14,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"go.uber.org/zap/zapcore"
 
@@ -29,7 +30,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-//const yamlFile = "./examples/upf.yaml"
+// const yamlFile = "./examples/upf.yaml"
 const yamlFile = "./examples/topo4.yaml"
 
 func main() {
@@ -167,9 +168,10 @@ func main() {
 		l.Info("run service", "gvk", gvk)
 		runner, err := fnruntime.NewRunner(ctx, svcCtx.Fn,
 			fnruntime.RunnerOptions{
-				Kind:           fnruntime.FunctionKindService,
-				ServicePort:    svcCtx.Port,
-				ResolveToImage: fnruntime.ResolveToImageForCLI,
+				Kind:            fnruntime.FunctionKindService,
+				ServicePort:     svcCtx.Port,
+				ImagePullPolicy: fnlib.AlwaysPull,
+				ResolveToImage:  fnruntime.ResolveToImageForCLI,
 			},
 		)
 		if err != nil {
@@ -177,7 +179,7 @@ func main() {
 			cancel()
 			return
 		}
-		
+
 		g := gvk
 		go func() {
 			_, err = runner.Run(ctx, nil)

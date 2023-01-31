@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -14,6 +16,7 @@ import (
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	fnresultv1 "github.com/yndd/lcnc-runtime/pkg/api/fnresult/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
+	"sigs.k8s.io/kustomize/kyaml/fn/runtime/runtimeutil"
 )
 
 type FunctionKind string
@@ -97,14 +100,23 @@ func NewRunner(
 		switch opts.Kind {
 		case FunctionKindService:
 			servicePort := strconv.Itoa(r.opts.ServicePort)
+			home := os.Getenv("HOME")
+			fmt.Printf("home: %s\n", home)
 			r.fnRunner = &ContainerFn{
 				Image:           fnc.Executor.Image,
 				ImagePullPolicy: opts.ImagePullPolicy,
 				FnResult:        fnResult,
 				Perm: ContainerFnPermission{
 					AllowNetwork: true,
+					AllowMount:   true,
 				},
-				Env: []string{strings.Join([]string{"FN_SERVICE_PORT", servicePort}, "=")},
+				StorageMounts: []runtimeutil.StorageMount{
+					{MountType: "volume", Src: filepath.Join(home, ".kube", "config"), DstPath: "/config"},
+				},
+				Env: []string{
+					strings.Join([]string{"FN_SERVICE_PORT", servicePort}, "="),
+					strings.Join([]string{"KUBECONFIG", "/config"}, "="),
+				},
 			}
 		default:
 			r.fnRunner = &ContainerFn{

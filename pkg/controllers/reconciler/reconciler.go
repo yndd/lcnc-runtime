@@ -168,6 +168,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//o.Print()
 	result.Print()
 
+	// TODO check result if failed, return an error
+
 	for _, output := range o.GetFinalOutput() {
 		b, err := json.MarshalIndent(output, "", "  ")
 		if err != nil {
@@ -191,16 +193,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				r.l.Error(err, "cannot apply the content")
 				return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 			}
-
-			/*
-				if err := r.client.Status().Update(ctx, u); err != nil {
-					r.l.Error(err, "cannot update status")
-				}
-			*/
 		}
 	}
-
-	//time.Sleep(60 * time.Second)
 
 	r.l.Info("reconcile apply finsihed...")
 	return reconcile.Result{}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
