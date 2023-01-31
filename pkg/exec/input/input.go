@@ -10,7 +10,7 @@ import (
 type Input interface {
 	kv.KV
 
-	Print(s string)
+	//Print(s string)
 }
 
 func New() Input {

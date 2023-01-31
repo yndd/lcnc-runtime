@@ -1,6 +1,8 @@
 package ccsyntax
 
 import (
+	"fmt"
+
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -17,13 +19,15 @@ type pipelinePreHookFn func(oc *OriginContext, v *ctrlcfgv1.Pipeline)
 type pipelinePostHookFn func(oc *OriginContext, v *ctrlcfgv1.Pipeline)
 
 // functionFn processes the function in the functions section
-type empryFunctionElementFn func(oc *OriginContext)
+type emptyFunctionElementFn func(oc *OriginContext)
 type functionFn func(oc *OriginContext, v *ctrlcfgv1.Function)
 type functionBlockFn func(oc *OriginContext, v *ctrlcfgv1.FunctionElement)
 
 //type lcncServicesPreHookFn func(v []ctrlcfgv1.ControllerConfigFunctionsBlock)
 
 //type lcncServicesPostHookFn func(v []LcncFunctionsBlock)
+
+type serviceFn func(oc *OriginContext, v *ctrlcfgv1.Function)
 
 // lcncServiceFn processes the service in the services section
 //type lcncServiceFn func(o Origin, block bool, idx int, vertexName string, v ctrlcfgv1.ControllerConfigFunction)
@@ -35,12 +39,12 @@ type WalkConfig struct {
 	emptyPipelineFn emptyPipelineFn
 
 	pipelinePreHookFn      pipelinePreHookFn
-	empryFunctionElementFn empryFunctionElementFn
+	emptyFunctionElementFn emptyFunctionElementFn
 	functionBlockFn        functionBlockFn
 	functionFn             functionFn
 	pipelinePostHookFn     pipelinePostHookFn
 	//lcncServicesPreHookFn   lcncServicesPreHookFn
-	//lcncServiceFn           lcncServiceFn
+	serviceFn serviceFn
 	//lcncServicesPostHookFn  lcncServicesPreHookFn
 }
 
@@ -54,7 +58,7 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	idx := 0
 	for vertexName, v := range r.cCfg.Spec.Properties.For {
 		// we run this once for apply and once for delete
-		oc := &OriginContext{FOW: FOWFor, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
+		oc := &OriginContext{FOWS: FOWFor, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 		idx++
 
@@ -62,15 +66,23 @@ func (r *parser) walkLcncConfig(fnc *WalkConfig) {
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Own {
 		// For Own the oepration is irrelevant
-		oc := &OriginContext{FOW: FOWOwn, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
+		oc := &OriginContext{FOWS: FOWOwn, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
 		idx++
 	}
 	idx = 0
 	for vertexName, v := range r.cCfg.Spec.Properties.Watch {
 		// we run this only for operation apply, NOT for delete
-		oc := &OriginContext{FOW: FOWWatch, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
+		oc := &OriginContext{FOWS: FOWWatch, RootVertexName: vertexName, Origin: OriginFow, VertexName: vertexName}
 		r.processGvkObject(fnc, oc, v)
+	}
+
+	if fnc.serviceFn != nil {
+		fmt.Printf("services: %v\n", r.cCfg.GetServices())
+		for vertexName, fn := range r.cCfg.GetServices() {
+			oc := &OriginContext{FOWS: FOWService, RootVertexName: vertexName, Origin: OriginService, VertexName: vertexName}
+			fnc.serviceFn(oc, fn)
+		}
 	}
 
 	if fnc.cfgPostHookFn != nil {
@@ -108,7 +120,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 	pipelineName := v.Name
 	if fnc.pipelinePreHookFn != nil {
 		oc := &OriginContext{
-			FOW:            oc.FOW,
+			FOWS:           oc.FOWS,
 			RootVertexName: oc.RootVertexName,
 			Operation:      oc.Operation,
 			GVK:            oc.GVK,
@@ -121,7 +133,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 
 	for vertexName, v := range v.Vars {
 		oc := &OriginContext{
-			FOW:            oc.FOW,
+			FOWS:           oc.FOWS,
 			RootVertexName: oc.RootVertexName,
 			Operation:      oc.Operation,
 			GVK:            oc.GVK,
@@ -135,7 +147,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 
 	for vertexName, v := range v.Tasks {
 		oc := &OriginContext{
-			FOW:            oc.FOW,
+			FOWS:           oc.FOWS,
 			RootVertexName: oc.RootVertexName,
 			Operation:      oc.Operation,
 			GVK:            oc.GVK,
@@ -149,7 +161,7 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 
 	if fnc.pipelinePostHookFn != nil {
 		oc := &OriginContext{
-			FOW:            oc.FOW,
+			FOWS:           oc.FOWS,
 			RootVertexName: oc.RootVertexName,
 			Operation:      oc.Operation,
 			GVK:            oc.GVK,
@@ -163,8 +175,8 @@ func (fnc *WalkConfig) walkPipeline(oc *OriginContext, v *ctrlcfgv1.Pipeline) {
 
 func (fnc *WalkConfig) walkFunctionElement(oc *OriginContext, v *ctrlcfgv1.FunctionElement) {
 	if v == nil {
-		if fnc.empryFunctionElementFn != nil {
-			fnc.empryFunctionElementFn(oc)
+		if fnc.emptyFunctionElementFn != nil {
+			fnc.emptyFunctionElementFn(oc)
 		}
 		return
 	}
@@ -186,7 +198,7 @@ func (fnc *WalkConfig) walkFunctionElement(oc *OriginContext, v *ctrlcfgv1.Funct
 
 		for vertexName, v := range v.FunctionBlock {
 			oc := &OriginContext{
-				FOW:             oc.FOW,
+				FOWS:            oc.FOWS,
 				RootVertexName:  oc.RootVertexName,
 				Operation:       oc.Operation,
 				GVK:             oc.GVK,
@@ -202,6 +214,7 @@ func (fnc *WalkConfig) walkFunctionElement(oc *OriginContext, v *ctrlcfgv1.Funct
 		}
 	} else {
 		if fnc.functionFn != nil {
+			fmt.Printf("oc function: %v\n", oc)
 			fnc.functionFn(oc, &v.Function)
 		}
 	}

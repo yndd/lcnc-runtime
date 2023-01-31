@@ -35,7 +35,7 @@ type output struct {
 }
 
 func (r *output) AddEntry(k string, v any) {
-	fmt.Printf("output: %s, value: %v\n", k, v)
+	//fmt.Printf("output: %s, value: %v\n", k, v)
 	r.o.AddEntry(k, v)
 }
 

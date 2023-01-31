@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/henderiw-k8s-lcnc/fn-sdk/go/fn"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/api/fnservicepb"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
@@ -15,8 +17,10 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"github.com/yndd/lcnc-runtime/pkg/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -51,14 +55,15 @@ type image struct {
 	namespace      string
 	rootVertexName string
 	// runtime config
-	fnconfig     *ctrlcfgv1.Function
+	fnconfig     ctrlcfgv1.Function
 	outputs      output.Output
 	gvkToVarName map[string]string
 	// result, output
-	m        sync.RWMutex
-	output   output.Output
-	numItems int
-	errs     []string
+	serviceClients map[schema.GroupVersionKind]svcclient.ServiceClient
+	m              sync.RWMutex
+	output         output.Output
+	numItems       int
+	errs           []string
 	// logging
 	l logr.Logger
 }
@@ -86,6 +91,15 @@ func (r *image) WithClient(client client.Client) {}
 
 func (r *image) WithFnMap(fnMap fnmap.FuncMap) {}
 
+func (r *image) WithServiceClients(sc map[schema.GroupVersionKind]svcclient.ServiceClient) {
+	r.serviceClients = sc
+}
+
+func (r *image) initOutput(numItems int) {
+	r.output = output.New()
+	r.numItems = numItems
+}
+
 func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "gvkToName", vertexContext.GVKToVarName)
 
@@ -99,11 +113,33 @@ func (r *image) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i i
 	return r.fec.exec(ctx, vertexContext.Function, i)
 }
 
-func (r *image) initOutput(numItems int) {
-	r.output = output.New()
-	r.numItems = numItems
+// run is an instance run of the function, if this is executed in a block
+// this is executed multiple time, once per block
+func (r *image) run(ctx context.Context, i input.Input) (any, error) {
+	runner, err := fnruntime.NewRunner(ctx, r.fnconfig,
+		fnruntime.RunnerOptions{
+			ResolveToImage: fnruntime.ResolveToImageForCLI,
+		},
+	)
+	if err != nil {
+		r.l.Error(err, "cannot get runner")
+		return nil, err
+	}
+	rCtx, err := buildResourceContext(i)
+	if err != nil {
+		r.l.Error(err, "cannot build resource context")
+		return nil, err
+	}
+	o, err := runner.Run(ctx, rCtx)
+	if err != nil {
+		r.l.Error(err, "failed tunner")
+		return nil, err
+	}
+	return o, nil
 }
 
+// recordOutput is executed per instance, if this is executed ina  block
+// each instance is recorded seperately
 func (r *image) recordOutput(o any) {
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -115,7 +151,7 @@ func (r *image) recordOutput(o any) {
 		return
 	}
 	for gvkString, krmslice := range rctx.Resources {
-		r.l.Info("recordOutput", "gvkString", gvkString, "krmslice", krmslice)
+		r.l.Info("recordOutput", "gvkString", gvkString)
 		varName, ok := r.gvkToVarName[gvkString]
 		if !ok {
 			err := fmt.Errorf("unregistered image output gvk: %s", gvkString)
@@ -126,6 +162,38 @@ func (r *image) recordOutput(o any) {
 
 		krmOutput := make([]any, 0, len(krmslice))
 		for _, krm := range krmslice {
+			u := unstructured.Unstructured{}
+			if err := json.Unmarshal(krm.Raw, &u); err != nil {
+				r.l.Error(err, "cannot unmarshal data")
+				r.errs = append(r.errs, err.Error())
+				break
+			}
+			if _, ok := u.GetLabels()[fn.ConditionedResourceKey]; ok {
+				// invoke the service to get the condition resolved
+				// lookup service client
+				r.l.Info("conditioned resource", "gvkString", gvkString, "gvk", meta.GetGVKFromObject(&u))
+				svcClient, ok := r.serviceClients[meta.GetGVKFromObject(&u)]
+				if !ok {
+					err := fmt.Errorf("cannot get svc client, %s", meta.GetGVKFromObject(&u).String())
+					r.l.Error(err, "cannot get svc client")
+					r.errs = append(r.errs, err.Error())
+					break
+				}
+				r.l.Info("conditioned resource", "gvkString", gvkString, "client", svcClient.Get())
+
+				// involke the service
+				resp, err := svcClient.Get().Apply(context.Background(), &fnservicepb.Request{
+					Resource: string(krm.Raw),
+				})
+				if err != nil {
+					r.l.Error(err, "cannot apply service")
+					r.errs = append(r.errs, err.Error())
+					break
+				}
+				// replace the krm.Raw with the resolved conditional resource
+				krm.Raw = []byte(resp.GetResource())
+			}
+
 			x := map[string]any{}
 			if err := json.Unmarshal(krm.Raw, &x); err != nil {
 				r.l.Error(err, "cannot unmarshal data")
@@ -168,7 +236,7 @@ func (r *image) getFinalResult() (output.Output, error) {
 		// inform the
 	}
 	*/
-	r.output.Print()
+	//r.output.Print()
 
 	return r.output, nil
 }
@@ -191,29 +259,6 @@ func (r *image) filterInput(i input.Input) input.Input {
 	return newInput
 }
 
-func (r *image) run(ctx context.Context, i input.Input) (any, error) {
-	runner, err := fnruntime.NewRunner(ctx, r.fnconfig,
-		fnruntime.RunnerOptions{
-			ResolveToImage: fnruntime.ResolveToImageForCLI,
-		},
-	)
-	if err != nil {
-		r.l.Error(err, "cannot get runner")
-		return nil, err
-	}
-	rCtx, err := buildResourceContext(i)
-	if err != nil {
-		r.l.Error(err, "cannot build resource context")
-		return nil, err
-	}
-	o, err := runner.Run(rCtx)
-	if err != nil {
-		r.l.Error(err, "failed tunner")
-		return nil, err
-	}
-	return o, nil
-}
-
 func buildResourceContext(i input.Input) (*fn.ResourceContext, error) {
 	resources, err := buildResourceContextResources(i)
 	if err != nil {
@@ -231,7 +276,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 	resources := &fn.Resources{
 		Resources: map[string][]runtime.RawExtension{},
 	}
-	i.Print("runImage")
+	//i.Print("runImage")
 	for _, v := range i.Get() {
 		switch x := v.(type) {
 		case map[string]any:
@@ -239,7 +284,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 			if err != nil {
 				return nil, err
 			}
-			if err := resources.AddResource(o); err != nil {
+			if err := resources.AddResource(o, &fn.ResourceParameters{}); err != nil {
 				return nil, err
 			}
 		case []any:
@@ -252,7 +297,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 						if err != nil {
 							return nil, err
 						}
-						if err := resources.AddResource(o); err != nil {
+						if err := resources.AddResource(o, &fn.ResourceParameters{}); err != nil {
 							return nil, err
 						}
 					case []any:
@@ -265,7 +310,7 @@ func buildResourceContextResources(i input.Input) (*fn.Resources, error) {
 									if err != nil {
 										return nil, err
 									}
-									if err := resources.AddResource(o); err != nil {
+									if err := resources.AddResource(o, &fn.ResourceParameters{}); err != nil {
 										return nil, err
 									}
 								default:

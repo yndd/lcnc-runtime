@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	ctrlcfgv1 "github.com/yndd/lcnc-runtime/pkg/api/controllerconfig/v1"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
@@ -14,6 +15,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -30,7 +32,7 @@ func NewQueryFn() fnmap.Function {
 		executeSingle: true,
 		// execution functions
 		filterInputFn: r.filterInput,
-		runFn: r.run,
+		runFn:         r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
@@ -76,6 +78,8 @@ func (r *query) WithClient(client client.Client) {
 
 func (r *query) WithFnMap(fnMap fnmap.FuncMap) {}
 
+func (r *query) WithServiceClients(map[schema.GroupVersionKind]svcclient.ServiceClient) {}
+
 func (r *query) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get(), "resource", vertexContext.Function.Input.Resource)
 	// Here we prepare the input we get from the runtime
@@ -109,11 +113,11 @@ func (r *query) getFinalResult() (output.Output, error) {
 			Data:     r.output,
 		})
 	}
-	o.Print()
+	//o.Print()
 	return o, nil
 }
 
-func (r *query) filterInput(i input.Input) input.Input {return i}
+func (r *query) filterInput(i input.Input) input.Input { return i }
 
 func (r *query) run(ctx context.Context, i input.Input) (any, error) {
 	gvk, err := ctrlcfgv1.GetGVK(r.resource)

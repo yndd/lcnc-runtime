@@ -3,10 +3,12 @@ package fnmap
 import (
 	"context"
 
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/yndd/lcnc-runtime/pkg/exec/input"
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -19,6 +21,7 @@ type Function interface {
 	WithClient(client client.Client)
 	WithFnMap(fnMap FuncMap)
 	WithRootVertexName(name string)
+	WithServiceClients(map[schema.GroupVersionKind]svcclient.ServiceClient)
 	Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error)
 }
 
@@ -57,5 +60,11 @@ func WithFnMap(fnMap FuncMap) FunctionOption {
 func WithRootVertexName(name string) FunctionOption {
 	return func(r Function) {
 		r.WithRootVertexName(name)
+	}
+}
+
+func WithServiceClients(sc map[schema.GroupVersionKind]svcclient.ServiceClient) FunctionOption {
+	return func(r Function) {
+		r.WithServiceClients(sc)
 	}
 }

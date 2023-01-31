@@ -3,9 +3,13 @@ package reconciler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -13,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/pkg/errors"
 	"github.com/yndd/lcnc-runtime/pkg/applicator"
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
@@ -87,13 +92,23 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	x, err := meta.MarshalData(cr)
 	if err != nil {
-		return reconcile.Result{}, errors.Wrap(err, errMarshalCr)
+		r.l.Error(err, "cannot marshal data")
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 	}
 
 	if err := r.f.AddFinalizer(ctx, cr); err != nil {
 		r.l.Error(err, "cannot add finalizer")
 		//managed.SetConditions(nddv1.ReconcileError(err), nddv1.Unknown())
-		return reconcile.Result{Requeue: true}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+	}
+
+	sc, err := r.getSvcClients()
+	if err != nil {
+		r.l.Error(err, "get svc clients")
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+	}
+	for _, c := range sc {
+		defer c.Close()
 	}
 
 	// delete branch -> used for delete
@@ -105,19 +120,20 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		o := output.New()
 		result := result.New()
 		e := builder.New(&builder.Config{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-			Data:      x,
-			Client:    r.client,
-			GVK:       gvk,
-			DAG:       deleteDAGCtx.DAG,
-			Output:    o,
-			Result:    result,
+			Name:           req.Name,
+			Namespace:      req.Namespace,
+			Data:           x,
+			Client:         r.client,
+			GVK:            gvk,
+			DAG:            deleteDAGCtx.DAG,
+			Output:         o,
+			Result:         result,
+			ServiceClients: sc,
 		})
 
 		// TODO should be per crName
 		e.Run(ctx)
-		o.Print()
+		//o.Print()
 		result.Print()
 
 		if err := r.f.RemoveFinalizer(ctx, cr); err != nil {
@@ -137,32 +153,32 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	o := output.New()
 	result := result.New()
 	e := builder.New(&builder.Config{
-		Name:      req.Name,
-		Namespace: req.Namespace,
-		Data:      x,
-		Client:    r.client,
-		GVK:       gvk,
-		DAG:       applyDAGCtx.DAG,
-		Output:    o,
-		Result:    result,
+		Name:           req.Name,
+		Namespace:      req.Namespace,
+		Data:           x,
+		Client:         r.client,
+		GVK:            gvk,
+		DAG:            applyDAGCtx.DAG,
+		Output:         o,
+		Result:         result,
+		ServiceClients: sc,
 	})
 
-	// TODO should be per crName
 	e.Run(ctx)
-	o.Print()
+	//o.Print()
 	result.Print()
 
 	for _, output := range o.GetFinalOutput() {
 		b, err := json.MarshalIndent(output, "", "  ")
 		if err != nil {
 			r.l.Error(err, "cannot marshal the content")
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 		}
 		//r.l.Info("final output", "jsin string", string(b))
 		u := &unstructured.Unstructured{}
 		if err := json.Unmarshal(b, u); err != nil {
 			r.l.Error(err, "cannot unmarshal the content")
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 		}
 		r.l.Info("final output", "unstructured", u)
 
@@ -173,17 +189,38 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		} else {
 			if err := r.client.Apply(ctx, u); err != nil {
 				r.l.Error(err, "cannot apply the content")
+				return reconcile.Result{RequeueAfter: 5 * time.Second}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
 			}
 
-			if err := r.client.Status().Update(ctx, u); err != nil {
-				r.l.Error(err, "cannot update status")
-			}
+			/*
+				if err := r.client.Status().Update(ctx, u); err != nil {
+					r.l.Error(err, "cannot update status")
+				}
+			*/
 		}
 	}
 
 	//time.Sleep(60 * time.Second)
 
 	r.l.Info("reconcile apply finsihed...")
-
 	return reconcile.Result{}, errors.Wrap(r.client.Status().Update(ctx, cr), errUpdateStatus)
+}
+
+func (r *reconciler) getSvcClients() (map[schema.GroupVersionKind]svcclient.ServiceClient, error) {
+	// get a service client for each service instance
+	sc := map[schema.GroupVersionKind]svcclient.ServiceClient{}
+	for gvk, svcCtx := range r.ceCtx.GetServices().Get() {
+		svcClient, err := svcclient.New(&svcclient.Config{
+			Address:  strings.Join([]string{"127.0.0.1", strconv.Itoa(svcCtx.Port)}, ":"),
+			Insecure: true,
+		})
+		if err != nil {
+			r.l.Error(err, "cannot create new client")
+			return nil, err
+		}
+		r.l.Info("svc client create", "gvk", gvk.String())
+		fmt.Printf("client create: client: %v\n", svcClient.Get())
+		sc[gvk] = svcClient
+	}
+	return sc, nil
 }

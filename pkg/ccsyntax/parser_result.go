@@ -13,7 +13,7 @@ type recordResultFn func(Result)
 
 type OriginContext struct {
 	//Index      int
-	FOW             FOW                      `json:"fow,omitempty" yaml:"fow,omitempty"`
+	FOWS            FOWS                     `json:"fow,omitempty" yaml:"fow,omitempty"`
 	RootVertexName  string                   `json:"rootVertexName,omitempty" yaml:"rootVertexName,omitempty"`
 	GVK             *schema.GroupVersionKind `json:"gvk,omitempty" yaml:"gvk,omitempty"`
 	Operation       Operation                `json:"operation,omitempty" yaml:"operation,omitempty"`
@@ -40,12 +40,13 @@ func (in *OriginContext) DeepCopyInto(out *OriginContext) {
 	*out = *in
 }
 
-type FOW string
+type FOWS string
 
 const (
-	FOWFor   FOW = "for"
-	FOWOwn   FOW = "own"
-	FOWWatch FOW = "watch"
+	FOWFor     FOWS = "for"
+	FOWOwn     FOWS = "own"
+	FOWWatch   FOWS = "watch"
+	FOWService FOWS = "service"
 )
 
 type Operation string
@@ -61,7 +62,7 @@ type Origin string
 const (
 	OriginInvalid  Origin = "invalid"
 	OriginFow      Origin = "fow"
+	OriginService  Origin = "service"
 	OriginVariable Origin = "vars"
 	OriginFunction Origin = "function"
-	OriginService  Origin = "services"
 )

@@ -122,7 +122,7 @@ func (r *eventhandler) add(obj runtime.Object, queue adder) {
 	})
 
 	e.Run(context.TODO())
-	o.Print()
+	//o.Print()
 	result.Print()
 
 	// for all the output add the queues

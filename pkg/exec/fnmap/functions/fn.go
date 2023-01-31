@@ -35,7 +35,7 @@ type fnExecConfig struct {
 	l logr.Logger
 }
 
-func (r *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, i input.Input) (output.Output, error) {
+func (r *fnExecConfig) exec(ctx context.Context, fnconfig ctrlcfgv1.Function, i input.Input) (output.Output, error) {
 	var items []*item
 	var isRange bool
 	var ok bool
@@ -95,7 +95,7 @@ func (r *fnExecConfig) exec(ctx context.Context, fnconfig *ctrlcfgv1.Function, i
 					return nil, err
 				}
 
-				i.Print("range")
+				//i.Print("range")
 
 				if r.executeRange {
 					//extraInput := fec.prepareInputFn(fnconfig)
@@ -214,7 +214,7 @@ func runCondition(exp string, i input.Input) (bool, error) {
 	return false, fmt.Errorf("unexpected result type, want bool got %T", v)
 }
 
-func resolveLocalVars(fnconfig *ctrlcfgv1.Function, i input.Input) error {
+func resolveLocalVars(fnconfig ctrlcfgv1.Function, i input.Input) error {
 	if fnconfig.Vars != nil {
 		for varName, expression := range fnconfig.Vars {
 			// We are lazy and provide all reference input to JQ

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"os"
@@ -13,6 +14,9 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
+	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
+	"go.uber.org/zap/zapcore"
+
 	//"github.com/yndd/lcnc-runtime/pkg/pcache"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -25,7 +29,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const yamlFile = "./examples/upf.yaml"
+//const yamlFile = "./examples/upf.yaml"
+const yamlFile = "./examples/topo4.yaml"
 
 func main() {
 	var metricsAddr string
@@ -46,13 +51,11 @@ func main() {
 	flag.BoolVar(&profiler, "profile", false, "Enable profiler")
 	opts := zap.Options{
 		Development: true,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	//zlog := zap.New(zap.UseDevMode(debug), zap.JSONEncoder())
-	//ctrl.SetLogger(zlog)
-	//logger := logging.NewLogrLogger(zlog.WithName("lcnc runtime"))
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	l := ctrl.Log.WithName("lcnc runtime")
 
@@ -136,33 +139,63 @@ func main() {
 		os.Exit(1)
 	}
 
-
 	l.Info("setup controller")
 	ctx := ctrl.SetupSignalHandler()
 	/*
-	reg, err := registrator.New(ctx, ctrl.GetConfigOrDie(), &registrator.Options{
-		ServiceDiscovery:          discovery.ServiceDiscoveryTypeK8s,
-		ServiceDiscoveryNamespace: "ipam",
-	})
-	if err != nil {
-		l.Error(err, "Cannot create registrator")
-		os.Exit(1)
+		reg, err := registrator.New(ctx, ctrl.GetConfigOrDie(), &registrator.Options{
+			ServiceDiscovery:          discovery.ServiceDiscoveryTypeK8s,
+			ServiceDiscoveryNamespace: "ipam",
+		})
+		if err != nil {
+			l.Error(err, "Cannot create registrator")
+			os.Exit(1)
+		}
+
+		// create proxy cache
+		c := pcache.New(&pcache.Config{
+			Registrator: reg,
+			EventChannels: map[schema.GroupVersionKind]chan event.GenericEvent{
+				*ceCtx.GetForGVK(): ge,
+			},
+		})
+
+		c.Start(ctx)
+	*/
+	//cancelFns := []context.CancelFunc{}
+	ctx, cancel := context.WithCancel(ctx)
+	for gvk, svcCtx := range ceCtx.GetServices().Get() {
+		l.Info("run service", "gvk", gvk)
+		runner, err := fnruntime.NewRunner(ctx, svcCtx.Fn,
+			fnruntime.RunnerOptions{
+				Kind:           fnruntime.FunctionKindService,
+				ServicePort:    svcCtx.Port,
+				ResolveToImage: fnruntime.ResolveToImageForCLI,
+			},
+		)
+		if err != nil {
+			l.Error(err, "cannot create service runner", "gvk", gvk)
+			cancel()
+			return
+		}
+		
+		g := gvk
+		go func() {
+			_, err = runner.Run(ctx, nil)
+			if err != nil {
+				l.Error(err, "cannot run service fn", "gvk", g)
+				cancel()
+				return
+			}
+			l.Info("service run stopped", "gvk", g)
+			cancel()
+		}()
 	}
 
-	// create proxy cache
-	c := pcache.New(&pcache.Config{
-		Registrator: reg,
-		EventChannels: map[schema.GroupVersionKind]chan event.GenericEvent{
-			*ceCtx.GetForGVK(): ge,
-		},
-	})
-
-	c.Start(ctx)
-	*/
+	time.Sleep(2 * time.Second)
 
 	l.Info("starting controller manager")
 	if err := mgr.Start(ctx); err != nil {
-		l.Error(err, "problem running manager")
-		os.Exit(1)
+		l.Error(err, "cannot run manager")
+		cancel()
 	}
 }

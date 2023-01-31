@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/henderiw-k8s-lcnc/fn-svc-sdk/pkg/svcclient"
 	"github.com/yndd/lcnc-runtime/pkg/ccutils/executor"
 	"github.com/yndd/lcnc-runtime/pkg/exec/exechandler"
 	"github.com/yndd/lcnc-runtime/pkg/exec/fnmap"
@@ -13,6 +14,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/exec/output"
 	"github.com/yndd/lcnc-runtime/pkg/exec/result"
 	"github.com/yndd/lcnc-runtime/pkg/exec/rtdag"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -28,7 +30,7 @@ func NewBlockFn() fnmap.Function {
 		executeSingle: true,
 		// execution functions
 		filterInputFn: r.filterInput,
-		runFn: r.run,
+		runFn:         r.run,
 		// result functions
 		initOutputFn:     r.initOutput,
 		recordOutputFn:   r.recordOutput,
@@ -78,6 +80,8 @@ func (r *block) WithFnMap(fnMap fnmap.FuncMap) {
 	r.fnMap = fnMap
 }
 
+func (r *block) WithServiceClients(map[schema.GroupVersionKind]svcclient.ServiceClient) {}
+
 func (r *block) Run(ctx context.Context, vertexContext *rtdag.VertexContext, i input.Input) (output.Output, error) {
 	r.l.Info("run", "vertexName", vertexContext.VertexName, "input", i.Get())
 	// Here we prepare the input we get from the runtime
@@ -105,7 +109,7 @@ func (r *block) getFinalResult() (output.Output, error) {
 	return output.New(), nil
 }
 
-func (r *block) filterInput(i input.Input) input.Input {return i}
+func (r *block) filterInput(i input.Input) input.Input { return i }
 
 func (r *block) run(ctx context.Context, i input.Input) (any, error) {
 	// check if the dag is initialized

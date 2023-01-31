@@ -21,6 +21,7 @@ func (r *parser) populate(cec ConfigExecutionContext, gvar GlobalVariable) []Res
 	fnc := &WalkConfig{
 		gvkObjectFn: p.addGvk,
 		functionFn:  p.addFunction,
+		serviceFn:   p.addService,
 	}
 
 	// walk the config populate the verteces and create the hierarchical DAG
@@ -63,8 +64,8 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 
 	// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
 	// and to resolve and connect the graph
-	r.gvar.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName})
-	if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVariable(oc.VertexName, &vardag.VariableContext{
+	r.gvar.Add(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.RootVertexName})
+	if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.RootVertexName}).AddVariable(oc.VertexName, &vardag.VariableContext{
 		OutputVertex:    oc.VertexName,
 		BlockIndex:      oc.BlockIndex,
 		BlockVertexName: oc.BlockVertexName,
@@ -79,11 +80,11 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 	// OWN does not have a runtime DAG
 	// FOR has both an apply and delete runtime DAG
 	// WATCH has only an apply runtime DAG
-	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
-		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationApply).DAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+	if oc.FOWS == FOWFor || oc.FOWS == FOWWatch {
+		if err := r.cec.GetDAGCtx(oc.FOWS, oc.GVK, OperationApply).DAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
 			VertexName: oc.VertexName,
 			Kind:       rtdag.RootVertexKind,
-			Function: &ctrlcfgv1.Function{
+			Function: ctrlcfgv1.Function{
 				Type: ctrlcfgv1.RootType,
 				Input: &ctrlcfgv1.Input{
 					Resource: v.Resource,
@@ -97,11 +98,11 @@ func (r *populator) addGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema.Gr
 			})
 		}
 	}
-	if oc.FOW == FOWFor {
-		if err := r.cec.GetDAGCtx(oc.FOW, oc.GVK, OperationDelete).DAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
+	if oc.FOWS == FOWFor {
+		if err := r.cec.GetDAGCtx(oc.FOWS, oc.GVK, OperationDelete).DAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
 			VertexName: oc.VertexName,
 			Kind:       rtdag.RootVertexKind,
-			Function: &ctrlcfgv1.Function{
+			Function: ctrlcfgv1.Function{
 				Type: ctrlcfgv1.RootType,
 				Input: &ctrlcfgv1.Input{
 					Resource: v.Resource,
@@ -141,7 +142,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 
 		// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
 		// and to resolve and connect the graph
-		if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVariable(varName, &vardag.VariableContext{
+		if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.RootVertexName}).AddVariable(varName, &vardag.VariableContext{
 			OutputVertex:    oc.VertexName,
 			BlockIndex:      oc.BlockIndex,
 			BlockVertexName: oc.BlockVertexName,
@@ -193,7 +194,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		}
 		// add the runtime outputCtxt to the outputCtxt DAG for ensuring the output varibales are globally unique
 		// and to resolve and connect the graph
-		if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).AddVariable(oc.VertexName, &vardag.VariableContext{
+		if err := r.gvar.GetDAG(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.RootVertexName}).AddVariable(oc.VertexName, &vardag.VariableContext{
 			OutputVertex:    oc.VertexName,
 			BlockIndex:      oc.BlockIndex,
 			BlockVertexName: oc.BlockVertexName,
@@ -217,7 +218,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		if err := r.cec.GetDAG(oc).AddVertex(oc.VertexName, &rtdag.VertexContext{
 			VertexName:   oc.VertexName,
 			Kind:         rtdag.FunctionVertexKind,
-			Function:     v,
+			Function:     *v,
 			References:   []string{},   // initialize reference
 			Outputs:      outputs,      // provide the preparsed output context to the vertex
 			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
@@ -227,6 +228,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				Error:         err.Error(),
 			})
 		}
+		r.cec.GetDAG(oc).PrintVertices()
 		return
 	}
 	// This is a block
@@ -242,7 +244,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 			VertexName:   oc.VertexName,
 			Kind:         rtdag.FunctionVertexKind,
 			BlockDAG:     blockDAG,
-			Function:     v,
+			Function:     *v,
 			References:   []string{},   // initialize reference
 			Outputs:      outputs,      // provide the preparsed output context to the vertex
 			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
@@ -256,7 +258,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		if err := blockDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
 			VertexName: oc.VertexName,
 			Kind:       rtdag.RootVertexKind, // this is the rootVertex in the blockDAG
-			Function: &ctrlcfgv1.Function{
+			Function: ctrlcfgv1.Function{
 				Type: ctrlcfgv1.RootType,
 			},
 			References:   []string{},   // initialize reference
@@ -272,7 +274,7 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 		if err := blockDAG.AddVertex(oc.VertexName, &rtdag.VertexContext{
 			VertexName:   oc.VertexName,
 			Kind:         rtdag.FunctionVertexKind,
-			Function:     v,
+			Function:     *v,
 			References:   []string{},   // initialize reference
 			Outputs:      outputs,      // provide the preparsed output context to the vertex
 			GVKToVarName: gvkToVarName, // provide a preparsed mapping from gvk to varName
@@ -282,5 +284,19 @@ func (r *populator) addFunction(oc *OriginContext, v *ctrlcfgv1.Function) {
 				Error:         err.Error(),
 			})
 		}
+	}
+}
+
+func (r *populator) addService(oc *OriginContext, v *ctrlcfgv1.Function) {
+	// we can safely consume the output as it was validated before
+	for _, outputCfg := range v.Output {
+		gvk, err := ctrlcfgv1.GetGVK(outputCfg.Resource)
+		if err != nil {
+			r.recordResult(Result{
+				OriginContext: oc,
+				Error:         err.Error(),
+			})
+		}
+		r.cec.AddService(gvk, *v)
 	}
 }

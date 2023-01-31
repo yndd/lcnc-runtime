@@ -111,7 +111,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 				}
 			}
 			// we lookup in the outputDAG
-			if !r.gvar.GetDAG(FOWEntry{FOW: oc.FOW, RootVertexName: oc.RootVertexName}).VarExists(ref.Value) {
+			if !r.gvar.GetDAG(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.RootVertexName}).VarExists(ref.Value) {
 				r.recordResult(Result{
 					OriginContext: oc,
 					Error:         fmt.Errorf("cannot resolve %s", ref.Value).Error(),
@@ -123,7 +123,7 @@ func (r *resolver) resolveRefs(oc *OriginContext, s string) {
 
 func (r *resolver) resolveDependsOn(oc *OriginContext, vertexNames []string) {
 	for _, vertexName := range vertexNames {
-		if r.ceCtx.GetDAGCtx(oc.FOW, oc.GVK, oc.Operation).DAG.GetVertex(vertexName) == nil {
+		if r.ceCtx.GetDAGCtx(oc.FOWS, oc.GVK, oc.Operation).DAG.GetVertex(vertexName) == nil {
 			r.recordResult(Result{
 				OriginContext: oc,
 				Error:         fmt.Errorf("vertex in depndsOn does not exist %s", vertexName).Error(),

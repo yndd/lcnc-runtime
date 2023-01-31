@@ -48,7 +48,7 @@ func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema
 	}
 	oc.GVK = gvk
 	// initialize execution context for thr for and watch
-	if oc.FOW == FOWFor || oc.FOW == FOWWatch {
+	if oc.FOWS == FOWFor || oc.FOWS == FOWWatch {
 		// initialize the gvk and rootVertex in the execution context
 		if err := r.cec.Add(oc); err != nil {
 			r.recordResult(Result{
@@ -58,7 +58,7 @@ func (r *initializer) initGvk(oc *OriginContext, v *ctrlcfgv1.GvkObject) *schema
 		}
 	}
 	// initialize the output context
-	r.gvar.Add(FOWEntry{FOW: oc.FOW, RootVertexName: oc.VertexName})
+	r.gvar.Add(FOWEntry{FOW: oc.FOWS, RootVertexName: oc.VertexName})
 	return gvk
 }
 

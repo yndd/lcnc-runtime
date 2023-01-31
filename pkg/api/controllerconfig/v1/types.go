@@ -136,8 +136,8 @@ type Input struct {
 }
 
 type Executor struct {
-	Image *string `json:"image,omitempty" yaml:"image,omitempty"`
-	Exec  *string `json:"exec,omitempty" yaml:"exec,omitempty"`
+	Image string `json:"image,omitempty" yaml:"image,omitempty"`
+	Exec  string `json:"exec,omitempty" yaml:"exec,omitempty"`
 }
 
 // ResourceContextSpec defines the context of the resource of the controller

@@ -24,7 +24,7 @@ type VariableContext struct {
 }
 
 type FOWEntry struct {
-	FOW            FOW
+	FOW            FOWS
 	RootVertexName string
 }
 
