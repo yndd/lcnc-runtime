@@ -18,8 +18,8 @@ spec:
       - apiGroups: ["coordination.k8s.io"]
         resources: [leases]
         verbs: [get, list, watch, update, patch, create, delete]
-      - apiGroups: ["topo.yndd.io/v1alpha1"]
-        resources: [definitions, templates, nodes, links, topologies]
+      - apiGroups: ["topo.yndd.io"]
+        resources: ["*"]
         verbs: [get, list, watch, update, patch, create, delete]
     porch:
       scope: cluster
