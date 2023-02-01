@@ -89,8 +89,10 @@ func (r ContainerRuntime) GetBin() string {
 		return podmanBin
 	case Nerdctl:
 		return nerdctlBin
-	default:
+	case Docker:
 		return dockerBin
+	default:
+		return podmanBin
 	}
 }
 

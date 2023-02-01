@@ -31,6 +31,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 #FROM gcr.io/distroless/static:nonroot
 FROM alpine:latest
 WORKDIR /
+RUN apk add --update && \
+    apk add crun-doc && \
+    apk add podman && \
+    rm -rf /tmp/*/var/cache/apk/*
 COPY --from=builder /workspace/manager .
 COPY examples/ examples/
 USER 65532:65532

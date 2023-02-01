@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"net/http"
 	"os"
@@ -14,8 +13,6 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"go.uber.org/zap/zapcore"
 
 	//"github.com/yndd/lcnc-runtime/pkg/pcache"
@@ -165,37 +162,39 @@ func main() {
 		c.Start(ctx)
 	*/
 	//cancelFns := []context.CancelFunc{}
-	ctx, cancel := context.WithCancel(ctx)
-	for gvk, svcCtx := range ceCtx.GetServices().Get() {
-		l.Info("run service", "gvk", gvk)
-		runner, err := fnruntime.NewRunner(ctx, svcCtx.Fn,
-			fnruntime.RunnerOptions{
-				Kind:            fnruntime.FunctionKindService,
-				ServicePort:     svcCtx.Port,
-				ImagePullPolicy: fnlib.AlwaysPull,
-				ResolveToImage:  fnruntime.ResolveToImageForCLI,
-			},
-		)
-		if err != nil {
-			l.Error(err, "cannot create service runner", "gvk", gvk)
-			cancel()
-			return
-		}
-
-		g := gvk
-		go func() {
-			_, err = runner.Run(ctx, nil)
+	/*
+		ctx, cancel := context.WithCancel(ctx)
+		for gvk, svcCtx := range ceCtx.GetServices().Get() {
+			l.Info("run service", "gvk", gvk)
+			runner, err := fnruntime.NewRunner(ctx, svcCtx.Fn,
+				fnruntime.RunnerOptions{
+					Kind:            fnruntime.FunctionKindService,
+					ServicePort:     svcCtx.Port,
+					ImagePullPolicy: fnlib.AlwaysPull,
+					ResolveToImage:  fnruntime.ResolveToImageForCLI,
+				},
+			)
 			if err != nil {
-				l.Error(err, "cannot run service fn", "gvk", g)
+				l.Error(err, "cannot create service runner", "gvk", gvk)
 				cancel()
 				return
 			}
-			l.Info("service run stopped", "gvk", g)
-			cancel()
-		}()
-	}
 
-	time.Sleep(2 * time.Second)
+			g := gvk
+			go func() {
+				_, err = runner.Run(ctx, nil)
+				if err != nil {
+					l.Error(err, "cannot run service fn", "gvk", g)
+					cancel()
+					return
+				}
+				l.Info("service run stopped", "gvk", g)
+				cancel()
+			}()
+		}
+
+		time.Sleep(2 * time.Second)
+	*/
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		l.Error(err, "unable to set up health check")
@@ -209,6 +208,7 @@ func main() {
 	l.Info("starting controller manager")
 	if err := mgr.Start(ctx); err != nil {
 		l.Error(err, "cannot run manager")
-		cancel()
+		//cancel()
+		os.Exit(1)
 	}
 }
