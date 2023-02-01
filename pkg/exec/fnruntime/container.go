@@ -89,8 +89,6 @@ func (r ContainerRuntime) GetBin() string {
 		return podmanBin
 	case Nerdctl:
 		return nerdctlBin
-	case Docker:
-		return dockerBin
 	default:
 		return podmanBin
 	}
@@ -294,7 +292,7 @@ func StringToContainerRuntime(v string) (ContainerRuntime, error) {
 	case string(Nerdctl):
 		return Nerdctl, nil
 	case "":
-		return Docker, nil
+		return Podman, nil
 	default:
 		return "", fmt.Errorf("unsupported runtime: %q the runtime must be either %s or %s", v, Docker, Podman)
 	}
