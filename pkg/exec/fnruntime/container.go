@@ -184,6 +184,7 @@ func (f *ContainerFn) runFnCLI(ctx context.Context, reader io.Reader, writer io.
 	cmd.Stderr = &errSink
 
 	//b, _ := io.ReadAll(reader)
+	fmt.Printf("container cmd: %v\n", cmd)
 	//fmt.Printf("runCLI for container with data:\n%v\n", string(b))
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError

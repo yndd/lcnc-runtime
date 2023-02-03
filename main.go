@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -14,8 +15,6 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/builder"
 	"github.com/yndd/lcnc-runtime/pkg/controller"
 	"github.com/yndd/lcnc-runtime/pkg/controllers/reconciler"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnlib"
-	"github.com/yndd/lcnc-runtime/pkg/exec/fnruntime"
 	"go.uber.org/zap/zapcore"
 
 	//"github.com/yndd/lcnc-runtime/pkg/pcache"
@@ -24,6 +23,7 @@ import (
 	"github.com/yndd/lcnc-runtime/pkg/ccsyntax"
 	"github.com/yndd/lcnc-runtime/pkg/manager"
 
+	"github.com/containers/podman/v4/pkg/rootless"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -166,34 +166,39 @@ func main() {
 	*/
 
 	ctx, cancel := context.WithCancel(ctx)
-	for gvk, svcCtx := range ceCtx.GetServices().Get() {
-		l.Info("run service", "gvk", gvk)
-		runner, err := fnruntime.NewRunner(ctx, svcCtx.Fn,
-			fnruntime.RunnerOptions{
-				Kind:            fnruntime.FunctionKindService,
-				ServicePort:     svcCtx.Port,
-				ImagePullPolicy: fnlib.AlwaysPull,
-				ResolveToImage:  fnruntime.ResolveToImageForCLI,
-			},
-		)
-		if err != nil {
-			l.Error(err, "cannot create service runner", "gvk", gvk)
-			cancel()
-			return
-		}
-
-		g := gvk
-		go func() {
-			_, err = runner.Run(ctx, nil)
+	/*
+		for gvk, svcCtx := range ceCtx.GetServices().Get() {
+			l.Info("run service", "gvk", gvk)
+			runner, err := fnruntime.NewRunner(ctx, svcCtx.Fn,
+				fnruntime.RunnerOptions{
+					Kind:            fnruntime.FunctionKindService,
+					ServicePort:     svcCtx.Port,
+					ImagePullPolicy: fnlib.AlwaysPull,
+					ResolveToImage:  fnruntime.ResolveToImageForCLI,
+				},
+			)
 			if err != nil {
-				l.Error(err, "cannot run service fn", "gvk", g)
+				l.Error(err, "cannot create service runner", "gvk", gvk)
 				cancel()
 				return
 			}
-			l.Info("service run stopped", "gvk", g)
-			cancel()
-		}()
-	}
+
+			g := gvk
+			go func() {
+				_, err = runner.Run(ctx, nil)
+				if err != nil {
+					l.Error(err, "cannot run service fn", "gvk", g)
+					cancel()
+					return
+				}
+				l.Info("service run stopped", "gvk", g)
+				cancel()
+			}()
+		}
+	*/
+
+	fmt.Printf("rootless: %t\n", rootless.IsRootless())
+	fmt.Printf("rootless uid: %d\n", rootless.GetRootlessUID())
 
 	time.Sleep(2 * time.Second)
 

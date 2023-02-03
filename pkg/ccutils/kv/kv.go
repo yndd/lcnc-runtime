@@ -1,6 +1,9 @@
 package kv
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 type RecordKVFn func(KV)
 
@@ -42,9 +45,29 @@ func (r *kv) Get() map[string]any {
 	defer r.m.RUnlock()
 	d := make(map[string]any, len(r.d))
 	for k, v := range r.d {
-		d[k] = v
+		d[k] = copy(v)
 	}
 	return d
+}
+
+func copy(v any) any {
+	switch v := v.(type) {
+	case map[string]any:
+		r := make(map[string]any, len(v))
+		for k, vd := range v {
+			r[k] = copy(vd)
+		}
+		return r
+	case []any:
+		r := make([]any, 0, len(v))
+		for _, vd := range v {
+			r = append(r, copy(vd))
+		}
+		return r
+	default:
+		fmt.Printf("%T\n", v)
+		return v
+	}
 }
 
 func (r *kv) GetValue(k string) any {
